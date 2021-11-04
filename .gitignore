@@ -30,3 +30,13 @@
 *.exe
 *.out
 *.app
+
+# Shaders
+*.spv
+
+# Folders
+stb
+1.2.162.0
+assets
+scripts
+bin
