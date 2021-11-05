@@ -1,4 +1,6 @@
-#include "model_viwer_win32.hpp"
+#include "../base.hpp"
+#include "../input.hpp"
+#include "../mv_allocator.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -6,7 +8,7 @@
 #include <stdio.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
-
+// TODO(arle): consider moving io to separate header file
 namespace io
 {
     bool close(file_t &file)
@@ -67,27 +69,30 @@ namespace io
         return result;
     }
 
-    file_t mapFile(size_t size, void *address)
+    file_t mapFile(size_t size)
     {
         file_t file{};
-        file.handle = VirtualAlloc(address, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        file.handle = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         file.size = size;
         return file;
     }
 }
 
+static vec2<int32_t> *GlobalExtentPtr = nullptr;
+static uint32_t *GlobalFlagsPtr = nullptr;
+
 LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
     switch(message){
-        case WM_SIZE:{/*
-            WinContext.extent.x = static_cast<int32_t>(lParam & 0x0000FFFF);
-            WinContext.extent.y = static_cast<int32_t>(lParam >> 16);
-            WinContext.flags |= CORE_FLAG_WINDOW_RESIZED;*/
-        }break;
+        case WM_SIZE:
+            GlobalExtentPtr->x = lParam & 0x0000FFFF;
+            GlobalExtentPtr->y = (lParam >> 16) & 0x0000FFFF;
+            *GlobalFlagsPtr |= CORE_FLAG_WINDOW_RESIZED;
+            break;
 
-        case WM_CLOSE: /*WinContext.flags &= ~CORE_FLAG_WINDOW_RUNNING;*/ break;
-        case WM_DESTROY: /*WinContext.flags &= ~CORE_FLAG_WINDOW_RUNNING;*/ break;
+        case WM_CLOSE:
+        case WM_DESTROY: *GlobalFlagsPtr &= ~CORE_FLAG_RUNNING; break;
         default: result = DefWindowProc(window, message, wParam, lParam); break;
     }
     return result;
@@ -95,7 +100,7 @@ LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LP
 
 struct win32_context
 {
-    win32_context()
+    win32_context(size_t virtualMemoryBufferSize)
     {
         this->perfCountFrequency = {};
         this->perfCounter = {};
@@ -103,8 +108,22 @@ struct win32_context
         this->instance = NULL;
         this->window = NULL;
         this->extent = vec2(0);
-        this->flags = 0;
+        this->flags = CORE_FLAG_RUNNING;
         this->dt = 0.0f;
+
+        QueryPerformanceFrequency(&this->perfCountFrequency);
+        QueryPerformanceCounter(&this->perfCounter);
+
+        GlobalExtentPtr = &this->extent;
+        GlobalFlagsPtr = &this->flags;
+
+        this->virtualMemoryBuffer = VirtualAlloc(NULL, virtualMemoryBufferSize,
+                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    }
+
+    ~win32_context()
+    {
+        VirtualFree(this->virtualMemoryBuffer, 0, MEM_RELEASE);
     }
 
     bool createWindow(LPCSTR lpWindowName)
@@ -127,14 +146,10 @@ struct win32_context
         return bool(result);
     }
 
-    void initClock()
+    void update()
     {
-        QueryPerformanceFrequency(&this->perfCountFrequency);
-        QueryPerformanceCounter(&this->perfCounter);
-    }
+        this->flags &= ~CORE_FLAG_WINDOW_RESIZED;
 
-    void updateClock()
-    {
         LARGE_INTEGER counter{};
         QueryPerformanceCounter(&counter);
         this->dt = float(counter.QuadPart - this->perfCounter.QuadPart);
@@ -197,8 +212,8 @@ struct win32_context
                     uint32_t keyCode = static_cast<uint32_t>(message.wParam);
                     processKeyPress(keyCode);
                     bool altKeyDown = (message.lParam & BIT(29));
-                    //if(message.lParam & BIT(29))
-                    //    this->flags &= ~CORE_FLAG_WINDOW_RUNNING;
+                    if(message.lParam & BIT(29))
+                        this->flags &= ~CORE_FLAG_RUNNING;
                 }break;
 
                 default:{
@@ -210,6 +225,35 @@ struct win32_context
         GetKeyboardState(this->input.keyBoard);
     }
 
+    // Thanks to Raymond Chan:
+    // https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
+    void toggleFullscreen()
+    {
+        const auto style = GetWindowLong(this->window, GWL_STYLE);
+        if(style & WS_OVERLAPPEDWINDOW){
+            auto monitor = MonitorFromWindow(this->window, MONITOR_DEFAULTTOPRIMARY);
+            MONITORINFO mi = {sizeof(mi)};
+
+            auto monitorInfo = GetMonitorInfoA(monitor, &mi);
+            if(GetWindowPlacement(this->window, &this->windowPlacement) && monitorInfo){
+                SetWindowLong(this->window, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+                SetWindowPos(this->window, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+                             mi.rcMonitor.right - mi.rcMonitor.left,
+                             mi.rcMonitor.bottom - mi.rcMonitor.top,
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                this->flags |= CORE_FLAG_WINDOW_FULLSCREEN;
+            }
+        }
+        else{
+            SetWindowLong(this->window, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+            SetWindowPlacement(this->window, &this->windowPlacement);
+            constexpr UINT setWindowPosFlags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                               SWP_NOOWNERZORDER | SWP_FRAMECHANGED;
+            SetWindowPos(this->window, NULL, 0, 0, 0, 0, setWindowPosFlags);
+            this->flags &= ~CORE_FLAG_WINDOW_FULLSCREEN;
+        }
+    }
+
     LARGE_INTEGER perfCountFrequency, perfCounter;
     WINDOWPLACEMENT windowPlacement;
     HINSTANCE instance;
@@ -218,22 +262,29 @@ struct win32_context
     input_state input;
     uint32_t flags;
     float dt;
+    void *virtualMemoryBuffer;
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
 {
-    win32_context context;
+    const auto permanentCapacity = MegaBytes(64);
+    const auto transientCapacity = MegaBytes(512);
+    win32_context context(permanentCapacity + transientCapacity);
 
     if(context.createWindow("3D model viewer") == false)
         return 0;
 
-    context.initClock();
+    auto allocator = mv_allocator(context.virtualMemoryBuffer, permanentCapacity, transientCapacity);
 
-    while(true){
-        // run
+    // Core->construct()
+    while(context.flags & CORE_FLAG_RUNNING){
         context.pollEvents();
-        context.updateClock();
+
+        // Core->run()
+
+        context.update();
     }
+    // Core->destruct()
 
     return 0;
 }

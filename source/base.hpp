@@ -1,3 +1,5 @@
+#pragma once
+
 #include "mv_utils/view.hpp"
 #include "mv_utils/vec.hpp"
 
@@ -29,10 +31,17 @@ namespace io
     file_t read(const char *filename);
     bool write(const char *filename, file_t &file);
     bool fileExists(const char *filename);
-    file_t mapFile(size_t size, void *address = (void*)0);
+    file_t mapFile(size_t size);
 }
 
 constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
 constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL;}
 constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL * 1024ULL;}
 constexpr uint32_t BIT(uint32_t value){return 1 << value;}
+
+enum CORE_FLAG_BITS
+{
+    CORE_FLAG_RUNNING = BIT(0),
+    CORE_FLAG_WINDOW_RESIZED = BIT(1),
+    CORE_FLAG_WINDOW_FULLSCREEN = BIT(2),
+};
