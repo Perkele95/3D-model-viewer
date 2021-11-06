@@ -1,6 +1,7 @@
 #include "../base.hpp"
 #include "../input.hpp"
 #include "../mv_allocator.hpp"
+#include "../model_viewer.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -276,15 +277,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     auto allocator = mv_allocator(context.virtualMemoryBuffer, permanentCapacity, transientCapacity);
 
-    // Core->construct()
+    auto core = model_viewer(&allocator, context.extent, context.flags);
+
     while(context.flags & CORE_FLAG_RUNNING){
         context.pollEvents();
-
-        // Core->run()
-
+        core.run(&allocator, context.extent, context.dt);
         context.update();
     }
-    // Core->destruct()
 
     return 0;
 }
