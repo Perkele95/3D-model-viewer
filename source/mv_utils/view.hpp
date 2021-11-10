@@ -2,6 +2,12 @@
 
 #include <stdint.h>
 
+template<typename T, int N>
+constexpr size_t arraysize(T (&array)[N])
+{
+    return N;
+}
+
 template<typename T>
 struct view
 {

@@ -40,7 +40,7 @@ struct mv_allocator
 
         if(this->transientCursor > this->transientEnd){
             this->transientCursor = this->transientBegin;
-            alloc = this->transientCursor;
+            alloc = static_cast<T*>(this->transientCursor);
         }
 
         return alloc;
@@ -59,7 +59,7 @@ struct mv_allocator
         auto result = view(this->allocTransient<T>(count), count);
         return result;
     }
-
+private:
     void *permanentBegin, *transientBegin;
     void *permanentEnd, *transientEnd;
     void *permanentCursor, *transientCursor;

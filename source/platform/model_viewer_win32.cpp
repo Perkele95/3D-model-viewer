@@ -81,6 +81,8 @@ namespace io
 
 static vec2<int32_t> *GlobalExtentPtr = nullptr;
 static uint32_t *GlobalFlagsPtr = nullptr;
+static HINSTANCE *GlobalInstancePtr = nullptr;
+static HWND *GlobalWindowPtr = nullptr;
 
 LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -97,6 +99,15 @@ LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LP
         default: result = DefWindowProc(window, message, wParam, lParam); break;
     }
     return result;
+}
+
+void SetSurface(VkInstance instance, VkSurfaceKHR *pSurface)
+{
+    VkWin32SurfaceCreateInfoKHR createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    createInfo.hwnd = *GlobalWindowPtr;
+    createInfo.hinstance = *GlobalInstancePtr;
+    vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, pSurface);
 }
 
 struct win32_context
@@ -117,6 +128,8 @@ struct win32_context
 
         GlobalExtentPtr = &this->extent;
         GlobalFlagsPtr = &this->flags;
+        GlobalInstancePtr = &this->instance;
+        GlobalWindowPtr = &this->window;
 
         this->virtualMemoryBuffer = VirtualAlloc(NULL, virtualMemoryBufferSize,
                                     MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);

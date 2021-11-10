@@ -2,6 +2,7 @@
 
 #include "base.hpp"
 #include "mv_allocator.hpp"
+#include "vk_context.hpp"
 
 struct model_viewer
 {
@@ -14,4 +15,6 @@ struct model_viewer
     model_viewer &operator=(const model_viewer &&src) = delete;
 
     void run(mv_allocator *allocator, vec2<int32_t> extent, float dt);
+
+    vulkan_context context;
 };

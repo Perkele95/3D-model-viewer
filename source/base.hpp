@@ -39,9 +39,18 @@ constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024U
 constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL * 1024ULL;}
 constexpr uint32_t BIT(uint32_t value){return 1 << value;}
 
+template<typename T>
+inline T clamp(T value, T min, T max)
+{
+    const T result = value < min ? min : value;
+    return result > max ? max : result;
+}
+
 enum CORE_FLAG_BITS
 {
     CORE_FLAG_RUNNING = BIT(0),
     CORE_FLAG_WINDOW_RESIZED = BIT(1),
     CORE_FLAG_WINDOW_FULLSCREEN = BIT(2),
+    CORE_FLAG_ENABLE_VALIDATION = BIT(3),
+    CORE_FLAG_ENABLE_VSYNC = BIT(4),
 };
