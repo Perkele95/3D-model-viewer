@@ -1,6 +1,6 @@
 #pragma once
 
-#include "base.hpp"
+#include "../base.hpp"
 #include "vulkan\vulkan.h"
 
 #define INIT_API constexpr auto [[nodiscard]]
@@ -26,10 +26,11 @@ namespace vkInits
         return iInfo;
     }
 
-    INIT_API commandPoolCreateInfo()
+    INIT_API commandPoolCreateInfo(uint32_t queueFamilyIndex)
     {
         VkCommandPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolInfo.queueFamilyIndex = queueFamilyIndex;
         return poolInfo;
     }
 
@@ -78,12 +79,12 @@ namespace vkInits
         return attachmentDescription;
     }
 
-    INIT_API shaderModuleCreateInfo(const file_t file)
+    INIT_API shaderModuleCreateInfo(const file_t *file)
     {
         VkShaderModuleCreateInfo shaderModuleInfo{};
         shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderModuleInfo.codeSize = file.size;
-        shaderModuleInfo.pCode = (const uint32_t*)file.handle;
+        shaderModuleInfo.codeSize = file->size;
+        shaderModuleInfo.pCode = static_cast<const uint32_t*>(file->handle);
         return shaderModuleInfo;
     }
 
@@ -113,6 +114,16 @@ namespace vkInits
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = flags;
         return beginInfo;
+    }
+
+    INIT_API renderPassBeginInfo(VkRenderPass renderPass, VkExtent2D extent)
+    {
+        VkRenderPassBeginInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassInfo.renderPass = renderPass;
+        renderPassInfo.renderArea.offset = {0, 0};
+        renderPassInfo.renderArea.extent = extent;
+        return renderPassInfo;
     }
 
     INIT_API submitInfo(const VkCommandBuffer *pCommandBuffers, size_t commandBufferCount)
@@ -167,10 +178,12 @@ namespace vkInits
         return copyRegion;
     }
 
-    INIT_API imageMemoryBarrier()
+    INIT_API imageMemoryBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
+                                VkAccessFlags srcAccess, VkAccessFlags dstAccess)
     {
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.image = image;
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -178,6 +191,10 @@ namespace vkInits
         barrier.subresourceRange.levelCount = 1;
         barrier.subresourceRange.baseArrayLayer = 0;
         barrier.subresourceRange.layerCount = 1;
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.srcAccessMask = srcAccess;
+        barrier.dstAccessMask = dstAccess;
         return barrier;
     }
 
@@ -205,7 +222,7 @@ namespace vkInits
         return fenceInfo;
     }
 
-    INIT_API GetShaderStageInfo(VkShaderStageFlagBits stage, VkShaderModule module)
+    INIT_API shaderStageInfo(VkShaderStageFlagBits stage, VkShaderModule module)
     {
         VkPipelineShaderStageCreateInfo stageInfo{};
         stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -215,7 +232,7 @@ namespace vkInits
         return stageInfo;
     }
 
-    INIT_API GetVertexBindingDescription(uint32_t stride)
+    INIT_API vertexBindingDescription(uint32_t stride)
     {
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
@@ -224,7 +241,7 @@ namespace vkInits
         return bindingDescription;
     }
 
-    INIT_API GetInputAssembly()
+    INIT_API inputAssemblyInfo()
     {
         VkPipelineInputAssemblyStateCreateInfo result{};
         result.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -233,7 +250,7 @@ namespace vkInits
         return result;
     }
 
-    INIT_API GetViewport(VkExtent2D extent)
+    INIT_API viewportInfo(VkExtent2D extent)
     {
         VkViewport result{};
         result.width = static_cast<float>(extent.width);
@@ -243,7 +260,7 @@ namespace vkInits
         return result;
     }
 
-    INIT_API GetScissor(VkExtent2D extent)
+    INIT_API scissorInfo(VkExtent2D extent)
     {
         VkRect2D result{};
         result.offset = {0, 0};
@@ -251,7 +268,7 @@ namespace vkInits
         return result;
     }
 
-    INIT_API GetRasterizationState(VkFrontFace frontFace)
+    INIT_API rasterizationStateInfo(VkFrontFace frontFace)
     {
         VkPipelineRasterizationStateCreateInfo result = {};
         result.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -265,7 +282,7 @@ namespace vkInits
         return result;
     }
 
-    INIT_API GetDepthStencilState()
+    INIT_API depthStencilStateInfo()
     {
         VkPipelineDepthStencilStateCreateInfo result = {};
         result.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -277,14 +294,14 @@ namespace vkInits
         return result;
     }
 
-    INIT_API ColourWriteMask()
+    INIT_API colourWriteMask()
     {
         VkColorComponentFlags writeMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
                                         | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
         return writeMask;
     }
 
-    INIT_API PipelineColorBlendStateCreateInfo()
+    INIT_API pipelineColorBlendStateCreateInfo()
     {
         VkPipelineColorBlendStateCreateInfo colourblend{};
         colourblend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
@@ -297,19 +314,19 @@ namespace vkInits
         return colourblend;
     }
 
-    INIT_API PipelineMultisampleStateCreateInfo()
+    INIT_API pipelineMultisampleStateCreateInfo(VkSampleCountFlagBits rasterizationSamples)
     {
         VkPipelineMultisampleStateCreateInfo multisampling{};
         multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling.sampleShadingEnable = VK_FALSE;
-        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.rasterizationSamples = rasterizationSamples;
         return multisampling;
     }
 
-    INIT_API PipelineColorBlendAttachmentState()
+    INIT_API pipelineColorBlendAttachmentState()
     {
         VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-        colorBlendAttachment.colorWriteMask = ColourWriteMask();
+        colorBlendAttachment.colorWriteMask = colourWriteMask();
         colorBlendAttachment.blendEnable = VK_TRUE;
         colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -320,7 +337,7 @@ namespace vkInits
         return colorBlendAttachment;
     }
 
-    INIT_API WriteDescriptorSet(uint32_t dstBinding)
+    INIT_API writeDescriptorSet(uint32_t dstBinding)
     {
         VkWriteDescriptorSet set{};
         set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

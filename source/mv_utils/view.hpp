@@ -12,18 +12,12 @@ template<typename T>
 struct view
 {
     view() = default;
-    view(T *data, size_t count)
-    {
-        this->data = data;
-        this->count = count;
-    }
+    constexpr view(T *src, size_t srcCount)
+    : data(src), count(srcCount) {}
 
     template<int N>
-    view(T (&array)[N])
-    {
-        this->data = array;
-        this->count = N;
-    }
+    constexpr view(T (&array)[N])
+    : data(array), count(N) {}
 
     T &operator[](size_t i) const
     {

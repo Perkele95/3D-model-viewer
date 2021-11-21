@@ -1,0 +1,23 @@
+{
+    "files.associations": {
+        "type_traits": "cpp",
+        "algorithm": "cpp",
+        "chrono": "cpp",
+        "xhash": "cpp",
+        "xtree": "cpp",
+        "xutility": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "initializer_list": "cpp",
+        "list": "cpp",
+        "queue": "cpp",
+        "random": "cpp",
+        "stack": "cpp",
+        "vector": "cpp",
+        "xstring": "cpp",
+        "functional": "cpp",
+        "xmemory": "cpp",
+        "xiosbase": "cpp",
+        "memory": "cpp"
+    }
+}

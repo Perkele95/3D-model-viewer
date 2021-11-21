@@ -120,7 +120,7 @@ struct win32_context
         this->instance = NULL;
         this->window = NULL;
         this->extent = vec2(0);
-        this->flags = CORE_FLAG_RUNNING;
+        this->flags = CORE_FLAG_RUNNING | CORE_FLAG_ENABLE_VALIDATION;
         this->dt = 0.0f;
 
         QueryPerformanceFrequency(&this->perfCountFrequency);
@@ -294,7 +294,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     while(context.flags & CORE_FLAG_RUNNING){
         context.pollEvents();
-        core.run(&allocator, context.extent, context.dt);
+        core.run(&allocator, context.flags, context.dt);
         context.update();
     }
 

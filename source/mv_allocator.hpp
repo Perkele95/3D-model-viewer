@@ -23,7 +23,7 @@ struct mv_allocator
     template<typename T>
     T *allocPermanent(size_t count)
     {
-        auto alloc = static_cast<T*>(this->permanentCursor);
+        alignas(T) auto alloc = static_cast<T*>(this->permanentCursor);
         this->permanentCursor = static_cast<T*>(this->permanentCursor) + count;
 
         if(this->permanentCursor > this->permanentEnd)
@@ -35,7 +35,7 @@ struct mv_allocator
     template<typename T>
     T *allocTransient(size_t count)
     {
-        auto alloc = static_cast<T*>(this->transientCursor);
+        alignas(T) auto alloc = static_cast<T*>(this->transientCursor);
         this->transientCursor = static_cast<T*>(this->transientCursor) + count;
 
         if(this->transientCursor > this->transientEnd){
