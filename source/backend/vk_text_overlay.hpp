@@ -35,12 +35,15 @@ struct text_overlay
 
     void onWindowResize(mv_allocator *allocator, const vulkan_device *vulkanDevice,
                         VkCommandPool commandPool, VkRenderPass sharedRenderPass);
+
+    void setTextTint(const vec4<float> tint);
+    void setTextAlignment(text_align alignment);
+    void setTextType(text_coord_type type);
+    void setTextSize(float size);
     void begin();
-    void draw(view<const char> stringView, vec2<float> position,
-              vec4<float> tint, text_align alignment, text_coord_type type,
-              float size);
+    void draw(view<const char> stringView, vec2<float> position);
     void end();
-    void updateCmdBuffers(const VkClearValue (*clearValues)[2], const VkFramebuffer *pFramebuffers);
+    void updateCmdBuffers(const VkFramebuffer *pFramebuffers);
     VkSubmitInfo getSubmitData();
 
 private:
@@ -80,4 +83,9 @@ private:
 
     size_t quadCount;
     float zOrder;
+
+    vec4<float> textTint;
+    text_align textAlignment;
+    text_coord_type textType;
+    float textSize;
 };

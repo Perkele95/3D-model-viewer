@@ -288,6 +288,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if(context.createWindow("3D model viewer") == false)
         return 0;
 
+    context.flags ^= CORE_FLAG_WINDOW_RESIZED;
+
     auto allocator = mv_allocator(context.virtualMemoryBuffer, permanentCapacity, transientCapacity);
 
     auto core = model_viewer(&allocator, context.extent, context.flags);

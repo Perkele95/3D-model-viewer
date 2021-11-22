@@ -5,6 +5,8 @@
 #include "backend/vulkan_device.hpp"
 #include "backend/vk_text_overlay.hpp"
 
+#include "mv_utils/mat4.hpp"
+
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
 struct model_viewer
@@ -20,8 +22,9 @@ struct model_viewer
     void run(mv_allocator *allocator, uint32_t flags, float dt);
 
 private:
-    void onWindowResize();
+    void onWindowResize(mv_allocator *allocator);
     void buildResources(mv_allocator *allocator);
+    void buildSwapchainViews();
     void buildMsaa();
     void buildDepth();
     void buildRenderPass();
@@ -49,4 +52,13 @@ private:
     VkSemaphore renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
     VkFence inFlightFences[MAX_IMAGES_IN_FLIGHT];
     VkFence *imagesInFlight;
+
+    // scene resources
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSetLayout setLayout;
+    VkDescriptorSet *descriptorSets;
+    VkPipeline pipeline;
+    VkPipelineLayout pipelineLayout;
+    VkShaderModule vertShaderModule, fragShaderModule;
+    buffer_t vertexBuffer, indexBuffer;
 };

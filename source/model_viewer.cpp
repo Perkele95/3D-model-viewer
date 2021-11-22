@@ -32,6 +32,19 @@ model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32
     this->hOverlay->create(&overlayInfo);
 
     this->currentFrame = 0;
+
+    this->hOverlay->setTextTint(vec4(1.0f));
+    this->hOverlay->setTextAlignment(text_align::centre);
+    this->hOverlay->setTextType(text_coord_type::relative);
+    this->hOverlay->setTextSize(1.0f);
+
+    this->hOverlay->begin();
+
+    constexpr auto titleString = view("3D model viewer");
+    this->hOverlay->draw(titleString, vec2(50.0f, 20.0f));
+
+    this->hOverlay->end();
+    this->hOverlay->updateCmdBuffers(this->framebuffers);
 }
 
 model_viewer::~model_viewer()
@@ -69,11 +82,7 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
 
     vkDeviceWaitIdle(this->hDevice->device);
 
-    this->hOverlay->begin();
-    constexpr auto titleString = view("3D model viewer");
-    this->hOverlay->draw(titleString, vec2(50.0f), vec4(1.0f), text_align::centre,
-                         text_coord_type::relative, 1.0f);
-    this->hOverlay->end();
+    // draw
 
     vkWaitForFences(this->hDevice->device, 1, &this->inFlightFences[this->currentFrame],
                     VK_TRUE, UINT64_MAX);
@@ -83,7 +92,7 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
                                             this->imageAvailableSPs[this->currentFrame], VK_NULL_HANDLE, &imageIndex);
 
     switch(result){
-        case VK_ERROR_OUT_OF_DATE_KHR: onWindowResize(); break;
+        case VK_ERROR_OUT_OF_DATE_KHR: onWindowResize(allocator); break;
         case VK_SUBOPTIMAL_KHR: //DebugLog("Suboptimal swapchain"); break;
         default: break;
     }
@@ -95,48 +104,7 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
 
     vkDeviceWaitIdle(this->hDevice->device);
 
-    VkClearValue colourValue = {};
-    colourValue.color = {0.005f, 0.008f, 0.02f, 1.0f};
-    VkClearValue depthStencilValue = {};
-    depthStencilValue.depthStencil = {1.0f, 0};
-
-    const VkClearValue clearValues[] = {colourValue, depthStencilValue};
-
-    this->hOverlay->updateCmdBuffers(&clearValues, this->framebuffers);
-/*
-    auto beginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-    result = vkBeginCommandBuffer(this->commandbuffers[imageIndex], &beginInfo);
-
-    VkClearValue colourValue = {};
-    colourValue.color = {0.005f, 0.008f, 0.02f, 1.0f};
-    VkClearValue depthStencilValue = {};
-    depthStencilValue.depthStencil = {1.0f, 0};
-
-    const VkClearValue clearValues[] = {colourValue, depthStencilValue};
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = this->renderPass;
-    renderPassInfo.framebuffer = this->framebuffers[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = this->extent;
-    renderPassInfo.clearValueCount = static_cast<uint32_t>(arraysize(clearValues));
-    renderPassInfo.pClearValues = clearValues;
-    vkCmdBeginRenderPass(this->commandbuffers[imageIndex], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-    UpdateCamera(core->camera, extent, input.mouseWheel, dt);
-
-    camera_matrix cameraMatrix;
-    cameraMatrix.model = core->camera.model;
-    cameraMatrix.view = core->camera.view;
-    cameraMatrix.proj = core->camera.proj;
-    SceneDraw(core->context, core->scene, &cameraMatrix, imageIndex);
-    TextOverlayDraw(core->context, core->textOverlay, imageIndex);
-
-    vkCmdEndRenderPass(this->commandbuffers[imageIndex]);
-    result = vkEndCommandBuffer(this->commandbuffers[imageIndex]);
-
-    SceneSwapBuffers(core->scene);
-    TextOverlaySwapBuffers(core->textOverlay);*/
+    //update command buffers
 
     const VkSemaphore waitSemaphores[] = {this->imageAvailableSPs[this->currentFrame]};
     const VkSemaphore signalSemaphores[] = {this->renderFinishedSPs[this->currentFrame]};
@@ -166,24 +134,49 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
     result = vkQueuePresentKHR(this->hDevice->present.queue, &presentInfo);
     switch(result){
         case VK_ERROR_OUT_OF_DATE_KHR:
-        case VK_SUBOPTIMAL_KHR: onWindowResize(); break;
+        case VK_SUBOPTIMAL_KHR: onWindowResize(allocator); break;
         default: break;
     }
 
     if(flags & CORE_FLAG_WINDOW_RESIZED)
-        onWindowResize();
+        onWindowResize(allocator);
 }
 // TODO(arle)
-void model_viewer::onWindowResize()
+void model_viewer::onWindowResize(mv_allocator *allocator)
 {
-    // destroy/reset
+    vkDeviceWaitIdle(this->hDevice->device);
+
+    for (size_t i = 0; i < this->imageCount; i++)
+        vkDestroyFramebuffer(this->hDevice->device, this->framebuffers[i], nullptr);
+
+    this->msaa.destroy(this->hDevice->device);
+    this->depth.destroy(this->hDevice->device);
+    vkResetCommandPool(this->hDevice->device, this->cmdPool, 0);// VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+    vkDestroyRenderPass(this->hDevice->device, this->renderPass, nullptr);
+
+    for (size_t i = 0; i < this->imageCount; i++)
+        vkDestroyImageView(this->hDevice->device, this->swapchainViews[i], nullptr);
 
     this->hDevice->refresh();
     this->extent = this->hDevice->getExtent();
-    this->depthFormat = this->hDevice->getDepthFormat();
-    this->sampleCount = this->hDevice->getSampleCount();
 
-    // create
+    auto oldSwapchain = this->swapchain;
+    this->hDevice->buildSwapchain(this->swapchain, &this->swapchain);
+    vkDestroySwapchainKHR(this->hDevice->device, oldSwapchain, nullptr);
+
+    uint32_t localImageCount = 0;
+    vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, nullptr);
+    vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, this->swapchainImages);
+    this->imageCount = localImageCount;
+
+    buildSwapchainViews();
+    buildRenderPass();
+    buildDepth();
+    buildMsaa();
+    buildFramebuffers();
+
+    this->hOverlay->onWindowResize(allocator, this->hDevice, this->cmdPool, this->renderPass);
+    this->hOverlay->updateCmdBuffers(this->framebuffers);
 }
 
 void model_viewer::buildResources(mv_allocator *allocator)
@@ -205,6 +198,16 @@ void model_viewer::buildResources(mv_allocator *allocator)
 
     vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, this->swapchainImages);
 
+    buildSwapchainViews();
+    buildMsaa();
+    buildDepth();
+    buildRenderPass();
+    buildFramebuffers();
+    buildSyncObjects();
+}
+
+void model_viewer::buildSwapchainViews()
+{
     for(size_t i = 0; i < this->imageCount; i++){
         auto imageViewInfo = vkInits::imageViewCreateInfo();
         imageViewInfo.format = this->hDevice->surfaceFormat.format;
@@ -212,12 +215,6 @@ void model_viewer::buildResources(mv_allocator *allocator)
         imageViewInfo.image = this->swapchainImages[i];
         vkCreateImageView(this->hDevice->device, &imageViewInfo, nullptr, &this->swapchainViews[i]);
     }
-
-    buildMsaa();
-    buildDepth();
-    buildRenderPass();
-    buildFramebuffers();
-    buildSyncObjects();
 }
 
 void model_viewer::buildMsaa()

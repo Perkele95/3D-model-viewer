@@ -54,6 +54,14 @@ namespace vkInits
         return info;
     }
 
+    INIT_API descriptorSetAllocateInfo(VkDescriptorPool pool)
+    {
+        VkDescriptorSetAllocateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        info.descriptorPool = pool;
+        return info;
+    }
+
     INIT_API descriptorSetLayoutBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stageFlags)
     {
         VkDescriptorSetLayoutBinding layoutBinding = {};

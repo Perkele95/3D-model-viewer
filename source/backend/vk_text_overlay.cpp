@@ -56,7 +56,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     prepareFontBuffer(fontpixels, {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT});
 
     const VkDescriptorPoolSize samplerImageSize = {
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(this->imageCount)
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(this->imageCount)
     };
 
     const VkDescriptorPoolSize poolSizes[] = {samplerImageSize};
@@ -64,7 +64,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
 
     VkDescriptorPoolCreateInfo descPoolInfo{};
     descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descPoolInfo.poolSizeCount = static_cast<uint32_t>(arraysize(poolSizes));
+    descPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
     descPoolInfo.pPoolSizes = poolSizes;
     descPoolInfo.maxSets = maxSets;
     result = vkCreateDescriptorPool(this->device, &descPoolInfo, nullptr, &this->descriptorPool);
@@ -77,7 +77,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
     setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     setLayoutInfo.pBindings = bindings;
-    setLayoutInfo.bindingCount = static_cast<uint32_t>(arraysize(bindings));
+    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
     result = vkCreateDescriptorSetLayout(this->device, &setLayoutInfo, nullptr, &this->setLayout);
 
     prepareDescriptorSets(pInfo->allocator);
@@ -111,9 +111,29 @@ void text_overlay::onWindowResize(mv_allocator *allocator, const vulkan_device *
     vkDestroyPipelineLayout(this->device, this->pipelineLayout, nullptr);
     vkResetDescriptorPool(this->device, this->descriptorPool, VkFlags(0));
 
-    prepareCommandbuffers();
+    //prepareCommandbuffers();
     prepareDescriptorSets(allocator);
     preparePipeline();
+}
+
+void text_overlay::setTextTint(const vec4<float> tint)
+{
+    this->textTint = tint;
+}
+
+void text_overlay::setTextAlignment(text_align alignment)
+{
+    this->textAlignment = alignment;
+}
+
+void text_overlay::setTextType(text_coord_type type)
+{
+    this->textType = type;
+}
+
+void text_overlay::setTextSize(float size)
+{
+    this->textSize = size;
 }
 
 void text_overlay::begin()
@@ -127,16 +147,14 @@ void text_overlay::begin()
     this->zOrder = Z_ORDER_GUI_DEFAULT;
 }
 
-void text_overlay::draw(view<const char> stringView, vec2<float> position,
-                        vec4<float> tint, text_align alignment, text_coord_type type,
-                        float size)
+void text_overlay::draw(view<const char> stringView, vec2<float> position)
 {
     const uint32_t firstChar = STB_SOMEFONT_FIRST_CHAR;
-    const float width = size / float(this->extent.width);
-    const float height = size / float(this->extent.height);
+    const float width = this->textSize / float(this->extent.width);
+    const float height = this->textSize / float(this->extent.height);
 
     float x = 0.0f, y = 0.0f;//NOTE(arle): inspect asm on these switches
-    switch (type){
+    switch (this->textType){
         case text_coord_type::absolute: {
             x = (float(position.x) / float(this->extent.width) * 2.0f) - 1.0f;
             y = (float(position.y) / float(this->extent.height) * 2.0f) - 1.0f;
@@ -151,7 +169,7 @@ void text_overlay::draw(view<const char> stringView, vec2<float> position,
     for (size_t i = 0; i < stringView.count - 1; i++)
         textWidth += s_Fontdata[uint32_t(stringView[i]) - firstChar].advance * width;
 
-    switch(alignment){
+    switch(this->textAlignment){
         case text_align::right: x -= textWidth; break;
         case text_align::centre: x -= textWidth / 2.0f; break;
         default: break;
@@ -164,28 +182,28 @@ void text_overlay::draw(view<const char> stringView, vec2<float> position,
         this->mappedVertices->position.y = y + charData->y0f * height;
         this->mappedVertices->position.z = this->zOrder;
         this->mappedVertices->texCoord = vec2(charData->s0, charData->t0);
-        this->mappedVertices->colour = tint;
+        this->mappedVertices->colour = this->textTint;
         this->mappedVertices++;
 
         this->mappedVertices->position.x = x + charData->x1f * width;
         this->mappedVertices->position.y = y + charData->y0f * height;
         this->mappedVertices->position.z = this->zOrder;
         this->mappedVertices->texCoord = vec2(charData->s1, charData->t0);
-        this->mappedVertices->colour = tint;
+        this->mappedVertices->colour = this->textTint;
         this->mappedVertices++;
 
         this->mappedVertices->position.x = x + charData->x1f * width;
         this->mappedVertices->position.y = y + charData->y1f * height;
         this->mappedVertices->position.z = this->zOrder;
         this->mappedVertices->texCoord = vec2(charData->s1, charData->t1);
-        this->mappedVertices->colour = tint;
+        this->mappedVertices->colour = this->textTint;
         this->mappedVertices++;
 
         this->mappedVertices->position.x = x + charData->x0f * width;
         this->mappedVertices->position.y = y + charData->y1f * height;
         this->mappedVertices->position.z = this->zOrder;
         this->mappedVertices->texCoord = vec2(charData->s0, charData->t1);
-        this->mappedVertices->colour = tint;
+        this->mappedVertices->colour = this->textTint;
         this->mappedVertices++;
 
         const auto offset = this->quadCount * QUAD_VERTEX_COUNT;
@@ -211,17 +229,24 @@ void text_overlay::end()
     this->mappedIndices = nullptr;
 }
 
-void text_overlay::updateCmdBuffers(const VkClearValue (*clearValues)[2], const VkFramebuffer *pFramebuffers)
+void text_overlay::updateCmdBuffers(const VkFramebuffer *pFramebuffers)
 {
     if(this->quadCount == 0)
         return;
+
+    VkClearValue colourValue = {};
+    colourValue.color = {};
+    VkClearValue depthStencilValue = {};
+    depthStencilValue.depthStencil = {1.0f, 0};
+
+    const VkClearValue clearValues[] = {colourValue, depthStencilValue};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
     auto renderBeginInfo = vkInits::renderPassBeginInfo(this->renderPass, this->extent);
     renderBeginInfo.framebuffer = VK_NULL_HANDLE;
     renderBeginInfo.clearValueCount = 1;
-    renderBeginInfo.pClearValues = *clearValues;
-    renderBeginInfo.clearValueCount = uint32_t(arraysize(*clearValues));
+    renderBeginInfo.pClearValues = clearValues;
+    renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));
 
     for (size_t i = 0; i < this->imageCount; i++){
         const auto cmdBuffer = this->cmdBuffers[i];
@@ -358,10 +383,8 @@ void text_overlay::prepareDescriptorSets(mv_allocator *allocator)
     for(size_t i = 0; i < this->imageCount; i++)
         layouts[i] = this->setLayout;
 
-    VkDescriptorSetAllocateInfo descriptorSetAllocInfo{};
-    descriptorSetAllocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptorSetAllocInfo.descriptorPool = this->descriptorPool;
-    descriptorSetAllocInfo.descriptorSetCount = static_cast<uint32_t>(this->imageCount);
+    auto descriptorSetAllocInfo = vkInits::descriptorSetAllocateInfo(this->descriptorPool);
+    descriptorSetAllocInfo.descriptorSetCount = uint32_t(this->imageCount);
     descriptorSetAllocInfo.pSetLayouts = layouts;
     vkAllocateDescriptorSets(this->device, &descriptorSetAllocInfo, this->descriptorSets);
 
@@ -393,7 +416,7 @@ void text_overlay::preparePipeline()
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(arraysize(GuiAttributeDescriptions));
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(GuiAttributeDescriptions));
     vertexInputInfo.pVertexAttributeDescriptions = GuiAttributeDescriptions;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
@@ -424,7 +447,7 @@ void text_overlay::preparePipeline()
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount = static_cast<uint32_t>(arraysize(shaderStages));
+    pipelineInfo.stageCount = uint32_t(arraysize(shaderStages));
     pipelineInfo.pStages = shaderStages;
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
