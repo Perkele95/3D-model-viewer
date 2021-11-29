@@ -34,7 +34,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     this->fragShaderModule = pInfo->fragment;
     this->hDevice = pInfo->device;
     this->cmdPool = pInfo->cmdPool;
-    this->renderPass = pInfo->renderPass;
+    this->depthFormat = pInfo->depthFormat;
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(this->cmdPool, this->imageCount);
     vkAllocateCommandBuffers(this->hDevice->device, &cmdInfo, this->cmdBuffers);
@@ -85,6 +85,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     result = vkCreateDescriptorSetLayout(this->hDevice->device, &setLayoutInfo, nullptr, &this->setLayout);
 
     prepareDescriptorSets(pInfo->allocator);
+    prepareRenderpass();
     preparePipeline();
     prepareRenderBuffers();
 }
@@ -98,6 +99,7 @@ void text_overlay::destroy()
     this->indexBuffer.destroy(this->hDevice->device);
     this->fontBuffer.destroy(this->hDevice->device);
 
+    vkDestroyRenderPass(this->hDevice->device, this->renderPass, nullptr);
     vkDestroyPipeline(this->hDevice->device, this->pipeline, nullptr);
     vkDestroyPipelineLayout(this->hDevice->device, this->pipelineLayout, nullptr);
 
@@ -106,10 +108,8 @@ void text_overlay::destroy()
     vkDestroySampler(this->hDevice->device, this->sampler, nullptr);
 }
 
-void text_overlay::onWindowResize(mv_allocator *allocator, VkCommandPool commandPool,
-                                  VkRenderPass sharedRenderPass)
+void text_overlay::onWindowResize(mv_allocator *allocator, VkCommandPool commandPool)
 {
-    this->renderPass = renderPass;
     this->cmdPool = commandPool;
 
     vkDestroyPipeline(this->hDevice->device, this->pipeline, nullptr);
@@ -238,12 +238,9 @@ void text_overlay::updateCmdBuffers(const VkFramebuffer *pFramebuffers)
     if(this->quadCount == 0)
         return;
 
-    VkClearValue colourValue = {};
-    colourValue.color = {};
-    VkClearValue depthStencilValue = {};
-    depthStencilValue.depthStencil = {1.0f, 0};
-
-    const VkClearValue clearValues[] = {colourValue, depthStencilValue};
+    VkClearValue clearValues[2];
+    clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
+    clearValues[1].depthStencil = {1.0f, 0};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
     auto renderBeginInfo = vkInits::renderPassBeginInfo(this->renderPass, this->hDevice->extent);
@@ -276,15 +273,71 @@ void text_overlay::updateCmdBuffers(const VkFramebuffer *pFramebuffers)
     }
 }
 
-view<VkCommandBuffer> text_overlay::getDrawCmds()
-{
-    auto v = view(this->cmdBuffers, this->imageCount);
-    return v;
-}
-
 void text_overlay::prepareRenderpass()
 {
-    //
+    auto colourAttachment = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format);
+    colourAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    colourAttachment.samples = this->hDevice->sampleCount;
+
+    auto depthAttachment = vkInits::attachmentDescription(this->depthFormat);
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthAttachment.samples = this->hDevice->sampleCount;
+
+    auto colourResolve = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format);
+    colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
+
+    VkAttachmentReference coluorAttachmentRef{};
+    coluorAttachmentRef.attachment = 0;
+    coluorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference depthAttachmentRef{};
+    depthAttachmentRef.attachment = 1;
+    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentReference colourResolveRef{};
+    colourResolveRef.attachment = 2;
+    colourResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &coluorAttachmentRef;
+    subpass.pDepthStencilAttachment = &depthAttachmentRef;
+    subpass.pResolveAttachments = &colourResolveRef;
+
+    VkSubpassDependency dependencies[2];
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = uint32_t(arraysize(attachments));
+    renderPassInfo.pAttachments = attachments;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+
+    vkCreateRenderPass(this->hDevice->device, &renderPassInfo, nullptr, &this->renderPass);
 }
 
 void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)

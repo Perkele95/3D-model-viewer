@@ -19,9 +19,9 @@ struct text_overlay_create_info
     mv_allocator *allocator;
     const vulkan_device *device;
     VkCommandPool cmdPool;
-    VkRenderPass renderPass;
     size_t imageCount;
     VkShaderModule vertex, fragment;
+    VkFormat depthFormat;
 };
 
 struct text_overlay
@@ -34,8 +34,7 @@ struct text_overlay
     text_overlay &operator=(const text_overlay &src) = delete;
     text_overlay &operator=(const text_overlay &&src) = delete;
 
-    void onWindowResize(mv_allocator *allocator, VkCommandPool commandPool,
-                        VkRenderPass sharedRenderPass);
+    void onWindowResize(mv_allocator *allocator, VkCommandPool commandPool);
 
     void setTextTint(const vec4<float> tint);
     void setTextAlignment(text_align alignment);
@@ -45,7 +44,8 @@ struct text_overlay
     void draw(view<const char> stringView, vec2<float> position);
     void end();
     void updateCmdBuffers(const VkFramebuffer *pFramebuffers);
-    view<VkCommandBuffer> getDrawCmds();
+
+    VkCommandBuffer *cmdBuffers;
 
 private:
     void prepareRenderpass();
@@ -55,10 +55,10 @@ private:
     void prepareRenderBuffers();
 
     const vulkan_device *hDevice;
+    VkFormat depthFormat;
 
     VkCommandPool cmdPool;
     VkRenderPass renderPass;
-    VkCommandBuffer *cmdBuffers;
     size_t imageCount;
 
     VkDescriptorPool descriptorPool;

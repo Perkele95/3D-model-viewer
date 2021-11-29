@@ -31,10 +31,8 @@ model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32
 
     this->hDevice->create(allocator, flags & CORE_FLAG_ENABLE_VALIDATION, flags & CORE_FLAG_ENABLE_VSYNC);
 
-    this->extent = this->hDevice->extent;
     this->depthFormat = this->hDevice->getDepthFormat();
-    this->sampleCount = this->hDevice->sampleCount;
-    this->mainCamera = camera(float(this->extent.width) / float(this->extent.height));
+    this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
 
     buildResources(allocator);
 
@@ -52,9 +50,9 @@ model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32
     overlayInfo.device = this->hDevice;
     overlayInfo.cmdPool = this->cmdPool;
     overlayInfo.imageCount = this->imageCount;
-    overlayInfo.renderPass = this->renderPass;
     overlayInfo.vertex = vertexModule;
     overlayInfo.fragment = fragmentModule;
+    overlayInfo.depthFormat = this->depthFormat;
     this->hOverlay->create(&overlayInfo);
 
     this->currentFrame = 0;
@@ -110,7 +108,7 @@ model_viewer::~model_viewer()
 
 void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
 {
-    if(this->extent.width == 0 || this->extent.height == 0)
+    if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
 
     vkDeviceWaitIdle(this->hDevice->device);
@@ -145,18 +143,12 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
 
     vkResetFences(this->hDevice->device, 1, &this->inFlightFences[this->currentFrame]);
 
-    // TODO(arle): put all command buffers next to each other in a preset array so we don't have to
-    // construct the array while running
-    auto overLayCmds = this->hOverlay->getDrawCmds();
-    auto submitCmds = allocator->allocViewTransient<VkCommandBuffer>(this->imageCount + overLayCmds.count);
+    VkCommandBuffer submitCmds[] = {
+        this->commandBuffers[imageIndex],
+        this->hOverlay->cmdBuffers[imageIndex]
+    };
 
-    for (size_t i = 0; i < this->imageCount; i++)
-        submitCmds[i] = this->commandBuffers[i];
-
-    for (size_t i = 0; i < overLayCmds.count; i++)
-        submitCmds[i + this->imageCount] = overLayCmds[i];
-
-    auto submitInfo = vkInits::submitInfo(submitCmds.data, submitCmds.count);
+    auto submitInfo = vkInits::submitInfo(submitCmds, arraysize(submitCmds));
     submitInfo.waitSemaphoreCount = 1;
     submitInfo.pWaitSemaphores = waitSemaphores;
     submitInfo.pWaitDstStageMask = waitStages;
@@ -164,8 +156,6 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
     submitInfo.pSignalSemaphores = signalSemaphores;
     vkQueueSubmit(this->hDevice->graphics.queue, 1, &submitInfo,
                   this->inFlightFences[this->currentFrame]);
-
-    this->currentFrame = (this->currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 
     VkPresentInfoKHR presentInfo{};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -178,12 +168,14 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
     result = vkQueuePresentKHR(this->hDevice->present.queue, &presentInfo);
     switch(result){
         case VK_ERROR_OUT_OF_DATE_KHR:
-        case VK_SUBOPTIMAL_KHR: onWindowResize(allocator); break;
+        case VK_SUBOPTIMAL_KHR: onWindowResize(allocator); break;//TODO(arle): return early or smth
         default: break;
     }
 
     if(flags & CORE_FLAG_WINDOW_RESIZED)
         onWindowResize(allocator);
+
+    this->currentFrame = (this->currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 }
 
 void model_viewer::onWindowResize(mv_allocator *allocator)
@@ -191,9 +183,8 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
     vkDeviceWaitIdle(this->hDevice->device);
 
     this->hDevice->refresh();
-    this->extent = this->hDevice->extent;
 
-    if(this->extent.width == 0 || this->extent.height == 0)
+    if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
 
     for (size_t i = 0; i < this->imageCount; i++)
@@ -222,7 +213,7 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
     buildMsaa();
     buildFramebuffers();
 
-    this->hOverlay->onWindowResize(allocator, this->cmdPool, this->renderPass);
+    this->hOverlay->onWindowResize(allocator, this->cmdPool);
     this->hOverlay->updateCmdBuffers(this->framebuffers);
 }
 
@@ -295,9 +286,9 @@ void model_viewer::buildSwapchainViews()
 void model_viewer::buildMsaa()
 {
     auto imageInfo = vkInits::imageCreateInfo();
-    imageInfo.samples = this->sampleCount;
+    imageInfo.samples = this->hDevice->sampleCount;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.extent = {this->extent.width, this->extent.height, 1};
+    imageInfo.extent = {this->hDevice->extent.width, this->hDevice->extent.height, 1};
     imageInfo.format = this->hDevice->surfaceFormat.format;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -320,10 +311,10 @@ void model_viewer::buildMsaa()
 void model_viewer::buildDepth()
 {
     auto imageInfo = vkInits::imageCreateInfo();
-    imageInfo.extent = {this->extent.width, this->extent.height, 1};
+    imageInfo.extent = {this->hDevice->extent.width, this->hDevice->extent.height, 1};
     imageInfo.format = this->depthFormat;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.samples = this->sampleCount;
+    imageInfo.samples = this->hDevice->sampleCount;
     imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     VkResult result = vkCreateImage(this->hDevice->device, &imageInfo, nullptr, &this->depth.image);
 
@@ -343,16 +334,16 @@ void model_viewer::buildDepth()
 
 void model_viewer::buildRenderPass()
 {
-    constexpr auto finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    auto colourAttachment = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format, finalLayout);
-    colourAttachment.samples = this->sampleCount;
+    auto colourAttachment = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format);
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colourAttachment.samples = this->hDevice->sampleCount;
 
-    constexpr auto finalLayoutDepth = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    auto depthAttachment = vkInits::attachmentDescription(this->depthFormat, finalLayoutDepth);
-    depthAttachment.samples = this->sampleCount;
+    auto depthAttachment = vkInits::attachmentDescription(this->depthFormat);
+    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthAttachment.samples = this->hDevice->sampleCount;
 
-    constexpr auto finalLayoutResolve = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    auto colourResolve = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format, finalLayoutResolve);
+    auto colourResolve = vkInits::attachmentDescription(this->hDevice->surfaceFormat.format);
+    colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
 
@@ -377,22 +368,31 @@ void model_viewer::buildRenderPass()
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
     subpass.pResolveAttachments = &colourResolveRef;
 
-    VkSubpassDependency dependency{};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    VkSubpassDependency dependencies[2];
+	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass = 0;
+	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass = 0;
+	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = static_cast<uint32_t>(arraysize(attachments));
+    renderPassInfo.attachmentCount = uint32_t(arraysize(attachments));
     renderPassInfo.pAttachments = attachments;
     renderPassInfo.subpassCount = 1;
     renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = 1;
-    renderPassInfo.pDependencies = &dependency;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
 
     vkCreateRenderPass(this->hDevice->device, &renderPassInfo, nullptr, &this->renderPass);
 }
@@ -411,8 +411,8 @@ void model_viewer::buildFramebuffers()
         framebufferInfo.renderPass = this->renderPass;
         framebufferInfo.attachmentCount = static_cast<uint32_t>(arraysize(frameBufferAttachments));
         framebufferInfo.pAttachments = frameBufferAttachments;
-        framebufferInfo.width = this->extent.width;
-        framebufferInfo.height = this->extent.height;
+        framebufferInfo.width = this->hDevice->extent.width;
+        framebufferInfo.height = this->hDevice->extent.height;
         vkCreateFramebuffer(this->hDevice->device, &framebufferInfo, nullptr, &this->framebuffers[i]);
     }
 }
@@ -452,8 +452,8 @@ void model_viewer::buildPipeline()
     vertexInputInfo.pVertexAttributeDescriptions = s_MeshAttributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
-    auto viewport = vkInits::viewportInfo(this->extent);
-    auto scissor = vkInits::scissorInfo(this->extent);
+    auto viewport = vkInits::viewportInfo(this->hDevice->extent);
+    auto scissor = vkInits::scissorInfo(this->hDevice->extent);
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -463,7 +463,7 @@ void model_viewer::buildPipeline()
     viewportState.pScissors = &scissor;
 
     auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_CLOCKWISE);
-    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(this->sampleCount);
+    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(this->hDevice->sampleCount);
 
     auto depthStencil = vkInits::depthStencilStateInfo();
     auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
@@ -561,7 +561,7 @@ void model_viewer::updateCmdBuffers()
     const VkClearValue clearValues[] = {colourValue, depthStencilValue};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-    auto renderBeginInfo = vkInits::renderPassBeginInfo(this->renderPass, this->extent);
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(this->renderPass, this->hDevice->extent);
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = clearValues;
     renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));

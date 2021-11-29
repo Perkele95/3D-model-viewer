@@ -49,7 +49,6 @@ private:
     vulkan_device *hDevice;
     text_overlay *hOverlay;
 
-    VkExtent2D extent;
     size_t imageCount, currentFrame;
     VkCommandPool cmdPool;
     VkRenderPass renderPass;
@@ -60,7 +59,6 @@ private:
 
     image_buffer msaa;
     image_buffer depth;
-    VkSampleCountFlagBits sampleCount;
     VkFormat depthFormat;
 
     VkSemaphore imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
