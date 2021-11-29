@@ -8,24 +8,27 @@
 struct mat4x4
 {
     mat4x4() = default;
-    mat4x4(float value)
+
+    static mat4x4 identity()
     {
-        this->data[0][0] = value;
-        this->data[0][1] = 0.0f;
-        this->data[0][2] = 0.0f;
-        this->data[0][3] = 0.0f;
-        this->data[1][0] = 0.0f;
-        this->data[1][1] = value;
-        this->data[1][2] = 0.0f;
-        this->data[1][3] = 0.0f;
-        this->data[2][0] = 0.0f;
-        this->data[2][1] = 0.0f;
-        this->data[2][2] = value;
-        this->data[2][3] = 0.0f;
-        this->data[3][0] = 0.0f;
-        this->data[3][1] = 0.0f;
-        this->data[3][2] = 0.0f;
-        this->data[3][3] = value;
+        mat4x4 result;
+        result.data[0][0] = 1.0f;
+        result.data[0][1] = 0.0f;
+        result.data[0][2] = 0.0f;
+        result.data[0][3] = 0.0f;
+        result.data[1][0] = 0.0f;
+        result.data[1][1] = 1.0f;
+        result.data[1][2] = 0.0f;
+        result.data[1][3] = 0.0f;
+        result.data[2][0] = 0.0f;
+        result.data[2][1] = 0.0f;
+        result.data[2][2] = 1.0f;
+        result.data[2][3] = 0.0f;
+        result.data[3][0] = 0.0f;
+        result.data[3][1] = 0.0f;
+        result.data[3][2] = 0.0f;
+        result.data[3][3] = 1.0f;
+        return result;
     }
 
     float &operator()(size_t x, size_t y)
@@ -33,7 +36,7 @@ struct mat4x4
         return data[x][y];
     }
 
-    mat4x4 &translate(vec3<float> t)
+    mat4x4& VECTOR_API translate(vec3<float> t)
     {
         this->data[0][3] = t.x;
         this->data[1][3] = t.y;
@@ -74,7 +77,7 @@ struct mat4x4
         return *this;
     }
 
-    static mat4x4 lookAt(vec3<float> eye, vec3<float> centre, vec3<float> up)
+    static mat4x4 VECTOR_API lookAt(vec3<float> eye, vec3<float> centre, vec3<float> up)
     {
         auto Z = vec3(eye - centre).normalise();
         auto Y = up;
@@ -107,10 +110,10 @@ struct mat4x4
         return result;
     }
 
-    static mat4x4 perspective(float fov, float aspectRatio, float zNear, float zFar)
+    static mat4x4 VECTOR_API perspective(float fov, float aspectRatio, float zNear, float zFar)
     {
         float t = tanf(fov / 2.0f);
-        auto result = mat4x4(1.0f);
+        auto result = mat4x4::identity();
         result.data[0][0] = 1.0f / aspectRatio * t;
         result.data[1][1] = -1.0f / t;
         result.data[2][2] = -(zFar + zNear) / (zFar - zNear);
@@ -119,13 +122,13 @@ struct mat4x4
         return result;
     }
 
-    static mat4x4 ortho(float left, float right, float bottom,
+    static mat4x4 VECTOR_API ortho(float left, float right, float bottom,
                         float top, float zNear, float zFar)
     {
         const float rightMinusLeft = right - left;
         const float topMinusBottom = top - bottom;
         const float zFarMinusZNear = zFar - zNear;
-        auto result = mat4x4(1.0f);
+        auto result = mat4x4::identity();
         result.data[0][0] = 2.0f / rightMinusLeft;
         result.data[1][1] = 2.0f / topMinusBottom;
         result.data[2][2] = - 2.0f / zFarMinusZNear;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan_device.hpp"
+#include "vulkan_tools.hpp"
 
 struct alignas(4) quad_vertex
 {
@@ -33,8 +34,8 @@ struct text_overlay
     text_overlay &operator=(const text_overlay &src) = delete;
     text_overlay &operator=(const text_overlay &&src) = delete;
 
-    void onWindowResize(mv_allocator *allocator, const vulkan_device *vulkanDevice,
-                        VkCommandPool commandPool, VkRenderPass sharedRenderPass);
+    void onWindowResize(mv_allocator *allocator, VkCommandPool commandPool,
+                        VkRenderPass sharedRenderPass);
 
     void setTextTint(const vec4<float> tint);
     void setTextAlignment(text_align alignment);
@@ -44,28 +45,21 @@ struct text_overlay
     void draw(view<const char> stringView, vec2<float> position);
     void end();
     void updateCmdBuffers(const VkFramebuffer *pFramebuffers);
-    VkSubmitInfo getSubmitData();
+    view<VkCommandBuffer> getDrawCmds();
 
 private:
-    void bind(const vulkan_device *vulkanDevice, VkCommandPool commandPool,
-              VkRenderPass sharedRenderPass);
-    void prepareCommandbuffers();
+    void prepareRenderpass();
     void prepareFontBuffer(const void *src, VkExtent2D bitmapExtent);
     void prepareDescriptorSets(mv_allocator *allocator);
     void preparePipeline();
     void prepareRenderBuffers();
 
-    VkDevice device;
-    VkPhysicalDevice gpu;
-    VkQueue graphicsQueue;
+    const vulkan_device *hDevice;
 
-    VkRenderPass renderPass;
     VkCommandPool cmdPool;
-    VkSampleCountFlagBits sampleCount;
-    VkFramebuffer *framebuffers;
+    VkRenderPass renderPass;
     VkCommandBuffer *cmdBuffers;
     size_t imageCount;
-    VkExtent2D extent;
 
     VkDescriptorPool descriptorPool;
     VkDescriptorSetLayout setLayout;

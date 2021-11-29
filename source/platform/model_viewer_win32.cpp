@@ -1,4 +1,5 @@
 #include "../base.hpp"
+#include "platform_tools.hpp"
 #include "../input.hpp"
 #include "../mv_allocator.hpp"
 #include "../model_viewer.hpp"
@@ -9,75 +10,6 @@
 #include <stdio.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
-// TODO(arle): consider moving io to separate header file
-namespace io
-{
-    bool close(file_t &file)
-    {
-        const bool result = VirtualFree(file.handle, 0, MEM_RELEASE);
-        file.handle = nullptr;
-        file.size = 0;
-        return result;
-    }
-
-    file_t read(const char *filename)
-    {
-        HANDLE fileHandle = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-        LARGE_INTEGER fileSize;
-        file_t result{};
-
-        if((fileHandle != INVALID_HANDLE_VALUE) && GetFileSizeEx(fileHandle, &fileSize)){
-            uint32_t fileSize32 = static_cast<uint32_t>(fileSize.QuadPart);
-            result.handle = VirtualAlloc(NULL, fileSize.QuadPart, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-            if(result.handle){
-                DWORD bytesRead;
-                if(ReadFile(fileHandle, result.handle, fileSize32, &bytesRead, 0) && fileSize32 == bytesRead){
-                    result.size = fileSize32;
-                }
-                else{
-                    VirtualFree(result.handle, 0, MEM_RELEASE);
-                    result.handle = nullptr;
-                }
-            }
-            CloseHandle(fileHandle);
-        }
-        return result;
-    }
-
-    bool write(const char *filename, file_t &file)
-    {
-        bool result = false;
-        HANDLE fileHandle = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-        if(fileHandle != INVALID_HANDLE_VALUE){
-            DWORD bytesWritten;
-            if(WriteFile(fileHandle, file.handle, static_cast<DWORD>(file.size), &bytesWritten, 0))
-                result = (file.size == bytesWritten);
-
-            CloseHandle(fileHandle);
-        }
-        return result;
-    }
-
-    bool fileExists(const char *filename)
-    {
-        WIN32_FIND_DATA findData;
-        HANDLE hFindFile = FindFirstFileA(filename, &findData);
-        bool result = false;
-        if(hFindFile != INVALID_HANDLE_VALUE){
-            result = true;
-            FindClose(hFindFile);
-        }
-        return result;
-    }
-
-    file_t mapFile(size_t size)
-    {
-        file_t file{};
-        file.handle = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        file.size = size;
-        return file;
-    }
-}
 
 static vec2<int32_t> *GlobalExtentPtr = nullptr;
 static uint32_t *GlobalFlagsPtr = nullptr;
@@ -88,11 +20,13 @@ LRESULT CALLBACK MainWindowCallback(HWND window, UINT message, WPARAM wParam, LP
 {
     LRESULT result = 0;
     switch(message){
-        case WM_SIZE:
+        case WM_SIZE:{
             GlobalExtentPtr->x = lParam & 0x0000FFFF;
             GlobalExtentPtr->y = (lParam >> 16) & 0x0000FFFF;
             *GlobalFlagsPtr |= CORE_FLAG_WINDOW_RESIZED;
-            break;
+        } break;
+
+        case WM_APP:
 
         case WM_CLOSE:
         case WM_DESTROY: *GlobalFlagsPtr &= ~CORE_FLAG_RUNNING; break;
@@ -142,20 +76,28 @@ struct win32_context
 
     bool createWindow(LPCSTR lpWindowName)
     {
-        WNDCLASSA windowClass{};
+        WNDCLASSEXA windowClass{};
+        windowClass.cbSize = sizeof(WNDCLASSEXA);
         windowClass.style = CS_HREDRAW | CS_VREDRAW;
         windowClass.lpfnWndProc = MainWindowCallback;
         windowClass.hInstance = this->instance;
-        windowClass.hIcon = NULL;
         windowClass.lpszClassName = "wnd_class";
 
-        const ATOM result = RegisterClassA(&windowClass);
+        constexpr auto screenSize = vec2(1920i32, 1080i32);
+        constexpr auto viewportSize = vec2(1280i32, 720i32);
+        constexpr auto viewportOrigin = vec2(
+            (screenSize.x / 2) - (viewportSize.x / 2),
+            (screenSize.y / 2) - (viewportSize.y / 2)
+        );
+
+        const ATOM result = RegisterClassExA(&windowClass);
         if(result != 0){
+            auto style = WS_VISIBLE | WS_SYSMENU;
             this->window = CreateWindowExA(0, windowClass.lpszClassName, lpWindowName,
-                                                WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-                                                CW_USEDEFAULT, CW_USEDEFAULT,
-                                                CW_USEDEFAULT, CW_USEDEFAULT,
-                                                NULL, NULL, this->instance, NULL);
+                                           style,
+                                           viewportOrigin.x, viewportOrigin.y,
+                                           viewportSize.x, viewportSize.y,
+                                           NULL, NULL, this->instance, NULL);
         }
         return bool(result);
     }
@@ -206,7 +148,7 @@ struct win32_context
                     this->input.mouse.x = message.lParam & 0x0000FFFF;
                     this->input.mouse.y = (message.lParam >> 16) & 0x0000FFFF;
                     this->input.mousePressEvents |= MOUSE_EVENT_MOVE;
-                }break;
+                } break;
 
                 case WM_LBUTTONDOWN: this->input.mousePressEvents |= MOUSE_EVENT_LMB; break;
                 case WM_RBUTTONDOWN: this->input.mousePressEvents |= MOUSE_EVENT_RMB; break;
@@ -217,7 +159,7 @@ struct win32_context
                 case WM_MOUSEWHEEL:{
                     auto wheelValue = GET_WHEEL_DELTA_WPARAM(message.wParam);
                     this->input.mouseWheel = -(wheelValue / 120);
-                }break;
+                } break;
                 case WM_SYSKEYUP:
                 case WM_KEYUP: break;
 
@@ -228,12 +170,12 @@ struct win32_context
                     bool altKeyDown = (message.lParam & BIT(29));
                     if(message.lParam & BIT(29))
                         this->flags &= ~CORE_FLAG_RUNNING;
-                }break;
+                } break;
 
                 default:{
                     TranslateMessage(&message);
                     DispatchMessage(&message);
-                }break;
+                } break;
             }
         }
         GetKeyboardState(this->input.keyBoard);

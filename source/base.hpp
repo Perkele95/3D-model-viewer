@@ -3,7 +3,7 @@
 #include "mv_utils/view.hpp"
 #include "mv_utils/vec.hpp"
 
-#if defined(DEBUG_BUILD)
+#if defined(MV_DEBUG)
     #if defined(_WIN32)
         #define WIN32_LEAN_AND_MEAN
         #define NOMINMAX
@@ -18,20 +18,28 @@
 #else
     #define vol_assert(expression)
 #endif
+// TODO(arle): put into separate tools header
+namespace mv_tools
+{
+    using mv_handle = void*;
+    using mapped_region = mv_handle;
+
+    mapped_region map(size_t size);
+    bool unMap(mapped_region mapped);
+}
 
 struct file_t
 {
-    void *handle;
+    mv_tools::mapped_region handle;
     size_t size;
 };
 
 namespace io
 {
-    bool close(file_t &file);
+    bool close(file_t *file);
     file_t read(const char *filename);
-    bool write(const char *filename, file_t &file);
+    bool write(const char *filename, file_t *file);
     bool fileExists(const char *filename);
-    file_t mapFile(size_t size);
 }
 
 constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
@@ -54,3 +62,5 @@ enum CORE_FLAG_BITS
     CORE_FLAG_ENABLE_VALIDATION = BIT(3),
     CORE_FLAG_ENABLE_VSYNC = BIT(4),
 };
+
+constexpr float PI32 = 3.141592741f;

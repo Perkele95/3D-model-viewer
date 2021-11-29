@@ -3,6 +3,16 @@
 #include <stdint.h>
 #include <math.h>
 
+#if defined(_MSC_VER)
+    #define VECTOR_API __vectorcall
+#elif defined(__clang__)
+        #define VECTOR_API __attribute__((vectorcall))
+#elif defined(__GNUC__)
+        #define VECTOR_API __attribute__((vectorcall))
+#else
+    #define VECTOR_API
+#endif
+
 template<typename T>
 struct vec2
 {
@@ -50,13 +60,13 @@ struct vec2
 };
 
 template<typename T>
-inline vec2<T> operator+(vec2<T> a, vec2<T> b)
+inline vec2<T> VECTOR_API operator+(vec2<T> a, vec2<T> b)
 {
     return vec2(a.x + b.x, a.y + b.y);
 }
 
 template<typename T>
-inline vec2<T> &operator+=(vec2<T> &a, vec2<T> b)
+inline vec2<T>& VECTOR_API operator+=(vec2<T> &a, vec2<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -64,13 +74,13 @@ inline vec2<T> &operator+=(vec2<T> &a, vec2<T> b)
 }
 
 template<typename T>
-inline vec2<T> operator-(vec2<T> a, vec2<T> b)
+inline vec2<T> VECTOR_API operator-(vec2<T> a, vec2<T> b)
 {
     return vec2(a.x - b.x, a.y - b.y);
 }
 
 template<typename T>
-inline vec2<T> &operator-=(vec2<T> &a, vec2<T> b)
+inline vec2<T>& VECTOR_API operator-=(vec2<T> &a, vec2<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -78,13 +88,13 @@ inline vec2<T> &operator-=(vec2<T> &a, vec2<T> b)
 }
 
 template<typename T>
-inline vec2<T> operator*(vec2<T> a, float f)
+inline vec2<T> VECTOR_API operator*(vec2<T> a, float f)
 {
     return vec2(a.x * f, a.y * f);
 }
 
 template<typename T>
-inline vec2<T> &operator*=(vec2<T> &a, float f)
+inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, float f)
 {
     a.x *= static_cast<T>(f);
     a.y *= static_cast<T>(f);
@@ -92,13 +102,13 @@ inline vec2<T> &operator*=(vec2<T> &a, float f)
 }
 
 template<typename T>
-inline vec2<T> operator/(vec2<T> a, float f)
+inline vec2<T> VECTOR_API operator/(vec2<T> a, float f)
 {
     return vec2(a.x / f, a.y / f);
 }
 
 template<typename T>
-inline vec2<T> &operator/=(vec2<T> &a, float f)
+inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, float f)
 {
     a.x /= static_cast<T>(f);
     a.y /= static_cast<T>(f);
@@ -148,14 +158,14 @@ struct vec3
         return *this;
     }
 
-    float dotProduct(vec3<T> other) const
+    float VECTOR_API dotProduct(vec3<T> other) const
     {
         auto result = float(this->x) * float(other.x) + float(this->y) * float(other.y) +
                       float(this->z) * float(other.z);
         return result;
     }
 
-    vec3<T> crossProduct(vec3<T> other) const
+    vec3<T> VECTOR_API crossProduct(vec3<T> other) const
     {
         auto result = vec3(
             this->y * other.z - this->z * other.y,
@@ -169,13 +179,13 @@ struct vec3
 };
 
 template<typename T>
-inline vec3<T> operator+(vec3<T> a, vec3<T> b)
+inline vec3<T> VECTOR_API operator+(vec3<T> a, vec3<T> b)
 {
     return vec3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
 template<typename T>
-inline vec3<T> &operator+=(vec3<T> &a, vec3<T> b)
+inline vec3<T>& VECTOR_API operator+=(vec3<T> &a, vec3<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -184,13 +194,13 @@ inline vec3<T> &operator+=(vec3<T> &a, vec3<T> b)
 }
 
 template<typename T>
-inline vec3<T> operator-(vec3<T> a, vec3<T> b)
+inline vec3<T> VECTOR_API operator-(vec3<T> a, vec3<T> b)
 {
     return vec3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 template<typename T>
-inline vec3<T> &operator-=(vec3<T> &a, vec3<T> b)
+inline vec3<T>& VECTOR_API operator-=(vec3<T> &a, vec3<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -199,13 +209,13 @@ inline vec3<T> &operator-=(vec3<T> &a, vec3<T> b)
 }
 
 template<typename T>
-inline vec3<T> operator*(vec3<T> a, float f)
+inline vec3<T> VECTOR_API operator*(vec3<T> a, float f)
 {
     return vec3(a.x * f, a.y * f, a.z * f);
 }
 
 template<typename T>
-inline vec3<T> &operator*=(vec3<T> &a, float f)
+inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, float f)
 {
     a.x *= static_cast<T>(f);
     a.y *= static_cast<T>(f);
@@ -214,13 +224,13 @@ inline vec3<T> &operator*=(vec3<T> &a, float f)
 }
 
 template<typename T>
-inline vec3<T> operator/(vec3<T> a, float f)
+inline vec3<T> VECTOR_API operator/(vec3<T> a, float f)
 {
     return vec3(a.x / f, a.y / f, a.z / f);
 }
 
 template<typename T>
-inline vec3<T> &operator/=(vec3<T> &a, float f)
+inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, float f)
 {
     a.x /= static_cast<T>(f);
     a.y /= static_cast<T>(f);
@@ -284,13 +294,13 @@ struct vec4
 };
 
 template<typename T>
-inline vec4<T> operator+(vec4<T> a, vec4<T> b)
+inline vec4<T> VECTOR_API operator+(vec4<T> a, vec4<T> b)
 {
     return vec4(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
 template<typename T>
-inline vec4<T> &operator+=(vec4<T> &a, vec4<T> b)
+inline vec4<T>& VECTOR_API operator+=(vec4<T> &a, vec4<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -299,13 +309,13 @@ inline vec4<T> &operator+=(vec4<T> &a, vec4<T> b)
 }
 
 template<typename T>
-inline vec4<T> operator-(vec4<T> a, vec4<T> b)
+inline vec4<T> VECTOR_API operator-(vec4<T> a, vec4<T> b)
 {
     return vec4(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 template<typename T>
-inline vec4<T> &operator-=(vec4<T> &a, vec4<T> b)
+inline vec4<T>& VECTOR_API operator-=(vec4<T> &a, vec4<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -314,13 +324,13 @@ inline vec4<T> &operator-=(vec4<T> &a, vec4<T> b)
 }
 
 template<typename T>
-inline vec4<T> operator*(vec4<T> a, float f)
+inline vec4<T> VECTOR_API operator*(vec4<T> a, float f)
 {
     return vec4(a.x * f, a.y * f, a.z * f);
 }
 
 template<typename T>
-inline vec4<T> &operator*=(vec4<T> &a, float f)
+inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, float f)
 {
     a.x *= static_cast<T>(f);
     a.y *= static_cast<T>(f);
@@ -329,13 +339,13 @@ inline vec4<T> &operator*=(vec4<T> &a, float f)
 }
 
 template<typename T>
-inline vec4<T> operator/(vec4<T> a, float f)
+inline vec4<T> VECTOR_API operator/(vec4<T> a, float f)
 {
     return vec4(a.x / f, a.y / f, a.z / f);
 }
 
 template<typename T>
-inline vec4<T> &operator/=(vec4<T> &a, float f)
+inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, float f)
 {
     a.x /= static_cast<T>(f);
     a.y /= static_cast<T>(f);

@@ -2,12 +2,21 @@
 
 #include "base.hpp"
 #include "mv_allocator.hpp"
+#include "backend/vulkan_tools.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vk_text_overlay.hpp"
+#include "backend/camera.hpp"
 
 #include "mv_utils/mat4.hpp"
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
+
+struct alignas(4) mesh_vertex
+{
+    vec3<float> position;
+    vec4<float> colour;
+};
+using mesh_index = uint32_t;
 
 struct model_viewer
 {
@@ -23,6 +32,7 @@ struct model_viewer
 
 private:
     void onWindowResize(mv_allocator *allocator);
+
     void buildResources(mv_allocator *allocator);
     void buildSwapchainViews();
     void buildMsaa();
@@ -30,6 +40,11 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
+    void buildDescriptorSets();
+    void buildPipeline();
+    void buildMeshBuffers();
+
+    void updateCmdBuffers();
 
     vulkan_device *hDevice;
     text_overlay *hOverlay;
@@ -54,11 +69,15 @@ private:
     VkFence *imagesInFlight;
 
     // scene resources
-    VkDescriptorPool descriptorPool;
-    VkDescriptorSetLayout setLayout;
-    VkDescriptorSet *descriptorSets;
+
+    //VkDescriptorPool descriptorPool;
+    //VkDescriptorSetLayout setLayout;
+    //VkDescriptorSet *descriptorSets;
+    VkCommandBuffer *commandBuffers;
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;
     VkShaderModule vertShaderModule, fragShaderModule;
     buffer_t vertexBuffer, indexBuffer;
+
+    camera mainCamera;
 };

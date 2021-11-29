@@ -5,48 +5,6 @@ constexpr char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 constexpr char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
-VkMemoryAllocateInfo GetMemoryAllocInfo(VkPhysicalDevice gpu, VkMemoryRequirements memReqs,
-                                        VkMemoryPropertyFlags flags)
-{
-    VkPhysicalDeviceMemoryProperties memProperties{};
-    vkGetPhysicalDeviceMemoryProperties(gpu, &memProperties);
-
-    const auto getMemTypeIndex = [&memProperties](uint32_t typeFilter, VkMemoryPropertyFlags propFlags){
-        for(uint32_t i = 0; i < memProperties.memoryTypeCount; i++){
-            const uint32_t typeFilterResult = typeFilter & (1 << i);
-            const VkMemoryPropertyFlags memoryProps = memProperties.memoryTypes[i].propertyFlags;
-            if(typeFilterResult && (memoryProps & propFlags))
-                return i;
-        }
-        return 0U;
-    };
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReqs.size;
-    allocInfo.memoryTypeIndex = getMemTypeIndex(memReqs.memoryTypeBits, flags);
-    return allocInfo;
-}
-
-void buffer_t::destroy(VkDevice device)
-{
-    vkDestroyBuffer(device, this->data, nullptr);
-    vkFreeMemory(device, this->memory, nullptr);
-    this->data = VK_NULL_HANDLE;
-    this->memory = VK_NULL_HANDLE;
-    this->size = 0;
-}
-
-void image_buffer::destroy(VkDevice device)
-{
-    vkDestroyImage(device, this->image, nullptr);
-    vkDestroyImageView(device, this->view, nullptr);
-    vkFreeMemory(device, this->memory, nullptr);
-    this->image = VK_NULL_HANDLE;
-    this->view = VK_NULL_HANDLE;
-    this->memory = VK_NULL_HANDLE;
-}
-
 void vulkan_device::create(mv_allocator *allocator, bool validation, bool vSync)
 {
     auto appInfo = vkInits::applicationInfo("3D model viewer");
@@ -71,6 +29,9 @@ void vulkan_device::create(mv_allocator *allocator, bool validation, bool vSync)
     pickSurfaceFormat(allocator);
     const auto preferredMode = vSync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
     pickPresentMode(allocator, preferredMode);
+
+    refresh();
+    getSampleCount();
 }
 
 void vulkan_device::destroy()
@@ -83,44 +44,18 @@ void vulkan_device::destroy()
 void vulkan_device::refresh()
 {
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->gpu, this->surface, &this->capabilities);
-}
 
-VkExtent2D vulkan_device::getExtent() const
-{
-    VkExtent2D extent = this->capabilities.currentExtent;
+    this->minImageCount = this->capabilities.minImageCount + 1;
+    if(this->capabilities.maxImageCount > 0 && this->minImageCount > this->capabilities.maxImageCount)
+        this->minImageCount = this->capabilities.maxImageCount;
+
+    this->extent = this->capabilities.currentExtent;
     if(this->capabilities.currentExtent.width == 0xFFFFFFFF){
-        extent.width = clamp(extent.width, this->capabilities.minImageExtent.width,
-                                     this->capabilities.maxImageExtent.width);
-        extent.height = clamp(extent.height, this->capabilities.minImageExtent.height,
-                                      this->capabilities.maxImageExtent.height);
+        this->extent.width = clamp(this->extent.width, this->capabilities.minImageExtent.width,
+                                   this->capabilities.maxImageExtent.width);
+        this->extent.height = clamp(this->extent.height, this->capabilities.minImageExtent.height,
+                                    this->capabilities.maxImageExtent.height);
     }
-    return extent;
-}
-
-uint32_t vulkan_device::getMinImageCount() const
-{
-    uint32_t minImageCount = this->capabilities.minImageCount + 1;
-    if(this->capabilities.maxImageCount > 0 && minImageCount > this->capabilities.maxImageCount)
-        minImageCount = this->capabilities.maxImageCount;
-    return minImageCount;
-}
-
-VkSampleCountFlagBits vulkan_device::getSampleCount() const
-{
-    VkPhysicalDeviceProperties physicalDeviceProperties{};
-    vkGetPhysicalDeviceProperties(this->gpu, &physicalDeviceProperties);
-    const auto colourBits = physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-    const auto depthBits = physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-    const VkSampleCountFlags samples = colourBits & depthBits;
-
-    VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
-    for(VkSampleCountFlags bit = VK_SAMPLE_COUNT_64_BIT; bit != VK_SAMPLE_COUNT_1_BIT; bit >>= 1){
-        if(samples & bit){
-            sampleCount = VkSampleCountFlagBits(bit);
-            break;
-        }
-    }
-    return sampleCount;
 }
 
 VkFormat vulkan_device::getDepthFormat() const
@@ -156,10 +91,10 @@ VkResult vulkan_device::buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainK
     auto info = vkInits::swapchainCreateInfo(oldSwapchain);
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     info.surface = this->surface;
-    info.minImageCount = this->getMinImageCount();
+    info.minImageCount = this->minImageCount;
     info.imageFormat = this->surfaceFormat.format;
     info.imageColorSpace = this->surfaceFormat.colorSpace;
-    info.imageExtent = this->getExtent();
+    info.imageExtent = this->extent;
     info.preTransform = this->capabilities.currentTransform;
     info.presentMode = this->presentMode;
 
@@ -311,6 +246,23 @@ void vulkan_device::pickPresentMode(mv_allocator *allocator, VkPresentModeKHR pr
     for(size_t i = 0; i < count; i++){
         if(presentModes[i] == preferredMode){
             this->presentMode = preferredMode;
+            break;
+        }
+    }
+}
+
+void vulkan_device::getSampleCount()
+{
+    VkPhysicalDeviceProperties physicalDeviceProperties{};
+    vkGetPhysicalDeviceProperties(this->gpu, &physicalDeviceProperties);
+    const auto colourBits = physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+    const auto depthBits = physicalDeviceProperties.limits.framebufferDepthSampleCounts;
+    const VkSampleCountFlags samples = colourBits & depthBits;
+
+    this->sampleCount = VK_SAMPLE_COUNT_1_BIT;
+    for(VkSampleCountFlags bit = VK_SAMPLE_COUNT_64_BIT; bit != VK_SAMPLE_COUNT_1_BIT; bit >>= 1){
+        if(samples & bit){
+            this->sampleCount = VkSampleCountFlagBits(bit);
             break;
         }
     }

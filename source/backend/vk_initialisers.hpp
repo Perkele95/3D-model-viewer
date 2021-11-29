@@ -54,6 +54,13 @@ namespace vkInits
         return info;
     }
 
+    INIT_API descriptorPoolCreateInfo()
+    {
+        VkDescriptorPoolCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        return info;
+    }
+
     INIT_API descriptorSetAllocateInfo(VkDescriptorPool pool)
     {
         VkDescriptorSetAllocateInfo info{};
