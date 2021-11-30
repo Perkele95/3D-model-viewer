@@ -7,21 +7,26 @@ constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
 };
 
 static constexpr auto s_MeshSzf = 0.5f;
-static constexpr auto s_MeshTint = vec4(1.0f);
+static constexpr auto s_MeshTint1 = vec4(1.0f);
+static constexpr auto s_MeshTint2 = vec4(0.8f, 0.8f, 0.8f, 1.0f);
 static mesh_vertex s_MeshVertices[] = {
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint},
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint1},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint1},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint1},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint1},
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint2},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint2},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint2},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint2},
 };
 
 static mesh_index s_MeshIndices[] = {
     0, 1, 2, 2, 3, 0, // Front
-    4, 5, 6, 6, 7, 4 // Back facing forward
+    4, 7, 6, 6, 5, 4, // Back
+    3, 2, 6, 6, 7, 3, // Top
+    4, 5, 1, 1, 0, 4, // Bottom
+    4, 0, 3, 3, 7, 4, // Left
+    1, 5, 6, 6, 2, 1 // Right
 };
 
 model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32_t flags)
@@ -65,7 +70,7 @@ model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32
     this->hOverlay->begin();
 
     constexpr auto titleString = view("3D model viewer");
-    this->hOverlay->draw(titleString, vec2(50.0f, 20.0f));
+    this->hOverlay->draw(titleString, vec2(50.0f, 12.0f));
 
     this->hOverlay->end();
     this->hOverlay->updateCmdBuffers(this->framebuffers);
@@ -111,10 +116,6 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
 
-    vkDeviceWaitIdle(this->hDevice->device);
-
-    // draw
-
     vkWaitForFences(this->hDevice->device, 1, &this->inFlightFences[this->currentFrame],
                     VK_TRUE, UINT64_MAX);
 
@@ -128,14 +129,15 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
         default: break;
     }
 
+    this->mainCamera.model *= mat4x4::rotateY(0.0005f);
+
+    vkQueueWaitIdle(this->hDevice->graphics.queue);//TODO(arle): replace with fence
+    updateCmdBuffers();
+
     if(this->imagesInFlight[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(this->hDevice->device, 1, &this->imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
 
     this->imagesInFlight[imageIndex] = this->inFlightFences[this->currentFrame];
-
-    vkDeviceWaitIdle(this->hDevice->device);
-
-    //update command buffers
 
     const VkSemaphore waitSemaphores[] = {this->imageAvailableSPs[this->currentFrame]};
     const VkSemaphore signalSemaphores[] = {this->renderFinishedSPs[this->currentFrame]};
@@ -166,14 +168,12 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
     presentInfo.pImageIndices = &imageIndex;
 
     result = vkQueuePresentKHR(this->hDevice->present.queue, &presentInfo);
-    switch(result){
-        case VK_ERROR_OUT_OF_DATE_KHR:
-        case VK_SUBOPTIMAL_KHR: onWindowResize(allocator); break;//TODO(arle): return early or smth
-        default: break;
-    }
 
-    if(flags & CORE_FLAG_WINDOW_RESIZED)
+    if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
+       flags & CORE_FLAG_WINDOW_RESIZED)
+    {
         onWindowResize(allocator);
+    }
 
     this->currentFrame = (this->currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 }
@@ -595,7 +595,7 @@ void model_viewer::updateCmdBuffers()
         const VkDeviceSize indexOffset = 0;
         vkCmdBindIndexBuffer(cmdBuffer, this->indexBuffer.data, indexOffset, VK_INDEX_TYPE_UINT32);
 
-        const auto indexCount = 12;
+        const auto indexCount = uint32_t(arraysize(s_MeshIndices));
         vkCmdDrawIndexed(cmdBuffer, indexCount, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(cmdBuffer);

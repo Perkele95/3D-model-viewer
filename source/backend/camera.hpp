@@ -40,7 +40,7 @@ struct camera
 
     void update(float aspectRatio)
     {
-        constexpr auto eye = vec3(0.0f, 0.5f, -2.0f);
+        constexpr auto eye = vec3(0.8f, 0.8f, -2.0f);
         constexpr auto centre = vec3(0.0f);
         constexpr auto up = vec3(0.0f, 1.0f, 0.0f);
         this->view = mat4x4::lookAt(eye, centre, up);
