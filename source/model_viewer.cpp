@@ -3,30 +3,60 @@
 
 constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
     VkVertexInputAttributeDescription{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, position)},
-    VkVertexInputAttributeDescription{1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh_vertex, colour)}
+    VkVertexInputAttributeDescription{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, normal)},
+    VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh_vertex, colour)}
 };
 
 static constexpr auto s_MeshSzf = 0.5f;
-static constexpr auto s_MeshTint1 = vec4(1.0f);
-static constexpr auto s_MeshTint2 = vec4(0.8f, 0.8f, 0.8f, 1.0f);
+static constexpr auto s_MeshTint = vec4(1.0f);
+
+static constexpr auto s_NormalFront = vec3(0.0f, 0.0f, -1.0f);
+static constexpr auto s_NormalBack = vec3(0.0f, 0.0f, 1.0f);
+static constexpr auto s_NormalTop = vec3(0.0f, 1.0f, 0.0f);
+static constexpr auto s_NormalBottom = vec3(0.0f, -1.0f, 0.0f);
+static constexpr auto s_NormalLeft = vec3(1.0f, 0.0f, 0.0f);
+static constexpr auto s_NormalRight = vec3(-1.0f, 0.0f, 0.0f);
+
 static mesh_vertex s_MeshVertices[] = {
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint1},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_MeshTint1},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint1},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_MeshTint1},
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint2},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_MeshTint2},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint2},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_MeshTint2},
+    // Front
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
+    // Back
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
+    // Top
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, s_MeshTint},
+    // Bottom
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, s_MeshTint},
+    // Left
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalLeft ,s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalLeft, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalLeft, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalLeft, s_MeshTint},
+    // Right
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalRight, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalRight, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalRight, s_MeshTint},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight, s_MeshTint},
 };
 
 static mesh_index s_MeshIndices[] = {
     0, 1, 2, 2, 3, 0, // Front
     4, 7, 6, 6, 5, 4, // Back
-    3, 2, 6, 6, 7, 3, // Top
-    4, 5, 1, 1, 0, 4, // Bottom
-    4, 0, 3, 3, 7, 4, // Left
-    1, 5, 6, 6, 2, 1 // Right
+    8, 9, 10, 10, 11, 8, // Top
+    12, 13, 14, 14, 15, 12, // Bottom
+    16, 17, 18, 18, 19, 16, // Left
+    20, 21, 22, 22, 23, 20, // Right
 };
 
 model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32_t flags)
@@ -215,6 +245,7 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
 
     this->hOverlay->onWindowResize(allocator, this->cmdPool);
     this->hOverlay->updateCmdBuffers(this->framebuffers);
+    this->mainCamera.update(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
 }
 
 void model_viewer::buildResources(mv_allocator *allocator)

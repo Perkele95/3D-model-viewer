@@ -4,7 +4,7 @@
 #include "mv_allocator.hpp"
 #include "backend/vulkan_tools.hpp"
 #include "backend/vulkan_device.hpp"
-#include "backend/vk_text_overlay.hpp"
+#include "backend/vulkan_text_overlay.hpp"
 #include "backend/camera.hpp"
 
 #include "mv_utils/mat4.hpp"
@@ -14,6 +14,7 @@ constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 struct alignas(4) mesh_vertex
 {
     vec3<float> position;
+    vec3<float> normal;
     vec4<float> colour;
 };
 using mesh_index = uint32_t;

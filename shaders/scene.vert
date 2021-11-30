@@ -9,12 +9,18 @@ layout(push_constant) uniform camera_matrix
 } camera;
 
 layout(location = 0) in vec3 inPosition;
-layout(location = 1) in vec4 inColour;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec4 inColour;
 
-layout(location = 0) out vec4 fragColour;
+layout(location = 0) out vec4 fragPosition;
+layout(location = 1) out vec3 fragNormal;
+layout(location = 2) out vec4 fragColour;
 
 void main()
 {
-    gl_Position = camera.proj * camera.view * camera.model * vec4(inPosition, 1.0);
+    fragPosition = camera.model * vec4(inPosition, 1.0);
+    gl_Position = camera.proj * camera.view * fragPosition;
+
+    fragNormal = inNormal;
     fragColour = inColour;
 }

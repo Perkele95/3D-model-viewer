@@ -1,5 +1,5 @@
 #include "../vendor/stb/stb_font_courier_40_latin1.inl"
-#include "vk_text_overlay.hpp"
+#include "vulkan_text_overlay.hpp"
 #include "vulkan_tools.hpp"
 #include <string.h>
 

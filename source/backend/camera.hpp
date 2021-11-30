@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../mv_utils/mat4.hpp"
-#include "vk_initialisers.hpp"
+#include "vulkan_initialisers.hpp"
 
 struct alignas(16) camera_matrix
 {
@@ -52,4 +52,7 @@ struct camera
     mat4x4 proj;
 
     float fov, zNear, zFar;
+
+    vec3<float> position;
+    vec3<float> target;
 };
