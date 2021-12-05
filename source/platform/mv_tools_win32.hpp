@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../base.hpp"
+#include "../mv_tools.hpp"
 #include <stdio.h>
 
 #define WIN32_LEAN_AND_MEAN
@@ -9,14 +9,14 @@
 
 namespace mv_tools
 {
-    mapped_region map(size_t size)
+    mv_handle map(size_t size)
     {
         auto ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-        auto mapped = static_cast<mapped_region>(ptr);
+        auto mapped = static_cast<mv_handle>(ptr);
         return mapped;
     }
 
-    bool unMap(mapped_region mapped)
+    bool unMap(mv_handle mapped)
     {
         const bool result = VirtualFree(mapped, 0, MEM_RELEASE);
         return result;

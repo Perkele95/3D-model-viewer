@@ -51,8 +51,11 @@ struct camera
     mat4x4 view;
     mat4x4 proj;
 
-    float fov, zNear, zFar;
+    float fov;
+
+private:
+    float zNear, zFar;
 
     vec3<float> position;
-    vec3<float> target;
+    vec3<float> front;
 };

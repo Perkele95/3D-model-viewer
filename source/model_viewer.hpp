@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.hpp"
+#include "input.hpp"
 #include "mv_allocator.hpp"
 #include "backend/vulkan_tools.hpp"
 #include "backend/vulkan_device.hpp"
@@ -29,9 +30,10 @@ struct model_viewer
     model_viewer &operator=(const model_viewer &src) = delete;
     model_viewer &operator=(const model_viewer &&src) = delete;
 
-    void run(mv_allocator *allocator, uint32_t flags, float dt);
+    void run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt);
 
 private:
+    void testProc(const input_state *input);
     void onWindowResize(mv_allocator *allocator);
 
     void buildResources(mv_allocator *allocator);

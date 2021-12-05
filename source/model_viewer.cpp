@@ -8,7 +8,7 @@ constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
 };
 
 static constexpr auto s_MeshSzf = 0.5f;
-static constexpr auto s_MeshTint = vec4(1.0f);
+constexpr auto CUBE_TINT = vec4(0.1f, 1.0f, 0.1f, 1.0f);
 
 static constexpr auto s_NormalFront = vec3(0.0f, 0.0f, -1.0f);
 static constexpr auto s_NormalBack = vec3(0.0f, 0.0f, 1.0f);
@@ -19,35 +19,35 @@ static constexpr auto s_NormalRight = vec3(-1.0f, 0.0f, 0.0f);
 
 static mesh_vertex s_MeshVertices[] = {
     // Front
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
     // Back
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
     // Top
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, s_MeshTint},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, CUBE_TINT},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, CUBE_TINT},
     // Bottom
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, s_MeshTint},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, CUBE_TINT},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, CUBE_TINT},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, CUBE_TINT},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, CUBE_TINT},
     // Left
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalLeft ,s_MeshTint},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalLeft, s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalLeft, s_MeshTint},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalLeft, s_MeshTint},
+    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalLeft ,CUBE_TINT},
+    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalLeft, CUBE_TINT},
+    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalLeft, CUBE_TINT},
+    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalLeft, CUBE_TINT},
     // Right
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalRight, s_MeshTint},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalRight, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalRight, s_MeshTint},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight, s_MeshTint},
+    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalRight, CUBE_TINT},
+    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalRight, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalRight, CUBE_TINT},
+    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight, CUBE_TINT},
 };
 
 static mesh_index s_MeshIndices[] = {
@@ -141,7 +141,15 @@ model_viewer::~model_viewer()
     this->hDevice->destroy();
 }
 
-void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
+void model_viewer::testProc(const input_state *input)
+{
+    if(input->mouseWheel){
+        const float factor = input->mouseWheel * 0.05f;
+        this->mainCamera.model *= mat4x4::rotateY(factor);
+    }
+}
+
+void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt)
 {
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
@@ -159,7 +167,7 @@ void model_viewer::run(mv_allocator *allocator, uint32_t flags, float dt)
         default: break;
     }
 
-    this->mainCamera.model *= mat4x4::rotateY(0.0005f);
+    testProc(input);
 
     vkQueueWaitIdle(this->hDevice->graphics.queue);//TODO(arle): replace with fence
     updateCmdBuffers();

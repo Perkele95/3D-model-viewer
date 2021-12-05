@@ -12,15 +12,16 @@ layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
 layout(location = 2) in vec4 inColour;
 
-layout(location = 0) out vec4 fragPosition;
+layout(location = 0) out vec3 fragPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec4 fragColour;
 
 void main()
 {
-    fragPosition = camera.model * vec4(inPosition, 1.0);
-    gl_Position = camera.proj * camera.view * fragPosition;
+    fragPosition = vec3(camera.model * vec4(inPosition, 1.0));
+    gl_Position = camera.proj * camera.view * camera.model * vec4(inPosition, 1.0);
 
-    fragNormal = inNormal;
+    fragNormal = mat3(transpose(inverse(camera.model))) * inNormal;
+    //fragNormal = inNormal;
     fragColour = inColour;
 }

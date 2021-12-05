@@ -1,5 +1,5 @@
 #include "../base.hpp"
-#include "platform_tools.hpp"
+#include "mv_tools_win32.hpp"
 #include "../input.hpp"
 #include "../mv_allocator.hpp"
 #include "../model_viewer.hpp"
@@ -167,8 +167,9 @@ struct win32_context
                 case WM_SYSKEYDOWN:{
                     uint32_t keyCode = static_cast<uint32_t>(message.wParam);
                     processKeyPress(keyCode);
-                    bool altKeyDown = (message.lParam & BIT(29));
-                    if(message.lParam & BIT(29))
+
+                    const bool altKeyDown = (message.lParam & BIT(29));
+                    if(altKeyDown && keyCode == VK_F4)
                         this->flags &= ~CORE_FLAG_RUNNING;
                 } break;
 
@@ -238,7 +239,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     while(context.flags & CORE_FLAG_RUNNING){
         context.pollEvents();
-        core.run(&allocator, context.flags, context.dt);
+        core.run(&allocator, &context.input, context.flags, context.dt);
         context.update();
     }
 

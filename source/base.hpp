@@ -2,6 +2,7 @@
 
 #include "mv_utils/view.hpp"
 #include "mv_utils/vec.hpp"
+#include "mv_tools.hpp"
 
 #if defined(MV_DEBUG)
     #if defined(_WIN32)
@@ -18,29 +19,6 @@
 #else
     #define vol_assert(expression)
 #endif
-// TODO(arle): put into separate tools header
-namespace mv_tools
-{
-    using mv_handle = void*;
-    using mapped_region = mv_handle;
-
-    mapped_region map(size_t size);
-    bool unMap(mapped_region mapped);
-}
-
-struct file_t
-{
-    mv_tools::mapped_region handle;
-    size_t size;
-};
-
-namespace io
-{
-    bool close(file_t *file);
-    file_t read(const char *filename);
-    bool write(const char *filename, file_t *file);
-    bool fileExists(const char *filename);
-}
 
 constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
 constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL;}
