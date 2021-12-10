@@ -6,7 +6,24 @@ constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
     VkVertexInputAttributeDescription{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, normal)},
     VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh_vertex, colour)}
 };
+#if 0
+struct alignas(4) material
+{
+    static VkPushConstantRange pushConstant()
+    {
+        VkPushConstantRange range;
+        range.offset = 0;
+        range.size = sizeof(material);
+        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        return range;
+    }
 
+    vec3<float> ambient;
+    vec3<float> diffuse;
+    vec3<float> specular;
+    float shininess;
+};
+#endif
 static constexpr auto s_MeshSzf = 0.5f;
 constexpr auto CUBE_TINT = vec4(0.1f, 1.0f, 0.1f, 1.0f);
 
@@ -141,15 +158,15 @@ model_viewer::~model_viewer()
     this->hDevice->destroy();
 }
 
-void model_viewer::testProc(const input_state *input)
+void model_viewer::testProc(const input_state *input, float dt)
 {
-    if(input->mouseWheel){
-        const float factor = input->mouseWheel * 0.05f;
-        this->mainCamera.model *= mat4x4::rotateY(factor);
-    }
+#if 1
+    const float aspectRatio = float(this->hDevice->extent.width) / float(this->hDevice->extent.height);
+    this->mainCamera.update(aspectRatio, input->mouseDelta, dt);
+#endif
 }
 
-void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt)
+void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t *flags, float dt)
 {
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
@@ -167,7 +184,7 @@ void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32
         default: break;
     }
 
-    testProc(input);
+    testProc(input, dt);
 
     vkQueueWaitIdle(this->hDevice->graphics.queue);//TODO(arle): replace with fence
     updateCmdBuffers();
@@ -208,7 +225,7 @@ void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32
     result = vkQueuePresentKHR(this->hDevice->present.queue, &presentInfo);
 
     if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-       flags & CORE_FLAG_WINDOW_RESIZED)
+       *flags & CORE_FLAG_WINDOW_RESIZED)
     {
         onWindowResize(allocator);
     }
@@ -253,7 +270,7 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
 
     this->hOverlay->onWindowResize(allocator, this->cmdPool);
     this->hOverlay->updateCmdBuffers(this->framebuffers);
-    this->mainCamera.update(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
+    this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
 }
 
 void model_viewer::buildResources(mv_allocator *allocator)

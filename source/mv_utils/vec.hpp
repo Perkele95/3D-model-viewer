@@ -88,30 +88,30 @@ inline vec2<T>& VECTOR_API operator-=(vec2<T> &a, vec2<T> b)
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator*(vec2<T> a, float f)
+inline vec2<T> VECTOR_API operator*(vec2<T> a, T value)
 {
-    return vec2(a.x * f, a.y * f);
+    return vec2(a.x * value, a.y * value);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, float f)
+inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, T value)
 {
-    a.x *= static_cast<T>(f);
-    a.y *= static_cast<T>(f);
+    a.x *= value;
+    a.y *= value;
     return a;
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator/(vec2<T> a, float f)
+inline vec2<T> VECTOR_API operator/(vec2<T> a, T value)
 {
-    return vec2(a.x / f, a.y / f);
+    return vec2(a.x / value, a.y / value);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, float f)
+inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, T value)
 {
-    a.x /= static_cast<T>(f);
-    a.y /= static_cast<T>(f);
+    a.x /= value;
+    a.y /= value;
     return a;
 }
 
@@ -209,32 +209,32 @@ inline vec3<T>& VECTOR_API operator-=(vec3<T> &a, vec3<T> b)
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator*(vec3<T> a, float f)
+inline vec3<T> VECTOR_API operator*(vec3<T> a, T value)
 {
-    return vec3(a.x * f, a.y * f, a.z * f);
+    return vec3(a.x * value, a.y * value, a.z * value);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, float f)
+inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, T value)
 {
-    a.x *= static_cast<T>(f);
-    a.y *= static_cast<T>(f);
-    a.z *= static_cast<T>(f);
+    a.x *= value;
+    a.y *= value;
+    a.z *= value;
     return a;
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator/(vec3<T> a, float f)
+inline vec3<T> VECTOR_API operator/(vec3<T> a, T value)
 {
-    return vec3(a.x / f, a.y / f, a.z / f);
+    return vec3(a.x / value, a.y / value, a.z / value);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, float f)
+inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, T value)
 {
-    a.x /= static_cast<T>(f);
-    a.y /= static_cast<T>(f);
-    a.z /= static_cast<T>(f);
+    a.x /= value;
+    a.y /= value;
+    a.z /= value;
     return a;
 }
 
@@ -296,7 +296,7 @@ struct vec4
 template<typename T>
 inline vec4<T> VECTOR_API operator+(vec4<T> a, vec4<T> b)
 {
-    return vec4(a.x + b.x, a.y + b.y, a.z + b.z);
+    return vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
 
 template<typename T>
@@ -305,13 +305,14 @@ inline vec4<T>& VECTOR_API operator+=(vec4<T> &a, vec4<T> b)
     a.x += b.x;
     a.y += b.y;
     a.z += b.z;
+    a.w += b.w;
     return a;
 }
 
 template<typename T>
 inline vec4<T> VECTOR_API operator-(vec4<T> a, vec4<T> b)
 {
-    return vec4(a.x - b.x, a.y - b.y, a.z - b.z);
+    return vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 }
 
 template<typename T>
@@ -320,35 +321,38 @@ inline vec4<T>& VECTOR_API operator-=(vec4<T> &a, vec4<T> b)
     a.x -= b.x;
     a.y -= b.y;
     a.z -= b.z;
+    a.w -= b.w;
     return a;
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator*(vec4<T> a, float f)
+inline vec4<T> VECTOR_API operator*(vec4<T> a, T value)
 {
-    return vec4(a.x * f, a.y * f, a.z * f);
+    return vec4(a.x * value, a.y * value, a.z * value, a.w * value);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, float f)
+inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, T value)
 {
-    a.x *= static_cast<T>(f);
-    a.y *= static_cast<T>(f);
-    a.z *= static_cast<T>(f);
+    a.x *= value;
+    a.y *= value;
+    a.z *= value;
+    a.w *= value;
     return a;
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator/(vec4<T> a, float f)
+inline vec4<T> VECTOR_API operator/(vec4<T> a, T value)
 {
-    return vec4(a.x / f, a.y / f, a.z / f);
+    return vec4(a.x / value, a.y / value, a.z / value, a.w / value);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, float f)
+inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, T value)
 {
-    a.x /= static_cast<T>(f);
-    a.y /= static_cast<T>(f);
-    a.z /= static_cast<T>(f);
+    a.x /= value;
+    a.y /= value;
+    a.z /= value;
+    a.w /= value;
     return a;
 }

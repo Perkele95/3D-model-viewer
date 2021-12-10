@@ -8,9 +8,10 @@ struct input_state
 {
     uint32_t keyPressEvents;
     uint32_t mousePressEvents;
-    vec2<int32_t> mouse;
     key_t keyBoard[0xFFUI8];
     int32_t mouseWheel;
+
+    vec2<int32_t> mouse, mousePrev, mouseDelta;
 };
 
 // Volunds keycodes are identical to windows platform keycodes

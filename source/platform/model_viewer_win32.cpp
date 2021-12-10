@@ -44,6 +44,11 @@ void SetSurface(VkInstance instance, VkSurfaceKHR *pSurface)
     vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, pSurface);
 }
 
+void SetCursorVisibility(bool show)
+{
+    ShowCursor(BOOL(show));
+}
+
 struct win32_context
 {
     win32_context(size_t virtualMemoryBufferSize)
@@ -54,8 +59,11 @@ struct win32_context
         this->instance = NULL;
         this->window = NULL;
         this->extent = vec2(0);
-        this->flags = CORE_FLAG_RUNNING | CORE_FLAG_ENABLE_VALIDATION;
+        this->flags = CORE_FLAG_RUNNING | CORE_FLAG_ENABLE_VALIDATION | CORE_FLAG_CONSTRAIN_MOUSE;
         this->dt = 0.0f;
+        this->input.mouse = vec2(0i32);
+        this->input.mousePrev = vec2(0i32);
+        this->input.mouseDelta = vec2(0i32);
 
         QueryPerformanceFrequency(&this->perfCountFrequency);
         QueryPerformanceCounter(&this->perfCounter);
@@ -98,7 +106,13 @@ struct win32_context
                                            viewportOrigin.x, viewportOrigin.y,
                                            viewportSize.x, viewportSize.y,
                                            NULL, NULL, this->instance, NULL);
+
+            SetWindowLong(this->window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
+            constexpr UINT setWindowPosFlags = SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                                               SWP_NOOWNERZORDER | SWP_FRAMECHANGED;
+            SetWindowPos(this->window, NULL, 0,0,0,0, setWindowPosFlags);
         }
+
         return bool(result);
     }
 
@@ -140,13 +154,14 @@ struct win32_context
         this->input.keyPressEvents = 0;
         this->input.mousePressEvents = 0;
         this->input.mouseWheel = 0;
+        this->input.mousePrev = this->input.mouse;
 
         MSG message;
         while(PeekMessageA(&message, 0, 0, 0, PM_REMOVE | PM_QS_INPUT)){
             switch(message.message){
                 case WM_MOUSEMOVE:{
-                    this->input.mouse.x = message.lParam & 0x0000FFFF;
-                    this->input.mouse.y = (message.lParam >> 16) & 0x0000FFFF;
+                    const auto p = MAKEPOINTS(message.lParam);
+                    this->input.mouse = vec2(int32_t(p.x), int32_t(p.y));
                     this->input.mousePressEvents |= MOUSE_EVENT_MOVE;
                 } break;
 
@@ -179,6 +194,17 @@ struct win32_context
                 } break;
             }
         }
+
+        GetWindowRect(this->window, &this->windowRect);
+        const auto halfExtent = this->extent / 2;
+        this->windowCentre = halfExtent + vec2(int32_t(this->windowRect.left), int32_t(this->windowRect.top));
+        this->input.mouseDelta = this->input.mouse - this->input.mousePrev;
+
+        if(this->flags & CORE_FLAG_CONSTRAIN_MOUSE){
+            SetCursorPos(this->windowCentre.x, this->windowCentre.y);
+            this->input.mouse = halfExtent;
+        }
+
         GetKeyboardState(this->input.keyBoard);
     }
 
@@ -213,9 +239,10 @@ struct win32_context
 
     LARGE_INTEGER perfCountFrequency, perfCounter;
     WINDOWPLACEMENT windowPlacement;
+    RECT windowRect;
     HINSTANCE instance;
     HWND window;
-    vec2<int32_t> extent;
+    vec2<int32_t> extent, windowCentre;
     input_state input;
     uint32_t flags;
     float dt;
@@ -231,7 +258,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     if(context.createWindow("3D model viewer") == false)
         return 0;
 
-    context.flags ^= CORE_FLAG_WINDOW_RESIZED;
+    context.flags &= ~CORE_FLAG_WINDOW_RESIZED;
 
     auto allocator = mv_allocator(context.virtualMemoryBuffer, permanentCapacity, transientCapacity);
 
@@ -239,7 +266,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     while(context.flags & CORE_FLAG_RUNNING){
         context.pollEvents();
-        core.run(&allocator, &context.input, context.flags, context.dt);
+        core.run(&allocator, &context.input, &context.flags, context.dt);
         context.update();
     }
 
