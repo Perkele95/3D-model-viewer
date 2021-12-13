@@ -13,11 +13,9 @@ struct queue_data
     uint32_t family;
 };
 
-void SetSurface(VkInstance instance, VkSurfaceKHR *pSurface);
-
 struct vulkan_device
 {
-    void create(mv_allocator *allocator, bool validation, bool vSync);
+    void create(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync);
     void destroy();
     void refresh();
 

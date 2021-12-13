@@ -18,6 +18,14 @@
         "functional": "cpp",
         "xmemory": "cpp",
         "xiosbase": "cpp",
-        "memory": "cpp"
+        "memory": "cpp",
+        "fstream": "cpp",
+        "iosfwd": "cpp",
+        "thread": "cpp",
+        "xlocale": "cpp",
+        "xlocinfo": "cpp",
+        "xlocmon": "cpp",
+        "xlocnum": "cpp",
+        "system_error": "cpp"
     }
 }

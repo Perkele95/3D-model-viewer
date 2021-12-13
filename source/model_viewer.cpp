@@ -76,12 +76,14 @@ static mesh_index s_MeshIndices[] = {
     20, 21, 22, 22, 23, 20, // Right
 };
 
-model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32_t flags)
+model_viewer::model_viewer(Platform::lDevice platformDevice, mv_allocator *allocator)
 {
     this->hDevice = allocator->allocPermanent<vulkan_device>(1);
     this->hOverlay = allocator->allocPermanent<text_overlay>(1);
 
-    this->hDevice->create(allocator, flags & CORE_FLAG_ENABLE_VALIDATION, flags & CORE_FLAG_ENABLE_VSYNC);
+    const bool validation = true;// TODO(arle): enable only for debug builds
+    const bool vSync = false;
+    this->hDevice->create(platformDevice, allocator, validation, vSync);
 
     this->depthFormat = this->hDevice->getDepthFormat();
     this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
@@ -89,13 +91,13 @@ model_viewer::model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32
     buildResources(allocator);
 
     VkShaderModule vertexModule, fragmentModule;
-    auto shader = io::read("../shaders/gui_vert.spv");
+    auto shader = Platform::io::read("../shaders/gui_vert.spv");
     this->hDevice->loadShader(&shader, &vertexModule);
-    io::close(&shader);
+    Platform::io::close(&shader);
 
-    shader = io::read("../shaders/gui_frag.spv");
+    shader = Platform::io::read("../shaders/gui_frag.spv");
     this->hDevice->loadShader(&shader, &fragmentModule);
-    io::close(&shader);
+    Platform::io::close(&shader);
 
     text_overlay_create_info overlayInfo;
     overlayInfo.allocator = allocator;
@@ -160,13 +162,13 @@ model_viewer::~model_viewer()
 
 void model_viewer::testProc(const input_state *input, float dt)
 {
-#if 1
+#if 0
     const float aspectRatio = float(this->hDevice->extent.width) / float(this->hDevice->extent.height);
     this->mainCamera.update(aspectRatio, input->mouseDelta, dt);
 #endif
 }
 
-void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t *flags, float dt)
+void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt)
 {
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
@@ -225,7 +227,7 @@ void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32
     result = vkQueuePresentKHR(this->hDevice->present.queue, &presentInfo);
 
     if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-       *flags & CORE_FLAG_WINDOW_RESIZED)
+       flags & Platform::FLAG_WINDOW_RESIZED)
     {
         onWindowResize(allocator);
     }
@@ -312,14 +314,14 @@ void model_viewer::buildResources(mv_allocator *allocator)
 
     // build set layout
 #endif
-    auto vertexShader = io::read("../shaders/scene_vert.spv");
-    auto fragmentShader = io::read("../shaders/scene_frag.spv");
+    auto vertexShader = Platform::io::read("../shaders/scene_vert.spv");
+    auto fragmentShader = Platform::io::read("../shaders/scene_frag.spv");
 
     hDevice->loadShader(&vertexShader, &this->vertShaderModule);
     hDevice->loadShader(&fragmentShader, &this->fragShaderModule);
 
-    io::close(&vertexShader);
-    io::close(&fragmentShader);
+    Platform::io::close(&vertexShader);
+    Platform::io::close(&fragmentShader);
 
     buildDescriptorSets();
     buildPipeline();

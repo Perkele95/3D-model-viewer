@@ -1,9 +1,8 @@
 #pragma once
 
 #include "base.hpp"
-#include "input.hpp"
+
 #include "mv_allocator.hpp"
-#include "backend/vulkan_tools.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vulkan_text_overlay.hpp"
 #include "backend/camera.hpp"
@@ -22,7 +21,7 @@ using mesh_index = uint32_t;
 
 struct model_viewer
 {
-    model_viewer(mv_allocator *allocator, vec2<int32_t> extent, uint32_t flags);
+    model_viewer(Platform::lDevice platformDevice, mv_allocator *allocator);
     ~model_viewer();
 
     model_viewer(const model_viewer &src) = delete;
@@ -30,7 +29,7 @@ struct model_viewer
     model_viewer &operator=(const model_viewer &src) = delete;
     model_viewer &operator=(const model_viewer &&src) = delete;
 
-    void run(mv_allocator *allocator, const input_state *input, uint32_t *flags, float dt);
+    void run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt);
 
 private:
     void testProc(const input_state *input, float dt);
