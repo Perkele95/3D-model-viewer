@@ -17,7 +17,6 @@ namespace Platform
         FLAG_RUNNING = (1 << 0),
         FLAG_WINDOW_RESIZED = (1 << 1),
         FLAG_WINDOW_FULLSCREEN = (1 << 2),
-        FLAG_CONSTRAIN_MOUSE = (1 << 3),
     };
 
     // Logical device for platform
@@ -41,6 +40,7 @@ namespace Platform
 
     bool SetupWindow(lDevice device, const char *appName);
     void ToggleFullscreen(lDevice device);
+    void Terminate(lDevice device);
     float GetTimestep(lDevice device);
 }
 
@@ -108,6 +108,7 @@ enum KEY_EVENT_BITS
     KEY_EVENT_CONTROL = (1 << 12),
     KEY_EVENT_SHIFT = (1 << 13),
     KEY_EVENT_F = (1 << 14),
+    KEY_EVENT_F4 = (1 << 15),
 };
 
 enum MOUSE_EVENT_BITS

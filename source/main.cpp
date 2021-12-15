@@ -8,17 +8,24 @@ void ApplicationEntryPoint(Platform::lDevice device)
 
     Platform::SetupWindow(device, "3D model viewer");
 
-    auto virtualBuffer = Platform::Map(permanentCapacity + transientCapacity);
-    auto allocator = mv_allocator(virtualBuffer, permanentCapacity, transientCapacity);
-
-    auto app = model_viewer(device, &allocator);
+    auto app = model_viewer(device);
 
     float dt = 0.001f;
     auto flags = Platform::QueryFlags(device);
     while (flags & Platform::FLAG_RUNNING){
         auto input = Platform::PollEvents(device);
 
-        app.run(&allocator, input, flags, dt);
+        if(Platform::IsKeyDown(KeyCode::ALT)){
+            if(input->keyPressEvents & KEY_EVENT_F4){
+                Platform::Terminate(device);
+                break;
+            }
+
+            if(input->keyPressEvents & KEY_EVENT_F)
+                Platform::ToggleFullscreen(device);
+        }
+
+        app.run(input, flags, dt);
 
         flags = Platform::QueryFlags(device);
         dt = Platform::GetTimestep(device);

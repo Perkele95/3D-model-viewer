@@ -28,6 +28,7 @@ struct camera
     static constexpr float DEFAULT_ZFAR = 100.0f;
     static constexpr float DEFAULT_YAW = PI32 / 2.0f;
     static constexpr float PITCH_CLAMP = (PI32 / 2.0f) - 0.01f;
+    static constexpr auto UP_VECTOR = vec3(0.0f, 1.0f, 0.0f);
 
     camera() = default;
 
@@ -46,10 +47,14 @@ struct camera
         update(aspectRatio, vec2(0i32), 0.0f);
     }
 
+    void refresh(float aspectRatio)
+    {
+        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
+        this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
+    }
+
     void update(float aspectRatio, vec2<int32_t> offset, float dt)
     {
-        constexpr auto up = vec3(0.0f, 1.0f, 0.0f);
-
         this->yaw += this->sensitivity * dt * float(offset.x);
         this->pitch -= this->sensitivity * dt * float(offset.y);
 
@@ -68,13 +73,12 @@ struct camera
         this->front.z = yawSine * pitchCosine;
         //this->right = up.crossProduct(this->front).normalise();
 
-        this->view = mat4x4::lookAt(this->position, this->position + this->front, up);
+        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
         this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
     }
 
     void resetView(float aspectRatio)
     {
-        constexpr auto up = vec3(0.0f, 1.0f, 0.0f);
         this->yaw = DEFAULT_YAW;
         this->pitch = 0.0f;
         const auto yawCosine = cosf(this->yaw);
@@ -85,7 +89,7 @@ struct camera
         this->front.x = yawCosine * pitchCosine;
         this->front.y = pitchSine;
         this->front.z = yawSine * pitchCosine;
-        this->view = mat4x4::lookAt(this->position, this->position + this->front, up);
+        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
         this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
     }
 

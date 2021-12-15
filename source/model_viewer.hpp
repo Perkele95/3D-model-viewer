@@ -21,7 +21,7 @@ using mesh_index = uint32_t;
 
 struct model_viewer
 {
-    model_viewer(Platform::lDevice platformDevice, mv_allocator *allocator);
+    model_viewer(Platform::lDevice platformDevice);
     ~model_viewer();
 
     model_viewer(const model_viewer &src) = delete;
@@ -29,13 +29,13 @@ struct model_viewer
     model_viewer &operator=(const model_viewer &src) = delete;
     model_viewer &operator=(const model_viewer &&src) = delete;
 
-    void run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt);
+    void run(const input_state *input, uint32_t flags, float dt);
 
 private:
     void testProc(const input_state *input, float dt);
-    void onWindowResize(mv_allocator *allocator);
+    void onWindowResize();
 
-    void buildResources(mv_allocator *allocator);
+    void buildResources();
     void buildSwapchainViews();
     void buildMsaa();
     void buildDepth();
@@ -47,6 +47,8 @@ private:
     void buildMeshBuffers();
 
     void updateCmdBuffers();
+
+    mv_allocator allocator;
 
     vulkan_device *hDevice;
     text_overlay *hOverlay;

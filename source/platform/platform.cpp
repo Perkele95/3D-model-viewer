@@ -12,6 +12,7 @@ namespace Platform
     {
         HINSTANCE instance;
         HWND window;
+        WINDOWPLACEMENT windowPlacement;
         int64_t perfCounter;
         int64_t perfCountFrequency;
         input_state input;
@@ -38,11 +39,8 @@ namespace Platform
     {
         LRESULT result = 0;
         switch(message){
-            case WM_SIZE: {
-                //s_ExtentPtr->x = lParam & 0x0000FFFF;
-                //s_ExtentPtr->y = (lParam >> 16) & 0x0000FFFF;
-                *s_FlagsPtr |= FLAG_WINDOW_RESIZED;
-            } break;
+            case WM_SIZE: *s_FlagsPtr |= FLAG_WINDOW_RESIZED; break;
+
             case WM_CLOSE:
             case WM_DESTROY: *s_FlagsPtr &= ~FLAG_RUNNING; break;
             default: result = DefWindowProc(window, message, wParam, lParam); break;
@@ -84,7 +82,30 @@ namespace Platform
 
     void ToggleFullscreen(lDevice device)
     {
-        // TODO(arle)
+        if(device->flags & FLAG_WINDOW_FULLSCREEN){
+            SetDefaultWindowStyle(device->window);
+            SetWindowPlacement(device->window, &device->windowPlacement);
+            device->flags &= ~FLAG_WINDOW_FULLSCREEN;
+        }
+        else{
+            auto monitor = MonitorFromWindow(device->window, MONITOR_DEFAULTTOPRIMARY);
+            MONITORINFO mi = {sizeof(mi)};
+            auto monitorInfo = GetMonitorInfoA(monitor, &mi);
+            if(GetWindowPlacement(device->window, &device->windowPlacement) && monitorInfo){
+                SetWindowLong(device->window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
+                SetWindowPos(device->window, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+                             mi.rcMonitor.right - mi.rcMonitor.left,
+                             mi.rcMonitor.bottom - mi.rcMonitor.top,
+                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                device->flags |= FLAG_WINDOW_FULLSCREEN;
+            }
+        }
+        device->flags |= FLAG_WINDOW_RESIZED;
+    }
+
+    void Terminate(lDevice device)
+    {
+        device->flags &= ~FLAG_RUNNING;
     }
 
     float GetTimestep(lDevice device)
@@ -125,6 +146,7 @@ namespace Platform
             case VK_ESCAPE: input->keyPressEvents |= KEY_EVENT_ESCAPE; break;
             case VK_CONTROL: input->keyPressEvents |= KEY_EVENT_CONTROL; break;
             case VK_SHIFT: input->keyPressEvents |= KEY_EVENT_SHIFT; break;
+            case VK_F4: input->keyPressEvents |= KEY_EVENT_F4; break;
             default: break;
         }
     }
@@ -156,7 +178,7 @@ namespace Platform
                 const auto keyCode = static_cast<uint32_t>(event.wParam);
                 ProcessKeyPress(&device->input, keyCode);
 
-                const bool altKeyDown = (event.lParam & (1 << 29));
+                const bool altKeyDown = HIWORD(event.lParam) & KF_ALTDOWN;
                 if(altKeyDown && keyCode == VK_F4)
                     device->flags &= ~FLAG_RUNNING;
                 break;
@@ -176,6 +198,7 @@ namespace Platform
         device->input.mousePressEvents = 0;
         device->input.mouseWheel = 0;
         device->input.mousePressEvents = 0;
+        device->flags &= ~FLAG_WINDOW_RESIZED;
 
         MSG event;
         while(PeekMessage(&event, device->window, 0, 0, PM_REMOVE | PM_QS_INPUT))
@@ -267,6 +290,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     device.instance = hInstance;
     device.window = NULL;
     device.flags = Platform::FLAG_RUNNING;
+    device.windowPlacement = {sizeof(WINDOWPLACEMENT)};
 
     Platform::s_FlagsPtr = &device.flags;
 

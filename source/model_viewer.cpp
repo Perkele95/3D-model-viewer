@@ -76,19 +76,20 @@ static mesh_index s_MeshIndices[] = {
     20, 21, 22, 22, 23, 20, // Right
 };
 
-model_viewer::model_viewer(Platform::lDevice platformDevice, mv_allocator *allocator)
+model_viewer::model_viewer(Platform::lDevice platformDevice)
+: allocator(MegaBytes(64), MegaBytes(512))
 {
-    this->hDevice = allocator->allocPermanent<vulkan_device>(1);
-    this->hOverlay = allocator->allocPermanent<text_overlay>(1);
+    this->hDevice = this->allocator.allocPermanent<vulkan_device>(1);
+    this->hOverlay = this->allocator.allocPermanent<text_overlay>(1);
 
     const bool validation = true;// TODO(arle): enable only for debug builds
     const bool vSync = false;
-    this->hDevice->create(platformDevice, allocator, validation, vSync);
+    this->hDevice->create(platformDevice, &allocator, validation, vSync);
 
     this->depthFormat = this->hDevice->getDepthFormat();
     this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
 
-    buildResources(allocator);
+    buildResources();
 
     VkShaderModule vertexModule, fragmentModule;
     auto shader = Platform::io::read("../shaders/gui_vert.spv");
@@ -100,7 +101,7 @@ model_viewer::model_viewer(Platform::lDevice platformDevice, mv_allocator *alloc
     Platform::io::close(&shader);
 
     text_overlay_create_info overlayInfo;
-    overlayInfo.allocator = allocator;
+    overlayInfo.allocator = &allocator;
     overlayInfo.device = this->hDevice;
     overlayInfo.cmdPool = this->cmdPool;
     overlayInfo.imageCount = this->imageCount;
@@ -168,7 +169,7 @@ void model_viewer::testProc(const input_state *input, float dt)
 #endif
 }
 
-void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32_t flags, float dt)
+void model_viewer::run(const input_state *input, uint32_t flags, float dt)
 {
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
@@ -181,7 +182,7 @@ void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32
                                             this->imageAvailableSPs[this->currentFrame], VK_NULL_HANDLE, &imageIndex);
 
     switch(result){
-        case VK_ERROR_OUT_OF_DATE_KHR: onWindowResize(allocator); break;
+        case VK_ERROR_OUT_OF_DATE_KHR: onWindowResize(); break;
         case VK_SUBOPTIMAL_KHR: //DebugLog("Suboptimal swapchain"); break;
         default: break;
     }
@@ -229,13 +230,13 @@ void model_viewer::run(mv_allocator *allocator, const input_state *input, uint32
     if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
        flags & Platform::FLAG_WINDOW_RESIZED)
     {
-        onWindowResize(allocator);
+        onWindowResize();
     }
 
     this->currentFrame = (this->currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 }
 
-void model_viewer::onWindowResize(mv_allocator *allocator)
+void model_viewer::onWindowResize()
 {
     vkDeviceWaitIdle(this->hDevice->device);
 
@@ -250,6 +251,10 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
     this->msaa.destroy(this->hDevice->device);
     this->depth.destroy(this->hDevice->device);
     vkResetCommandPool(this->hDevice->device, this->cmdPool, 0);// VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+
+    vkDestroyPipeline(this->hDevice->device, this->pipeline, nullptr);
+    vkDestroyPipelineLayout(this->hDevice->device, this->pipelineLayout, nullptr);
+
     vkDestroyRenderPass(this->hDevice->device, this->renderPass, nullptr);
 
     for (size_t i = 0; i < this->imageCount; i++)
@@ -266,16 +271,19 @@ void model_viewer::onWindowResize(mv_allocator *allocator)
 
     buildSwapchainViews();
     buildRenderPass();
+    buildPipeline();
     buildDepth();
     buildMsaa();
     buildFramebuffers();
 
-    this->hOverlay->onWindowResize(allocator, this->cmdPool);
+    const auto aspectRatio = float(this->hDevice->extent.width) / float(this->hDevice->extent.height);
+    this->mainCamera.refresh(aspectRatio);
+
+    this->hOverlay->onWindowResize(&allocator, this->cmdPool);
     this->hOverlay->updateCmdBuffers(this->framebuffers);
-    this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
 }
 
-void model_viewer::buildResources(mv_allocator *allocator)
+void model_viewer::buildResources()
 {
     auto poolInfo = vkInits::commandPoolCreateInfo(this->hDevice->graphics.family);
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -287,11 +295,11 @@ void model_viewer::buildResources(mv_allocator *allocator)
     vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, nullptr);
     this->imageCount = localImageCount;
 
-    this->swapchainImages = allocator->allocPermanent<VkImage>(this->imageCount);
-    this->swapchainViews = allocator->allocPermanent<VkImageView>(this->imageCount);
-    this->framebuffers = allocator->allocPermanent<VkFramebuffer>(this->imageCount);
-    this->imagesInFlight = allocator->allocPermanent<VkFence>(this->imageCount);
-    this->commandBuffers = allocator->allocPermanent<VkCommandBuffer>(this->imageCount);
+    this->swapchainImages = allocator.allocPermanent<VkImage>(this->imageCount);
+    this->swapchainViews = allocator.allocPermanent<VkImageView>(this->imageCount);
+    this->framebuffers = allocator.allocPermanent<VkFramebuffer>(this->imageCount);
+    this->imagesInFlight = allocator.allocPermanent<VkFence>(this->imageCount);
+    this->commandBuffers = allocator.allocPermanent<VkCommandBuffer>(this->imageCount);
 
     vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, this->swapchainImages);
 

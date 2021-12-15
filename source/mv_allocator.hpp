@@ -1,18 +1,24 @@
 #pragma once
 
 #include "base.hpp"
+#include "platform/platform.hpp"
 
 struct mv_allocator
 {
-    mv_allocator(void *buffer, size_t permanentCapacity, size_t transientCapacity)
+    mv_allocator(size_t permanentCapacity, size_t transientCapacity)
     {
-        this->permanentBegin = buffer;
+        this->permanentBegin = Platform::Map(permanentCapacity + transientCapacity);
         this->permanentCursor = this->permanentBegin;
         this->permanentEnd = static_cast<uint8_t*>(this->permanentBegin) + permanentCapacity;
 
         this->transientBegin = static_cast<uint8_t*>(this->permanentEnd) + 1;
         this->transientCursor = this->transientBegin;
         this->transientEnd = static_cast<uint8_t*>(this->transientBegin) + transientCapacity;
+    }
+
+    ~mv_allocator()
+    {
+        Platform::Unmap(this->permanentBegin);
     }
 
     mv_allocator(const mv_allocator &src) = delete;
