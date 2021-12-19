@@ -244,6 +244,7 @@ template<typename T>
 struct vec4
 {
     constexpr vec4() = default;
+    constexpr explicit vec4(vec3<T> value) : x(value.x), y(value.y), z(value.z), w(T(1)) {}
     constexpr explicit vec4(T value) : x(value), y(value), z(value), w(value) {}
     constexpr explicit vec4(T xVal, T yVal, T zVal, T wVal) : x(xVal), y(yVal), z(zVal), w(wVal) {}
 

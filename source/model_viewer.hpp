@@ -42,10 +42,9 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
-    void buildDescriptorSets();
+    void buildUniformBuffers();
     void buildPipeline();
     void buildMeshBuffers();
-
     void updateCmdBuffers();
 
     mv_allocator allocator;
@@ -70,11 +69,6 @@ private:
     VkFence inFlightFences[MAX_IMAGES_IN_FLIGHT];
     VkFence *imagesInFlight;
 
-    // scene resources
-
-    //VkDescriptorPool descriptorPool;
-    //VkDescriptorSetLayout setLayout;
-    //VkDescriptorSet *descriptorSets;
     VkCommandBuffer *commandBuffers;
     VkPipeline pipeline;
     VkPipelineLayout pipelineLayout;

@@ -24,10 +24,10 @@ struct view
         return this->data[i];
     }
 
-    void fill(const T &data)
+    void fill(const T &value)
     {
         for(size_t i = 0; i < this->count; i++)
-            this->data[i] = data;
+            this->data[i] = value;
     }
 
     T *data;

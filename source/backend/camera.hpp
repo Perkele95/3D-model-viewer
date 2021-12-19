@@ -3,20 +3,56 @@
 #include "../mv_utils/mat4.hpp"
 #include "vulkan_initialisers.hpp"
 
-struct alignas(16) camera_matrix
+struct alignas(16) mvp_matrix
 {
     static VkPushConstantRange pushConstant()
     {
         VkPushConstantRange range;
         range.offset = 0;
-        range.size = sizeof(camera_matrix);
+        range.size = sizeof(mvp_matrix);
         range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         return range;
+    }
+
+    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout)
+    {
+        const auto pc = pushConstant();
+        vkCmdPushConstants(commandBuffer,
+                           layout,
+                           pc.stageFlags,
+                           pc.offset,
+                           pc.size,
+                           this);
     }
 
     mat4x4 model;
     mat4x4 view;
     mat4x4 proj;
+};
+
+struct alignas(4) camera_data
+{
+    static VkPushConstantRange pushConstant()
+    {
+        VkPushConstantRange range;
+        range.offset = sizeof(mvp_matrix);
+        range.size = sizeof(camera_data);
+        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        return range;
+    }
+
+    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout)
+    {
+        const auto pc = pushConstant();
+        vkCmdPushConstants(commandBuffer,
+                           layout,
+                           pc.stageFlags,
+                           pc.offset,
+                           pc.size,
+                           this);
+    }
+
+    vec4<float> position;
 };
 
 // NOTE(arle): radians, not degrees
@@ -40,7 +76,7 @@ struct camera
         this->fov = DEFAULT_FOV;
         this->zNear = DEFAULT_ZNEAR;
         this->zFar = DEFAULT_ZFAR;
-        this->position = vec3(0.8f, 0.8f, -2.0f);
+        this->position = vec3(0.0f, 0.0f, -2.0f);
         this->sensitivity = 2.0f;
         this->yaw = DEFAULT_YAW;
         this->pitch = 0.0f;
@@ -97,14 +133,13 @@ struct camera
     mat4x4 view;
     mat4x4 proj;
 
-    float fov;
+    vec3<float> position;
+    float fov, yaw, pitch;
 
 private:
     float zNear, zFar;
-    float yaw, pitch;
     float sensitivity;
 
-    vec3<float> position;
     vec3<float> right;
     vec3<float> front;
 };

@@ -7,13 +7,13 @@ constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
     VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh_vertex, colour)}
 };
 #if 0
-struct alignas(4) material
+struct alignas(4) material3D
 {
     static VkPushConstantRange pushConstant()
     {
         VkPushConstantRange range;
         range.offset = 0;
-        range.size = sizeof(material);
+        range.size = sizeof(material3D);
         range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         return range;
     }
@@ -22,6 +22,14 @@ struct alignas(4) material
     vec3<float> diffuse;
     vec3<float> specular;
     float shininess;
+};
+
+struct alignas(4) model3D
+{
+    model3D() = default;
+
+    mat4x4 transform;
+    material3D material;
 };
 #endif
 static constexpr auto s_MeshSzf = 0.5f;
@@ -163,8 +171,17 @@ model_viewer::~model_viewer()
 
 void model_viewer::testProc(const input_state *input, float dt)
 {
-#if 0
     const float aspectRatio = float(this->hDevice->extent.width) / float(this->hDevice->extent.height);
+
+    if(Platform::IsKeyDown(KeyCode::A))
+        this->mainCamera.model *= mat4x4::rotateY(0.001f);
+    else if(Platform::IsKeyDown(KeyCode::D))
+        this->mainCamera.model *= mat4x4::rotateY(-0.001f);
+    else if(Platform::IsKeyDown(KeyCode::W))
+        this->mainCamera.model *= mat4x4::rotateX(0.001f);
+    else if(Platform::IsKeyDown(KeyCode::S))
+        this->mainCamera.model *= mat4x4::rotateX(-0.001f);
+#if 0
     this->mainCamera.update(aspectRatio, input->mouseDelta, dt);
 #endif
 }
@@ -173,6 +190,8 @@ void model_viewer::run(const input_state *input, uint32_t flags, float dt)
 {
     if(this->hDevice->extent.width == 0 || this->hDevice->extent.height == 0)
         return;
+
+    testProc(input, dt);
 
     vkWaitForFences(this->hDevice->device, 1, &this->inFlightFences[this->currentFrame],
                     VK_TRUE, UINT64_MAX);
@@ -186,8 +205,6 @@ void model_viewer::run(const input_state *input, uint32_t flags, float dt)
         case VK_SUBOPTIMAL_KHR: //DebugLog("Suboptimal swapchain"); break;
         default: break;
     }
-
-    testProc(input, dt);
 
     vkQueueWaitIdle(this->hDevice->graphics.queue);//TODO(arle): replace with fence
     updateCmdBuffers();
@@ -313,15 +330,6 @@ void model_viewer::buildResources()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(this->cmdPool, this->imageCount);
     vkAllocateCommandBuffers(this->hDevice->device, &cmdInfo, this->commandBuffers);
 
-#if 0
-    auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
-    descriptorPoolInfo.pPoolSizes = poolSizes;
-    descriptorPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
-    descriptorPoolInfo.maxSets = 0;
-    vkCreateDescriptorPool(this->hDevice->device, &descriptorPoolInfo, nullptr, &this->descriptorPool);
-
-    // build set layout
-#endif
     auto vertexShader = Platform::io::read("../shaders/scene_vert.spv");
     auto fragmentShader = Platform::io::read("../shaders/scene_frag.spv");
 
@@ -331,7 +339,6 @@ void model_viewer::buildResources()
     Platform::io::close(&vertexShader);
     Platform::io::close(&fragmentShader);
 
-    buildDescriptorSets();
     buildPipeline();
     buildMeshBuffers();
 
@@ -495,12 +502,6 @@ void model_viewer::buildSyncObjects()
     }
 }
 
-void model_viewer::buildDescriptorSets()
-{
-    // TODO(arle)
-    // NOTE(arle): not yet required
-}
-
 void model_viewer::buildPipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
@@ -537,14 +538,17 @@ void model_viewer::buildPipeline()
     colourBlend.attachmentCount = 1;
     colourBlend.pAttachments = &colorBlendAttachment;
 
-    auto cameraPushConstant = camera_matrix::pushConstant();
+    const VkPushConstantRange pushConstants[] = {
+        mvp_matrix::pushConstant(),
+        camera_data::pushConstant()
+    };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.pSetLayouts = nullptr;
     pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pushConstantRangeCount = 1;
-    pipelineLayoutInfo.pPushConstantRanges = &cameraPushConstant;//TODO(arle): Add descriptor layout info
+    pipelineLayoutInfo.pPushConstantRanges = pushConstants;
+    pipelineLayoutInfo.pushConstantRangeCount = uint32_t(arraysize(pushConstants));
     vkCreatePipelineLayout(this->hDevice->device, &pipelineLayoutInfo, nullptr, &this->pipelineLayout);
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
@@ -639,22 +643,17 @@ void model_viewer::updateCmdBuffers()
         renderBeginInfo.framebuffer = this->framebuffers[i];
         vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        auto cameraConstant = camera_matrix::pushConstant();
-        auto cameraData = camera_matrix();
-        cameraData.model = this->mainCamera.model;
-        cameraData.view = this->mainCamera.view;
-        cameraData.proj = this->mainCamera.proj;
-        vkCmdPushConstants(cmdBuffer,
-                           this->pipelineLayout,
-                           cameraConstant.stageFlags,
-                           cameraConstant.offset,
-                           cameraConstant.size,
-                           &cameraData);
+        auto mvpMatrix = mvp_matrix();
+        mvpMatrix.model = this->mainCamera.model;
+        mvpMatrix.view = this->mainCamera.view;
+        mvpMatrix.proj = this->mainCamera.proj;
+        mvpMatrix.bind(cmdBuffer, this->pipelineLayout);
+
+        auto cameraData = camera_data();
+        cameraData.position = vec4(this->mainCamera.position);
+        cameraData.bind(cmdBuffer, this->pipelineLayout);
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
-        //vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipelineLayout,
-        //                        0, 1, &this->descriptorSets[i], 0, nullptr);
-
         const VkDeviceSize vertexOffset = 0;
         vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &this->vertexBuffer.data, &vertexOffset);
 
