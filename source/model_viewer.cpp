@@ -84,15 +84,20 @@ static mesh_index s_MeshIndices[] = {
     20, 21, 22, 22, 23, 20, // Right
 };
 
+#if defined(_DEBUG)
+static const bool s_validation = true;
+#else
+static const bool s_validation = false;
+#endif
+
 model_viewer::model_viewer(Platform::lDevice platformDevice)
 : allocator(MegaBytes(64), MegaBytes(512))
 {
     this->hDevice = this->allocator.allocPermanent<vulkan_device>(1);
     this->hOverlay = this->allocator.allocPermanent<text_overlay>(1);
 
-    const bool validation = true;// TODO(arle): enable only for debug builds
     const bool vSync = false;
-    this->hDevice->create(platformDevice, &allocator, validation, vSync);
+    this->hDevice->create(platformDevice, &allocator, s_validation, vSync);
 
     this->depthFormat = this->hDevice->getDepthFormat();
     this->mainCamera = camera(float(this->hDevice->extent.width) / float(this->hDevice->extent.height));
@@ -145,6 +150,13 @@ model_viewer::~model_viewer()
     vkDestroyPipelineLayout(this->hDevice->device, this->pipelineLayout, nullptr);
     vkDestroyShaderModule(this->hDevice->device, this->vertShaderModule, nullptr);
     vkDestroyShaderModule(this->hDevice->device, this->fragShaderModule, nullptr);
+
+    vkDestroyDescriptorPool(this->hDevice->device, this->descriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(this->hDevice->device, this->descriptorSetLayout, nullptr);
+
+    for(size_t i = 0; i < this->imageCount; i++)
+        this->uniformBuffers[i].destroy(this->hDevice->device);
+
     this->vertexBuffer.destroy(this->hDevice->device);
     this->indexBuffer.destroy(this->hDevice->device);
 
@@ -172,18 +184,10 @@ model_viewer::~model_viewer()
 void model_viewer::testProc(const input_state *input, float dt)
 {
     const float aspectRatio = float(this->hDevice->extent.width) / float(this->hDevice->extent.height);
+    this->mainCamera.refresh(aspectRatio);
 
-    if(Platform::IsKeyDown(KeyCode::A))
-        this->mainCamera.model *= mat4x4::rotateY(0.001f);
-    else if(Platform::IsKeyDown(KeyCode::D))
-        this->mainCamera.model *= mat4x4::rotateY(-0.001f);
-    else if(Platform::IsKeyDown(KeyCode::W))
-        this->mainCamera.model *= mat4x4::rotateX(0.001f);
-    else if(Platform::IsKeyDown(KeyCode::S))
-        this->mainCamera.model *= mat4x4::rotateX(-0.001f);
-#if 0
-    this->mainCamera.update(aspectRatio, input->mouseDelta, dt);
-#endif
+    for (size_t i = 0; i < this->imageCount; i++)
+        this->mainCamera.map(this->hDevice->device, this->uniformBuffers[i].memory);
 }
 
 void model_viewer::run(const input_state *input, uint32_t flags, float dt)
@@ -317,6 +321,8 @@ void model_viewer::buildResources()
     this->framebuffers = allocator.allocPermanent<VkFramebuffer>(this->imageCount);
     this->imagesInFlight = allocator.allocPermanent<VkFence>(this->imageCount);
     this->commandBuffers = allocator.allocPermanent<VkCommandBuffer>(this->imageCount);
+    this->descriptorSets = allocator.allocPermanent<VkDescriptorSet>(this->imageCount);
+    this->uniformBuffers = allocator.allocPermanent<buffer_t>(this->imageCount);
 
     vkGetSwapchainImagesKHR(this->hDevice->device, this->swapchain, &localImageCount, this->swapchainImages);
 
@@ -326,6 +332,32 @@ void model_viewer::buildResources()
     buildRenderPass();
     buildFramebuffers();
     buildSyncObjects();
+
+    const VkDescriptorPoolSize poolSizes[] = {
+        camera_data::poolSize(this->imageCount)
+    };
+
+    auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
+    descriptorPoolInfo.pPoolSizes = poolSizes;
+    descriptorPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
+
+    for (size_t i = 0; i < arraysize(poolSizes); i++)
+        descriptorPoolInfo.maxSets += poolSizes[i].descriptorCount;
+
+    vkCreateDescriptorPool(this->hDevice->device, &descriptorPoolInfo, nullptr, &this->descriptorPool);
+
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        camera_data::binding()
+    };
+
+    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
+    setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    setLayoutInfo.pBindings = bindings;
+    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
+    vkCreateDescriptorSetLayout(this->hDevice->device, &setLayoutInfo, nullptr, &this->descriptorSetLayout);
+
+    buildUniformBuffers();
+    buildDescriptorSets();
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(this->cmdPool, this->imageCount);
     vkAllocateCommandBuffers(this->hDevice->device, &cmdInfo, this->commandBuffers);
@@ -338,7 +370,6 @@ void model_viewer::buildResources()
 
     Platform::io::close(&vertexShader);
     Platform::io::close(&fragmentShader);
-
     buildPipeline();
     buildMeshBuffers();
 
@@ -502,6 +533,46 @@ void model_viewer::buildSyncObjects()
     }
 }
 
+void model_viewer::buildUniformBuffers()
+{
+    for (size_t i = 0; i < this->imageCount; i++){
+        vkTools::CreateBuffer(this->hDevice->device,
+                              this->hDevice->gpu,
+                              sizeof(camera_data),
+                              camera_data::usageFlags(),
+                              camera_data::bufferMemFlags(),
+                              &this->uniformBuffers[i]);
+    }
+}
+
+void model_viewer::buildDescriptorSets()
+{
+    auto layouts = allocator.allocViewTransient<VkDescriptorSetLayout>(this->imageCount);
+    layouts.fill(this->descriptorSetLayout);
+
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(this->descriptorPool);
+    allocInfo.descriptorSetCount = uint32_t(this->imageCount);
+    allocInfo.pSetLayouts = layouts.data;
+    vkAllocateDescriptorSets(this->hDevice->device, &allocInfo, this->descriptorSets);
+
+    for (size_t i = 0; i < this->imageCount; i++){
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = this->uniformBuffers[i].data;
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(camera_data);
+
+        auto uniformWrite = camera_data::descriptorWrite();
+        uniformWrite.pBufferInfo = &bufferInfo;
+        uniformWrite.dstSet = this->descriptorSets[i];
+
+        const VkWriteDescriptorSet writes[] = {
+            uniformWrite
+        };
+
+        vkUpdateDescriptorSets(this->hDevice->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
+    }
+}
+
 void model_viewer::buildPipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
@@ -539,14 +610,13 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        mvp_matrix::pushConstant(),
-        camera_data::pushConstant()
+        mvp_matrix::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
-    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pSetLayouts = &this->descriptorSetLayout;
+    pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = uint32_t(arraysize(pushConstants));
     vkCreatePipelineLayout(this->hDevice->device, &pipelineLayoutInfo, nullptr, &this->pipelineLayout);
@@ -649,16 +719,21 @@ void model_viewer::updateCmdBuffers()
         mvpMatrix.proj = this->mainCamera.proj;
         mvpMatrix.bind(cmdBuffer, this->pipelineLayout);
 
-        auto cameraData = camera_data();
-        cameraData.position = vec4(this->mainCamera.position);
-        cameraData.bind(cmdBuffer, this->pipelineLayout);
-
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline);
         const VkDeviceSize vertexOffset = 0;
         vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &this->vertexBuffer.data, &vertexOffset);
 
         const VkDeviceSize indexOffset = 0;
         vkCmdBindIndexBuffer(cmdBuffer, this->indexBuffer.data, indexOffset, VK_INDEX_TYPE_UINT32);
+
+        vkCmdBindDescriptorSets(cmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                this->pipelineLayout,
+                                0,
+                                1,
+                                &this->descriptorSets[i],
+                                0,
+                                nullptr);
 
         const auto indexCount = uint32_t(arraysize(s_MeshIndices));
         vkCmdDrawIndexed(cmdBuffer, indexCount, 1, 0, 0, 0);

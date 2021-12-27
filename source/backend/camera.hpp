@@ -32,24 +32,42 @@ struct alignas(16) mvp_matrix
 
 struct alignas(4) camera_data
 {
-    static VkPushConstantRange pushConstant()
+    static VkDescriptorPoolSize poolSize(size_t count)
     {
-        VkPushConstantRange range;
-        range.offset = sizeof(mvp_matrix);
-        range.size = sizeof(camera_data);
-        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        return range;
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        poolSize.descriptorCount = uint32_t(count);
+        return poolSize;
     }
 
-    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout)
+    static VkDescriptorSetLayoutBinding binding()
     {
-        const auto pc = pushConstant();
-        vkCmdPushConstants(commandBuffer,
-                           layout,
-                           pc.stageFlags,
-                           pc.offset,
-                           pc.size,
-                           this);
+        VkDescriptorSetLayoutBinding setBinding{};
+        setBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        setBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        setBinding.descriptorCount = uint32_t(1);
+        setBinding.binding = 0;
+        return setBinding;
+    }
+
+    static VkWriteDescriptorSet descriptorWrite()
+    {
+        VkWriteDescriptorSet set{};
+        set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        set.dstBinding = 0;
+        set.descriptorCount = uint32_t(1);
+        set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        return set;
+    }
+
+    static VkBufferUsageFlags usageFlags()
+    {
+        return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    }
+
+    static VkMemoryPropertyFlags bufferMemFlags()
+    {
+        return VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
     }
 
     vec4<float> position;
@@ -127,6 +145,16 @@ struct camera
         this->front.z = yawSine * pitchCosine;
         this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
         this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
+    }
+
+    void map(VkDevice device, VkDeviceMemory memory) const
+    {
+        auto pushData = camera_data();
+
+        camera_data *mapped = nullptr;
+        vkMapMemory(device, memory, 0, sizeof(pushData), 0, reinterpret_cast<void**>(&mapped));
+        mapped->position = vec4(this->position, 1.0f);
+        vkUnmapMemory(device, memory);
     }
 
     mat4x4 model;

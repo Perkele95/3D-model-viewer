@@ -43,6 +43,7 @@ private:
     void buildFramebuffers();
     void buildSyncObjects();
     void buildUniformBuffers();
+    void buildDescriptorSets();
     void buildPipeline();
     void buildMeshBuffers();
     void updateCmdBuffers();
@@ -76,4 +77,9 @@ private:
     buffer_t vertexBuffer, indexBuffer;
 
     camera mainCamera;
+
+    VkDescriptorPool descriptorPool;
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkDescriptorSet *descriptorSets;
+    buffer_t *uniformBuffers;
 };

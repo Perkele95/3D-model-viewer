@@ -5,7 +5,7 @@ layout(location = 0) in vec3 fragPosition;
 layout(location = 1) in vec3 fragNormal;
 layout(location = 2) in vec4 fragColour;
 
-layout(push_constant) uniform camera_data
+layout(binding = 0) uniform camera_data
 {
     vec4 position;
 } camera;
