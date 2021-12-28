@@ -48,38 +48,38 @@ private:
     void buildMeshBuffers();
     void updateCmdBuffers();
 
-    mv_allocator allocator;
+    mv_allocator m_allocator;
 
-    vulkan_device *hDevice;
-    text_overlay *hOverlay;
+    vulkan_device *m_device;
+    text_overlay *m_overlay;
 
-    size_t imageCount, currentFrame;
-    VkCommandPool cmdPool;
-    VkRenderPass renderPass;
-    VkSwapchainKHR swapchain;
-    VkImage *swapchainImages;
-    VkImageView *swapchainViews;
-    VkFramebuffer *framebuffers;
+    size_t m_imageCount, m_currentFrame;
+    VkCommandPool m_cmdPool;
+    VkRenderPass m_renderPass;
+    VkSwapchainKHR m_swapchain;
+    VkImage *m_swapchainImages;
+    VkImageView *m_swapchainViews;
+    VkFramebuffer *m_framebuffers;
 
-    image_buffer msaa;
-    image_buffer depth;
-    VkFormat depthFormat;
+    image_buffer m_msaa;
+    image_buffer m_depth;
+    VkFormat m_depthFormat;
 
-    VkSemaphore imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
-    VkSemaphore renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
-    VkFence inFlightFences[MAX_IMAGES_IN_FLIGHT];
-    VkFence *imagesInFlight;
+    VkSemaphore m_imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
+    VkSemaphore m_renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
+    VkFence m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
+    VkFence *m_imagesInFlight;
 
-    VkCommandBuffer *commandBuffers;
-    VkPipeline pipeline;
-    VkPipelineLayout pipelineLayout;
-    VkShaderModule vertShaderModule, fragShaderModule;
-    buffer_t vertexBuffer, indexBuffer;
+    VkCommandBuffer *m_commandBuffers;
+    VkPipeline m_pipeline;
+    VkPipelineLayout m_pipelineLayout;
+    VkShaderModule m_vertShaderModule, m_fragShaderModule;
+    buffer_t m_vertexBuffer, m_indexBuffer;
 
-    camera mainCamera;
+    camera m_mainCamera;
 
-    VkDescriptorPool descriptorPool;
-    VkDescriptorSetLayout descriptorSetLayout;
-    VkDescriptorSet *descriptorSets;
-    buffer_t *uniformBuffers;
+    VkDescriptorPool m_descriptorPool;
+    VkDescriptorSetLayout m_descriptorSetLayout;
+    VkDescriptorSet *m_descriptorSets;
+    buffer_t *m_uniformBuffers;
 };

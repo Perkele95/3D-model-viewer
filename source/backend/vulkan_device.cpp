@@ -5,7 +5,7 @@ constexpr char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 constexpr char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
-void vulkan_device::create(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync)
+void vulkan_device::init(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync)
 {
     auto appInfo = vkInits::applicationInfo("3D model viewer");
     auto instanceInfo = vkInits::instanceCreateInfo();
@@ -16,9 +16,9 @@ void vulkan_device::create(Platform::lDevice platformDevice, mv_allocator *alloc
         instanceInfo.enabledLayerCount = uint32_t(arraysize(ValidationLayers));
         instanceInfo.ppEnabledLayerNames = ValidationLayers;
     }
-    vkCreateInstance(&instanceInfo, 0, &this->instance);
+    vkCreateInstance(&instanceInfo, 0, &m_instance);
 
-    Platform::SetupVkSurface(platformDevice, this->instance, &this->surface);
+    Platform::SetupVkSurface(platformDevice, m_instance, &m_surface);
 
     pickPhysicalDevice(allocator);
     prepareLogicalDevice(validation);
@@ -34,16 +34,16 @@ void vulkan_device::create(Platform::lDevice platformDevice, mv_allocator *alloc
     getSampleCount();
 }
 
-void vulkan_device::destroy()
+vulkan_device::~vulkan_device()
 {
     vkDestroyDevice(this->device, nullptr);
-    vkDestroySurfaceKHR(this->instance, this->surface, nullptr);
-    vkDestroyInstance(this->instance, nullptr);
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    vkDestroyInstance(m_instance, nullptr);
 }
 
 void vulkan_device::refresh()
 {
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->gpu, this->surface, &this->capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(this->gpu, m_surface, &this->capabilities);
 
     this->minImageCount = this->capabilities.minImageCount + 1;
     if(this->capabilities.maxImageCount > 0 && this->minImageCount > this->capabilities.maxImageCount)
@@ -90,7 +90,7 @@ VkResult vulkan_device::buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainK
 {
     auto info = vkInits::swapchainCreateInfo(oldSwapchain);
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    info.surface = this->surface;
+    info.surface = m_surface;
     info.minImageCount = this->minImageCount;
     info.imageFormat = this->surfaceFormat.format;
     info.imageColorSpace = this->surfaceFormat.colorSpace;
@@ -117,12 +117,74 @@ VkResult vulkan_device::buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainK
     return vkCreateSwapchainKHR(this->device, &info, nullptr, pSwapchain);
 }
 
+VkMemoryAllocateInfo vulkan_device::getMemoryAllocInfo(VkMemoryRequirements memReqs,
+                                                       VkMemoryPropertyFlags flags) const
+{
+    VkPhysicalDeviceMemoryProperties memProps{};
+    vkGetPhysicalDeviceMemoryProperties(this->gpu, &memProps);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReqs.size;
+    allocInfo.memoryTypeIndex = 0;
+
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++){
+        if((memReqs.memoryTypeBits & BIT(i)) && (memProps.memoryTypes[i].propertyFlags & flags)){
+            allocInfo.memoryTypeIndex = i;
+            break;
+        }
+    }
+    return allocInfo;
+}
+
+VkResult vulkan_device::makeBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                                   VkMemoryPropertyFlags flags, buffer_t *pBuffer) const
+{
+    pBuffer->size = size;
+    auto bufferInfo = vkInits::bufferCreateInfo(size, usage);
+    vkCreateBuffer(this->device, &bufferInfo, nullptr, &pBuffer->data);
+
+    VkMemoryRequirements memReqs;
+    vkGetBufferMemoryRequirements(this->device, pBuffer->data, &memReqs);
+
+    auto allocInfo = getMemoryAllocInfo(memReqs, flags);
+    vkAllocateMemory(this->device, &allocInfo, nullptr, &pBuffer->memory);
+    return vkBindBufferMemory(this->device, pBuffer->data, pBuffer->memory, 0);
+}
+
+VkResult vulkan_device::makeImage(VkFormat format, VkExtent2D imageExtent, VkImageUsageFlags usage,
+                                  VkMemoryPropertyFlags flags, image_buffer *pImage) const
+{
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.extent = {imageExtent.width, imageExtent.height, 1};
+    imageInfo.format = format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = usage;
+    vkCreateImage(this->device, &imageInfo, nullptr, &pImage->image);
+
+    VkMemoryRequirements memReqs{};
+    vkGetImageMemoryRequirements(this->device, pImage->image, &memReqs);
+
+    auto allocInfo = getMemoryAllocInfo(memReqs, flags);
+    vkAllocateMemory(this->device, &allocInfo, nullptr, &pImage->memory);
+    return vkBindImageMemory(this->device, pImage->image, pImage->memory, 0);
+}
+
+VkResult vulkan_device::fillBuffer(buffer_t *pDst, const void *src, size_t size) const
+{
+    void *mapped = nullptr;
+    const auto result = vkMapMemory(this->device, pDst->memory, 0, size, 0, &mapped);
+    memcpy(mapped, src, size);
+    vkUnmapMemory(this->device, pDst->memory);
+    return result;
+}
+
 void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
 {
     uint32_t physDeviceCount = 0;
-    vkEnumeratePhysicalDevices(this->instance, &physDeviceCount, nullptr);
+    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
     auto physDevices = allocator->allocTransient<VkPhysicalDevice>(physDeviceCount);
-    vkEnumeratePhysicalDevices(this->instance, &physDeviceCount, physDevices);
+    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices);
 
     const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
     {
@@ -142,11 +204,11 @@ void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions);
         const bool extensionsSupported = findExtensionProperty({availableExtensions, extensionCount});
 
-        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physDevices[i], this->surface, &this->capabilities);
+        vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physDevices[i], m_surface, &this->capabilities);
 
         uint32_t formatCount = 0, presentModeCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physDevices[i], this->surface, &formatCount, nullptr);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physDevices[i], this->surface, &presentModeCount, nullptr);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(physDevices[i], m_surface, &formatCount, nullptr);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(physDevices[i], m_surface, &presentModeCount, nullptr);
         const bool adequateCapabilities = (formatCount > 0) && (presentModeCount > 0);
 
         uint32_t propCount = 0;
@@ -164,7 +226,7 @@ void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
             }
 
             VkBool32 presentSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(physDevices[i], queueIndex, this->surface, &presentSupport);
+            vkGetPhysicalDeviceSurfaceSupportKHR(physDevices[i], queueIndex, m_surface, &presentSupport);
             if(presentSupport){
                 hasPresentFamily = true;
                 this->present.family = queueIndex;
@@ -220,9 +282,9 @@ void vulkan_device::prepareLogicalDevice(bool validation)
 void vulkan_device::pickSurfaceFormat(mv_allocator *allocator)
 {
     uint32_t count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, this->surface, &count, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, nullptr);
     auto surfaceFormats = allocator->allocTransient<VkSurfaceFormatKHR>(count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, this->surface, &count, surfaceFormats);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, surfaceFormats);
 
     this->surfaceFormat = surfaceFormats[0];
     for(size_t i = 0; i < count; i++){
@@ -238,9 +300,9 @@ void vulkan_device::pickSurfaceFormat(mv_allocator *allocator)
 void vulkan_device::pickPresentMode(mv_allocator *allocator, VkPresentModeKHR preferredMode)
 {
     uint32_t count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, this->surface, &count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, nullptr);
     auto presentModes = allocator->allocTransient<VkPresentModeKHR>(count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, this->surface, &count, presentModes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, presentModes);
 
     this->presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     for(size_t i = 0; i < count; i++){

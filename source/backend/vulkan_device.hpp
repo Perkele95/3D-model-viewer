@@ -15,8 +15,8 @@ struct queue_data
 
 struct vulkan_device
 {
-    void create(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync);
-    void destroy();
+    void init(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync);
+    ~vulkan_device();
     void refresh();
 
     // Tools
@@ -24,6 +24,13 @@ struct vulkan_device
     VkFormat getDepthFormat() const;
     VkResult loadShader(const file_t *src, VkShaderModule *pModule) const;
     VkResult buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainKHR *pSwapchain) const;
+
+    VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
+    VkResult makeBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+                        VkMemoryPropertyFlags flags, buffer_t *pBuffer) const;
+    VkResult makeImage(VkFormat format, VkExtent2D imageExtent, VkImageUsageFlags usage,
+                       VkMemoryPropertyFlags flags, image_buffer *pImage) const;
+    VkResult fillBuffer(buffer_t *pDst, const void *src, size_t size) const;
 
     // ~Tools
 
@@ -45,6 +52,6 @@ private:
 
     void getSampleCount();
 
-    VkInstance instance;
-    VkSurfaceKHR surface;
+    VkInstance m_instance;
+    VkSurfaceKHR m_surface;
 };

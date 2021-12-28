@@ -7,18 +7,18 @@ struct mv_allocator
 {
     mv_allocator(size_t permanentCapacity, size_t transientCapacity)
     {
-        this->permanentBegin = Platform::Map(permanentCapacity + transientCapacity);
-        this->permanentCursor = this->permanentBegin;
-        this->permanentEnd = static_cast<uint8_t*>(this->permanentBegin) + permanentCapacity;
+        m_permanentBegin = Platform::Map(permanentCapacity + transientCapacity);
+        m_permanentCursor = m_permanentBegin;
+        m_permanentEnd = static_cast<uint8_t*>(m_permanentBegin) + permanentCapacity;
 
-        this->transientBegin = static_cast<uint8_t*>(this->permanentEnd) + 1;
-        this->transientCursor = this->transientBegin;
-        this->transientEnd = static_cast<uint8_t*>(this->transientBegin) + transientCapacity;
+        m_transientBegin = static_cast<uint8_t*>(m_permanentEnd) + 1;
+        m_transientCursor = m_transientBegin;
+        m_transientEnd = static_cast<uint8_t*>(m_transientBegin) + transientCapacity;
     }
 
     ~mv_allocator()
     {
-        Platform::Unmap(this->permanentBegin);
+        Platform::Unmap(m_permanentBegin);
     }
 
     mv_allocator(const mv_allocator &src) = delete;
@@ -29,10 +29,10 @@ struct mv_allocator
     template<typename T>
     T *allocPermanent(size_t count)
     {
-        alignas(T) auto alloc = static_cast<T*>(this->permanentCursor);
-        this->permanentCursor = static_cast<T*>(this->permanentCursor) + count;
+        alignas(T) auto alloc = static_cast<T*>(m_permanentCursor);
+        m_permanentCursor = static_cast<T*>(m_permanentCursor) + count;
 
-        if(this->permanentCursor > this->permanentEnd)
+        if(m_permanentCursor > m_permanentEnd)
             alloc = nullptr;
 
         return alloc;
@@ -41,12 +41,12 @@ struct mv_allocator
     template<typename T>
     T *allocTransient(size_t count)
     {
-        alignas(T) auto alloc = static_cast<T*>(this->transientCursor);
-        this->transientCursor = static_cast<T*>(this->transientCursor) + count;
+        alignas(T) auto alloc = static_cast<T*>(m_transientCursor);
+        m_transientCursor = static_cast<T*>(m_transientCursor) + count;
 
-        if(this->transientCursor > this->transientEnd){
-            this->transientCursor = this->transientBegin;
-            alloc = static_cast<T*>(this->transientCursor);
+        if(m_transientCursor > m_transientEnd){
+            m_transientCursor = m_transientBegin;
+            alloc = static_cast<T*>(m_transientCursor);
         }
 
         return alloc;
@@ -55,18 +55,18 @@ struct mv_allocator
     template<typename T>
     view<T> allocViewPermanent(size_t count)
     {
-        auto result = view(this->allocPermanent<T>(count), count);
+        auto result = view(allocPermanent<T>(count), count);
         return result;
     }
 
     template<typename T>
     view<T> allocViewTransient(size_t count)
     {
-        auto result = view(this->allocTransient<T>(count), count);
+        auto result = view(allocTransient<T>(count), count);
         return result;
     }
 private:
-    void *permanentBegin, *transientBegin;
-    void *permanentEnd, *transientEnd;
-    void *permanentCursor, *transientCursor;
+    void *m_permanentBegin, *m_transientBegin;
+    void *m_permanentEnd, *m_transientEnd;
+    void *m_permanentCursor, *m_transientCursor;
 };
