@@ -29,7 +29,7 @@ void main()
     matr.shininess = 0.1;
 
     const vec3 normal = normalize(fragNormal);
-    const vec3 lightPosition = vec3(2.0, 2.0, -2.0);
+    const vec3 lightPosition = vec3(3.0, 3.0, -3.0);
     const vec3 lightColour = vec3(1.0);
 
     const vec3 ambientLight = lightColour * matr.ambient;

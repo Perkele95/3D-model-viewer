@@ -182,8 +182,29 @@ model_viewer::~model_viewer()
 
 void model_viewer::testProc(const input_state *input, float dt)
 {
+    const auto rotationSpeed = m_mainCamera.sensitivity * dt;
+    if(Platform::IsKeyDown(KeyCode::W))
+        m_mainCamera.pitch -= rotationSpeed;
+    else if(Platform::IsKeyDown(KeyCode::S))
+        m_mainCamera.pitch += rotationSpeed;
+
+    if(Platform::IsKeyDown(KeyCode::A))
+        m_mainCamera.yaw += rotationSpeed;
+    else if(Platform::IsKeyDown(KeyCode::D))
+        m_mainCamera.yaw -= rotationSpeed;
+
+    if(Platform::IsKeyDown(KeyCode::UP))
+        m_mainCamera.move(camera::direction::forward, dt);
+    else if(Platform::IsKeyDown(KeyCode::DOWN))
+        m_mainCamera.move(camera::direction::backward, dt);
+
+    if(Platform::IsKeyDown(KeyCode::LEFT))
+        m_mainCamera.move(camera::direction::left, dt);
+    else if(Platform::IsKeyDown(KeyCode::RIGHT))
+        m_mainCamera.move(camera::direction::right, dt);
+
     const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    m_mainCamera.refresh(aspectRatio);
+    m_mainCamera.update(aspectRatio);
 
     for (size_t i = 0; i < m_imageCount; i++)
         m_mainCamera.map(m_device->device, m_uniformBuffers[i].memory);
@@ -295,9 +316,6 @@ void model_viewer::onWindowResize()
     buildDepth();
     buildMsaa();
     buildFramebuffers();
-
-    const auto aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    m_mainCamera.refresh(aspectRatio);
 
     m_overlay->onWindowResize(&m_allocator, m_cmdPool);
     m_overlay->updateCmdBuffers(m_framebuffers);

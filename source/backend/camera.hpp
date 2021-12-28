@@ -77,12 +77,21 @@ struct alignas(4) camera_data
 
 struct camera
 {
-    static constexpr float DEFAULT_FOV = PI32 / 2.0f;
-    static constexpr float DEFAULT_ZNEAR = 0.1f;
+    static constexpr float DEFAULT_FOV = GetRadians(75.0f);
+    static constexpr float DEFAULT_ZNEAR = 0.005f;
     static constexpr float DEFAULT_ZFAR = 100.0f;
-    static constexpr float DEFAULT_YAW = PI32 / 2.0f;
-    static constexpr float PITCH_CLAMP = (PI32 / 2.0f) - 0.01f;
-    static constexpr auto UP_VECTOR = vec3(0.0f, 1.0f, 0.0f);
+    static constexpr float DEFAULT_YAW = GetRadians(90.0f);
+    static constexpr float PITCH_CLAMP = GetRadians(90.0f) - 0.01f;
+    static constexpr float YAW_MOD = GetRadians(360.0f);
+    static constexpr auto GLOBAL_UP = vec3(0.0f, 1.0f, 0.0f);
+
+    enum class direction
+    {
+        forward,
+        backward,
+        left,
+        right
+    };
 
     camera() = default;
 
@@ -98,52 +107,41 @@ struct camera
         this->sensitivity = 2.0f;
         this->yaw = DEFAULT_YAW;
         this->pitch = 0.0f;
-        update(aspectRatio, vec2(0i32), 0.0f);
+        update(aspectRatio);
     }
 
-    void refresh(float aspectRatio)
+    void move(direction dir, float dt)
     {
-        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
-        this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
+        switch (dir){
+            case direction::forward: this->position += m_front * dt; break;
+            case direction::backward: this->position -= m_front * dt; break;
+            case direction::left: this->position += m_right * dt; break;
+            case direction::right: this->position -= m_right * dt; break;
+        };
     }
 
-    void update(float aspectRatio, vec2<int32_t> offset, float dt)
+    void update(float aspectRatio)
     {
-        this->yaw += this->sensitivity * dt * float(offset.x);
-        this->pitch -= this->sensitivity * dt * float(offset.y);
-
         if(this->pitch > PITCH_CLAMP)
             this->pitch = PITCH_CLAMP;
         else if(this->pitch < -PITCH_CLAMP)
             this->pitch = -PITCH_CLAMP;
 
+        if(this->yaw > YAW_MOD)
+            this->yaw = 0.0f;
+        else if(this->yaw < 0.0f)
+            this->yaw = YAW_MOD;
+
         const auto yawCosine = cosf(this->yaw);
         const auto yawSine = sinf(this->yaw);
         const auto pitchCosine = cosf(this->pitch);
         const auto pitchSine = sinf(this->pitch);
 
-        this->front.x = yawCosine * pitchCosine;
-        this->front.y = pitchSine;
-        this->front.z = yawSine * pitchCosine;
-        //this->right = up.crossProduct(this->front).normalise();
+        m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
+        m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
+        m_up = (m_front.crossProduct(m_right)).normalise();
 
-        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
-        this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
-    }
-
-    void resetView(float aspectRatio)
-    {
-        this->yaw = DEFAULT_YAW;
-        this->pitch = 0.0f;
-        const auto yawCosine = cosf(this->yaw);
-        const auto yawSine = sinf(this->yaw);
-        const auto pitchCosine = cosf(this->pitch);
-        const auto pitchSine = sinf(this->pitch);
-
-        this->front.x = yawCosine * pitchCosine;
-        this->front.y = pitchSine;
-        this->front.z = yawSine * pitchCosine;
-        this->view = mat4x4::lookAt(this->position, this->position + this->front, UP_VECTOR);
+        this->view = mat4x4::lookAt(this->position, this->position + m_front, m_up);
         this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
     }
 
@@ -162,12 +160,12 @@ struct camera
     mat4x4 proj;
 
     vec3<float> position;
-    float fov, yaw, pitch;
+    float fov, sensitivity;
+    float yaw, pitch;
+    float zNear, zFar;
 
 private:
-    float zNear, zFar;
-    float sensitivity;
-
-    vec3<float> right;
-    vec3<float> front;
+    vec3<float> m_right;
+    vec3<float> m_front;
+    vec3<float> m_up;
 };

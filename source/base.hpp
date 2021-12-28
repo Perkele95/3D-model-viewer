@@ -43,3 +43,4 @@ enum CORE_FLAG_BITS
 };
 
 constexpr float PI32 = 3.141592741f;
+constexpr float GetRadians(float angle) {return angle / 180.0f * PI32;}

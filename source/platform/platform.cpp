@@ -283,6 +283,17 @@ namespace Platform
     }
 }
 
+void StartTimestepClock(Platform::lDevice device)
+{
+    LARGE_INTEGER perfCountFrequencyResult{};
+    QueryPerformanceFrequency(&perfCountFrequencyResult);
+    device->perfCountFrequency = perfCountFrequencyResult.QuadPart;
+
+    LARGE_INTEGER counter{};
+    QueryPerformanceCounter(&counter);
+    device->perfCounter = counter.QuadPart;
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nShowCmd)
 {
@@ -293,6 +304,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     device.windowPlacement = {sizeof(WINDOWPLACEMENT)};
 
     Platform::s_FlagsPtr = &device.flags;
+    StartTimestepClock(&device);
 
     ApplicationEntryPoint(&device);
 }

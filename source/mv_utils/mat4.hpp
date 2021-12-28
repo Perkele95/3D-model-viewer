@@ -127,7 +127,7 @@ struct mat4x4
     {
         float t = tanf(fov / 2.0f);
         auto result = mat4x4::identity();
-        result.data[0][0] = 1.0f / aspectRatio * t;
+        result.data[0][0] = 1.0f / (aspectRatio * t);
         result.data[1][1] = -1.0f / t;
         result.data[2][2] = -(zFar + zNear) / (zFar - zNear);
         result.data[2][3] = -1.0f;

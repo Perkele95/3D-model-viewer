@@ -89,6 +89,10 @@ enum class KeyCode : key_t
     D = 0x44,
     S = 0x53,
     W = 0x57,
+    LEFT = 0x25,
+    UP = 0x26,
+    RIGHT = 0x27,
+    DOWN = 0x28,
 };
 
 enum KEY_EVENT_BITS
