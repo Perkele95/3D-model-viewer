@@ -44,3 +44,16 @@ enum CORE_FLAG_BITS
 
 constexpr float PI32 = 3.141592741f;
 constexpr float GetRadians(float angle) {return angle / 180.0f * PI32;}
+
+constexpr vec4<float> GetColour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
+{
+    return vec4(float(r) / 255.0f, float(g) / 255.0f, float(b) / 255.0f, float(a) / 255.0f);
+}
+
+constexpr vec4<float> GetColour(uint32_t hex)
+{
+    return vec4(float((hex & 0xFF000000) >> 24) / 255.0f,
+                float((hex & 0x00FF0000) >> 16) / 255.0f,
+                float((hex & 0x0000FF00) >> 8) / 255.0f,
+                float((hex & 0x000000FF) >> 0) / 255.0f);
+}

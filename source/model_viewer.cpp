@@ -1,89 +1,6 @@
 #include "model_viewer.hpp"
 #include "backend/vulkan_tools.hpp"
 
-constexpr static VkVertexInputAttributeDescription s_MeshAttributes[] = {
-    VkVertexInputAttributeDescription{0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, position)},
-    VkVertexInputAttributeDescription{1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, normal)},
-    VkVertexInputAttributeDescription{2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh_vertex, colour)}
-};
-#if 0
-struct alignas(4) material3D
-{
-    static VkPushConstantRange pushConstant()
-    {
-        VkPushConstantRange range;
-        range.offset = 0;
-        range.size = sizeof(material3D);
-        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        return range;
-    }
-
-    vec3<float> ambient;
-    vec3<float> diffuse;
-    vec3<float> specular;
-    float shininess;
-};
-
-struct alignas(4) model3D
-{
-    model3D() = default;
-
-    mat4x4 transform;
-    material3D material;
-};
-#endif
-static constexpr auto s_MeshSzf = 0.5f;
-constexpr auto CUBE_TINT = vec4(0.1f, 1.0f, 0.1f, 1.0f);
-
-static constexpr auto s_NormalFront = vec3(0.0f, 0.0f, -1.0f);
-static constexpr auto s_NormalBack = vec3(0.0f, 0.0f, 1.0f);
-static constexpr auto s_NormalTop = vec3(0.0f, 1.0f, 0.0f);
-static constexpr auto s_NormalBottom = vec3(0.0f, -1.0f, 0.0f);
-static constexpr auto s_NormalLeft = vec3(1.0f, 0.0f, 0.0f);
-static constexpr auto s_NormalRight = vec3(-1.0f, 0.0f, 0.0f);
-
-static mesh_vertex s_MeshVertices[] = {
-    // Front
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront, CUBE_TINT},
-    // Back
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack, CUBE_TINT},
-    // Top
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, CUBE_TINT},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop, CUBE_TINT},
-    // Bottom
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, CUBE_TINT},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom, CUBE_TINT},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, CUBE_TINT},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom, CUBE_TINT},
-    // Left
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalLeft ,CUBE_TINT},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalLeft, CUBE_TINT},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalLeft, CUBE_TINT},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalLeft, CUBE_TINT},
-    // Right
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalRight, CUBE_TINT},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalRight, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalRight, CUBE_TINT},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight, CUBE_TINT},
-};
-
-static mesh_index s_MeshIndices[] = {
-    0, 1, 2, 2, 3, 0, // Front
-    4, 7, 6, 6, 5, 4, // Back
-    8, 9, 10, 10, 11, 8, // Top
-    12, 13, 14, 14, 15, 12, // Bottom
-    16, 17, 18, 18, 19, 16, // Left
-    20, 21, 22, 22, 23, 20, // Right
-};
-
 #if defined(_DEBUG)
 static const bool s_validation = true;
 #else
@@ -99,7 +16,7 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
     m_device->init(platformDevice, &m_allocator, s_validation, false);
 
     m_depthFormat = m_device->getDepthFormat();
-    m_mainCamera = camera(float(m_device->extent.width) / float(m_device->extent.height));
+    m_mainCamera = camera();
 
     buildResources();
 
@@ -182,16 +99,15 @@ model_viewer::~model_viewer()
 
 void model_viewer::testProc(const input_state *input, float dt)
 {
-    const auto rotationSpeed = m_mainCamera.sensitivity * dt;
     if(Platform::IsKeyDown(KeyCode::W))
-        m_mainCamera.pitch -= rotationSpeed;
+        m_mainCamera.rotate(camera::direction::up, dt);
     else if(Platform::IsKeyDown(KeyCode::S))
-        m_mainCamera.pitch += rotationSpeed;
+        m_mainCamera.rotate(camera::direction::down, dt);
 
     if(Platform::IsKeyDown(KeyCode::A))
-        m_mainCamera.yaw += rotationSpeed;
+        m_mainCamera.rotate(camera::direction::left, dt);
     else if(Platform::IsKeyDown(KeyCode::D))
-        m_mainCamera.yaw -= rotationSpeed;
+        m_mainCamera.rotate(camera::direction::right, dt);
 
     if(Platform::IsKeyDown(KeyCode::UP))
         m_mainCamera.move(camera::direction::forward, dt);
@@ -203,11 +119,13 @@ void model_viewer::testProc(const input_state *input, float dt)
     else if(Platform::IsKeyDown(KeyCode::RIGHT))
         m_mainCamera.move(camera::direction::right, dt);
 
+    m_mainCamera.update();
+
     const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    m_mainCamera.update(aspectRatio);
+    const auto mvp = m_mainCamera.calculateMvp(aspectRatio);
 
     for (size_t i = 0; i < m_imageCount; i++)
-        m_mainCamera.map(m_device->device, m_uniformBuffers[i].memory);
+        m_device->fillBuffer(&m_uniformBuffers[i], &mvp, sizeof(mvp));
 }
 
 void model_viewer::run(const input_state *input, uint32_t flags, float dt)
@@ -351,7 +269,7 @@ void model_viewer::buildResources()
     buildSyncObjects();
 
     const VkDescriptorPoolSize poolSizes[] = {
-        camera_data::poolSize(m_imageCount)
+        mvp_matrix::poolSize(m_imageCount)
     };
 
     auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
@@ -364,7 +282,7 @@ void model_viewer::buildResources()
     vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
 
     const VkDescriptorSetLayoutBinding bindings[] = {
-        camera_data::binding()
+        mvp_matrix::binding()
     };
 
     VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
@@ -553,8 +471,8 @@ void model_viewer::buildSyncObjects()
 void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
-        m_device->makeBuffer(sizeof(camera_data), camera_data::usageFlags(),
-                                  camera_data::bufferMemFlags(), &m_uniformBuffers[i]);
+        m_device->makeBuffer(sizeof(mvp_matrix), mvp_matrix::usageFlags(),
+                             mvp_matrix::bufferMemFlags(), &m_uniformBuffers[i]);
     }
 }
 
@@ -568,14 +486,15 @@ void model_viewer::buildDescriptorSets()
     allocInfo.pSetLayouts = layouts.data;
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
-    for (size_t i = 0; i < m_imageCount; i++){
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = m_uniformBuffers[i].data;
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(camera_data);
+    VkDescriptorBufferInfo uniformBufferInfo{};
+    uniformBufferInfo.range = sizeof(mvp_matrix);
+    uniformBufferInfo.offset = 0;
 
-        auto uniformWrite = camera_data::descriptorWrite();
-        uniformWrite.pBufferInfo = &bufferInfo;
+    auto uniformWrite = mvp_matrix::descriptorWrite();
+    uniformWrite.pBufferInfo = &uniformBufferInfo;
+
+    for (size_t i = 0; i < m_imageCount; i++){
+        uniformBufferInfo.buffer = m_uniformBuffers[i].data;
         uniformWrite.dstSet = m_descriptorSets[i];
 
         const VkWriteDescriptorSet writes[] = {
@@ -593,14 +512,20 @@ void model_viewer::buildPipeline()
         vkInits::shaderStageInfo(VK_SHADER_STAGE_FRAGMENT_BIT, m_fragShaderModule),
     };
 
-    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh_vertex));
+    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh3D::vertex));
+
+    constexpr VkVertexInputAttributeDescription attributes[] = {
+        mesh3D::positionAttribute(),
+        mesh3D::normalAttribute(),
+        mesh3D::colourAttribute()
+    };
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(s_MeshAttributes));
-    vertexInputInfo.pVertexAttributeDescriptions = s_MeshAttributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewport = vkInits::viewportInfo(m_device->extent);
@@ -623,7 +548,7 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        mvp_matrix::pushConstant()
+        material3D::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -718,11 +643,7 @@ void model_viewer::updateCmdBuffers()
         renderBeginInfo.framebuffer = m_framebuffers[i];
         vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        auto mvpMatrix = mvp_matrix();
-        mvpMatrix.model = m_mainCamera.model;
-        mvpMatrix.view = m_mainCamera.view;
-        mvpMatrix.proj = m_mainCamera.proj;
-        mvpMatrix.bind(cmdBuffer, m_pipelineLayout);
+        MATERIAL_BRONZE.bind(cmdBuffer, m_pipelineLayout);
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
         const VkDeviceSize vertexOffset = 0;

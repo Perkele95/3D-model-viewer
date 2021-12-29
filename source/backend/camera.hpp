@@ -5,33 +5,6 @@
 
 struct alignas(16) mvp_matrix
 {
-    static VkPushConstantRange pushConstant()
-    {
-        VkPushConstantRange range;
-        range.offset = 0;
-        range.size = sizeof(mvp_matrix);
-        range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        return range;
-    }
-
-    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout)
-    {
-        const auto pc = pushConstant();
-        vkCmdPushConstants(commandBuffer,
-                           layout,
-                           pc.stageFlags,
-                           pc.offset,
-                           pc.size,
-                           this);
-    }
-
-    mat4x4 model;
-    mat4x4 view;
-    mat4x4 proj;
-};
-
-struct alignas(4) camera_data
-{
     static VkDescriptorPoolSize poolSize(size_t count)
     {
         VkDescriptorPoolSize poolSize{};
@@ -43,7 +16,7 @@ struct alignas(4) camera_data
     static VkDescriptorSetLayoutBinding binding()
     {
         VkDescriptorSetLayoutBinding setBinding{};
-        setBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        setBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         setBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         setBinding.descriptorCount = uint32_t(1);
         setBinding.binding = 0;
@@ -70,6 +43,9 @@ struct alignas(4) camera_data
         return VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
     }
 
+    mat4x4 model;
+    mat4x4 view;
+    mat4x4 proj;
     vec4<float> position;
 };
 
@@ -90,81 +66,85 @@ struct camera
         forward,
         backward,
         left,
-        right
+        right,
+        up,
+        down
     };
 
-    camera() = default;
-
-    camera(float aspectRatio)
+    camera()
     {
-        this->model = mat4x4::identity();
-        this->view = mat4x4::identity();
-        this->proj = mat4x4::identity();
         this->fov = DEFAULT_FOV;
-        this->zNear = DEFAULT_ZNEAR;
-        this->zFar = DEFAULT_ZFAR;
-        this->position = vec3(0.0f, 0.0f, -2.0f);
+        m_zNear = DEFAULT_ZNEAR;
+        m_zFar = DEFAULT_ZFAR;
+        m_position = vec3(0.0f, 0.0f, -2.0f);
         this->sensitivity = 2.0f;
-        this->yaw = DEFAULT_YAW;
-        this->pitch = 0.0f;
-        update(aspectRatio);
+        m_yaw = DEFAULT_YAW;
+        m_pitch = 0.0f;
+        update();
+    }
+
+    void rotate(direction dir, float dt)
+    {
+        const auto speed = this->sensitivity * dt;
+        switch (dir){
+            case direction::up: m_pitch -= speed; break;
+            case direction::down: m_pitch += speed; break;
+            case direction::left: m_yaw += speed; break;
+            case direction::right: m_yaw -= speed; break;
+            default: break;
+        };
     }
 
     void move(direction dir, float dt)
     {
         switch (dir){
-            case direction::forward: this->position += m_front * dt; break;
-            case direction::backward: this->position -= m_front * dt; break;
-            case direction::left: this->position += m_right * dt; break;
-            case direction::right: this->position -= m_right * dt; break;
+            case direction::forward: m_position += m_front * dt; break;
+            case direction::backward: m_position -= m_front * dt; break;
+            case direction::left: m_position += m_right * dt; break;
+            case direction::right: m_position -= m_right * dt; break;
+            default: break;
         };
     }
 
-    void update(float aspectRatio)
+    void update()
     {
-        if(this->pitch > PITCH_CLAMP)
-            this->pitch = PITCH_CLAMP;
-        else if(this->pitch < -PITCH_CLAMP)
-            this->pitch = -PITCH_CLAMP;
+        if(m_pitch > PITCH_CLAMP)
+            m_pitch = PITCH_CLAMP;
+        else if(m_pitch < -PITCH_CLAMP)
+            m_pitch = -PITCH_CLAMP;
 
-        if(this->yaw > YAW_MOD)
-            this->yaw = 0.0f;
-        else if(this->yaw < 0.0f)
-            this->yaw = YAW_MOD;
+        if(m_yaw > YAW_MOD)
+            m_yaw = 0.0f;
+        else if(m_yaw < 0.0f)
+            m_yaw = YAW_MOD;
 
-        const auto yawCosine = cosf(this->yaw);
-        const auto yawSine = sinf(this->yaw);
-        const auto pitchCosine = cosf(this->pitch);
-        const auto pitchSine = sinf(this->pitch);
+        const auto yawCosine = cosf(m_yaw);
+        const auto yawSine = sinf(m_yaw);
+        const auto pitchCosine = cosf(m_pitch);
+        const auto pitchSine = sinf(m_pitch);
 
         m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
         m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
         m_up = (m_front.crossProduct(m_right)).normalise();
-
-        this->view = mat4x4::lookAt(this->position, this->position + m_front, m_up);
-        this->proj = mat4x4::perspective(this->fov, aspectRatio, this->zNear, this->zFar);
     }
 
-    void map(VkDevice device, VkDeviceMemory memory) const
+    mvp_matrix calculateMvp(float aspectRatio)
     {
-        auto pushData = camera_data();
-
-        camera_data *mapped = nullptr;
-        vkMapMemory(device, memory, 0, sizeof(pushData), 0, reinterpret_cast<void**>(&mapped));
-        mapped->position = vec4(this->position, 1.0f);
-        vkUnmapMemory(device, memory);
+        auto mvp = mvp_matrix();
+        mvp.model = mat4x4::identity();
+        mvp.view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
+        mvp.proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
+        mvp.position = vec4(m_position, 1.0f);
+        return mvp;
     }
 
-    mat4x4 model;
-    mat4x4 view;
-    mat4x4 proj;
-
-    vec3<float> position;
     float fov, sensitivity;
-    float yaw, pitch;
-    float zNear, zFar;
 
 private:
+    float m_yaw, m_pitch;
+    float m_zNear, m_zFar;
+
+    vec3<float> m_position;
     vec3<float> m_right;
     vec3<float> m_front;
     vec3<float> m_up;
