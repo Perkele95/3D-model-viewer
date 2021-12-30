@@ -75,4 +75,6 @@ private:
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkDescriptorSet *m_descriptorSets;
     buffer_t *m_uniformBuffers;
+
+    model3D m_model;
 };

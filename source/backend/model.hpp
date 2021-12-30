@@ -41,6 +41,13 @@ constexpr auto MATERIAL_BRONZE = material3D(
     0.2f
 );
 
+constexpr auto MATERIAL_GOLD = material3D(
+    vec3(0.24725f, 0.1995f, 0.0745f),
+    vec3(0.75164f, 0.60648f, 0.22648f),
+    vec3(0.628281f, 0.555802f, 0.366065f),
+    0.4f
+);
+
 struct mesh3D
 {
     struct vertex
@@ -68,20 +75,48 @@ struct mesh3D
         return {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(mesh3D::vertex, colour)};
     }
 
-    view<vertex> vertices;
-    view<index> indices;
+    void load(view<vertex> vertices, view<index> indices)
+    {
+        //
+    }
+
+    void unload()
+    {
+        //
+    }
+
+    void bind()
+    {
+        //
+    }
+
+private:
+    buffer_t m_vertices, m_indices;
 };
 
 struct model3D
 {
     model3D() = default;
+    model3D(const vulkan_device *device)
+    {
+        m_device = device;
+    }
 
-    mesh3D mesh;
-    material3D material;
+    void draw(VkCommandBuffer cmd, VkDescriptorSet set)
+    {
+        //
+    }
+
+private:
+    mesh3D m_mesh;
+    material3D m_material;
+    const vulkan_device *m_device;
 };
 
 static constexpr auto s_MeshSzf = 0.5f;
-constexpr auto CUBE_TINT = GetColour(0xb08d57FF);
+constexpr auto TINT_BRONZE = GetColour(0xb08d57FF);
+constexpr auto TINT_GOLD = GetColour(0xFFD700FF);
+constexpr auto CUBE_TINT = TINT_GOLD;
 
 static constexpr auto s_NormalFront = vec3(0.0f, 0.0f, -1.0f);
 static constexpr auto s_NormalBack = vec3(0.0f, 0.0f, 1.0f);

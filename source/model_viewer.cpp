@@ -643,7 +643,7 @@ void model_viewer::updateCmdBuffers()
         renderBeginInfo.framebuffer = m_framebuffers[i];
         vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        MATERIAL_BRONZE.bind(cmdBuffer, m_pipelineLayout);
+        MATERIAL_GOLD.bind(cmdBuffer, m_pipelineLayout);
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
         const VkDeviceSize vertexOffset = 0;
