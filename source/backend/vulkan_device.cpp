@@ -5,7 +5,7 @@ constexpr char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 constexpr char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
-void vulkan_device::init(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync)
+void vulkan_device::init(Platform::lDevice platformDevice, linear_storage *transient, bool validation, bool vSync)
 {
     auto appInfo = vkInits::applicationInfo("3D model viewer");
     auto instanceInfo = vkInits::instanceCreateInfo();
@@ -20,15 +20,15 @@ void vulkan_device::init(Platform::lDevice platformDevice, mv_allocator *allocat
 
     Platform::SetupVkSurface(platformDevice, m_instance, &m_surface);
 
-    pickPhysicalDevice(allocator);
+    pickPhysicalDevice(transient);
     prepareLogicalDevice(validation);
 
     vkGetDeviceQueue(this->device, this->graphics.family, 0, &this->graphics.queue);
     vkGetDeviceQueue(this->device, this->present.family, 0, &this->present.queue);
 
-    pickSurfaceFormat(allocator);
+    pickSurfaceFormat(transient);
     const auto preferredMode = vSync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_MAILBOX_KHR;
-    pickPresentMode(allocator, preferredMode);
+    pickPresentMode(transient, preferredMode);
 
     refresh();
     getSampleCount();
@@ -179,11 +179,11 @@ VkResult vulkan_device::fillBuffer(buffer_t *pDst, const void *src, size_t size)
     return result;
 }
 
-void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
+void vulkan_device::pickPhysicalDevice(linear_storage *transient)
 {
     uint32_t physDeviceCount = 0;
     vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
-    auto physDevices = allocator->allocTransient<VkPhysicalDevice>(physDeviceCount);
+    auto physDevices = transient->push<VkPhysicalDevice>(physDeviceCount);
     vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices);
 
     const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
@@ -200,7 +200,7 @@ void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
     for(size_t i = 0; i < physDeviceCount; i++){
         uint32_t extensionCount = 0;
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, nullptr);
-        auto availableExtensions = allocator->allocTransient<VkExtensionProperties>(extensionCount);
+        auto availableExtensions = transient->push<VkExtensionProperties>(extensionCount);
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions);
         const bool extensionsSupported = findExtensionProperty({availableExtensions, extensionCount});
 
@@ -213,7 +213,7 @@ void vulkan_device::pickPhysicalDevice(mv_allocator *allocator)
 
         uint32_t propCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, nullptr);
-        auto queueFamilyProps = allocator->allocTransient<VkQueueFamilyProperties>(propCount);
+        auto queueFamilyProps = transient->push<VkQueueFamilyProperties>(propCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps);
 
         this->graphics.family = 0;
@@ -279,11 +279,11 @@ void vulkan_device::prepareLogicalDevice(bool validation)
     vkCreateDevice(this->gpu, &createInfo, nullptr, &this->device);
 }
 
-void vulkan_device::pickSurfaceFormat(mv_allocator *allocator)
+void vulkan_device::pickSurfaceFormat(linear_storage *transient)
 {
     uint32_t count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, nullptr);
-    auto surfaceFormats = allocator->allocTransient<VkSurfaceFormatKHR>(count);
+    auto surfaceFormats = transient->push<VkSurfaceFormatKHR>(count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, surfaceFormats);
 
     this->surfaceFormat = surfaceFormats[0];
@@ -297,11 +297,11 @@ void vulkan_device::pickSurfaceFormat(mv_allocator *allocator)
     }
 }
 
-void vulkan_device::pickPresentMode(mv_allocator *allocator, VkPresentModeKHR preferredMode)
+void vulkan_device::pickPresentMode(linear_storage *transient, VkPresentModeKHR preferredMode)
 {
     uint32_t count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, nullptr);
-    auto presentModes = allocator->allocTransient<VkPresentModeKHR>(count);
+    auto presentModes = transient->push<VkPresentModeKHR>(count);
     vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, presentModes);
 
     this->presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;

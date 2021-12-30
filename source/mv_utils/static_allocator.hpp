@@ -19,7 +19,7 @@ struct static_allocator
     static_allocator &operator=(const static_allocator &&src) = delete;
 
     template<typename T>
-    T *allocate(size_t count)
+    T *allocate(size_t count) const
     {
 #if defined(_WIN32)
         auto memory = VirtualAlloc(nullptr, count * sizeof(T), MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -32,7 +32,7 @@ struct static_allocator
     }
 
     template<>
-    void *allocate(size_t count)
+    void *allocate(size_t count) const
     {
 #if defined(_WIN32)
         auto memory = VirtualAlloc(nullptr, count, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);

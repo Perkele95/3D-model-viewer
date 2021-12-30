@@ -2,7 +2,7 @@
 
 #include "base.hpp"
 
-#include "mv_allocator.hpp"
+#include "mv_utils/linear_storage.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vulkan_text_overlay.hpp"
 #include "backend/camera.hpp"
@@ -41,7 +41,7 @@ private:
     void buildMeshBuffers();
     void updateCmdBuffers();
 
-    mv_allocator m_allocator;
+    linear_storage m_permanentStorage, m_transientStorage;
 
     vulkan_device *m_device;
     text_overlay *m_overlay;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../base.hpp"
-#include "../mv_allocator.hpp"
 #include "vulkan_tools.hpp"
 
 constexpr VkMemoryPropertyFlags VISIBLE_BUFFER_FLAGS = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -15,7 +14,7 @@ struct queue_data
 
 struct vulkan_device
 {
-    void init(Platform::lDevice platformDevice, mv_allocator *allocator, bool validation, bool vSync);
+    void init(Platform::lDevice platformDevice, linear_storage *transient, bool validation, bool vSync);
     ~vulkan_device();
     void refresh();
 
@@ -45,10 +44,10 @@ struct vulkan_device
     uint32_t minImageCount;
 
 private:
-    void pickPhysicalDevice(mv_allocator *allocator);
+    void pickPhysicalDevice(linear_storage *transient);
     void prepareLogicalDevice(bool validation);
-    void pickSurfaceFormat(mv_allocator *allocator);
-    void pickPresentMode(mv_allocator *allocator, VkPresentModeKHR preferredMode);
+    void pickSurfaceFormat(linear_storage *transient);
+    void pickPresentMode(linear_storage *transient, VkPresentModeKHR preferredMode);
 
     void getSampleCount();
 

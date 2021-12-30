@@ -26,8 +26,8 @@ static stb_fontchar s_Fontdata[STB_SOMEFONT_NUM_CHARS];
 void text_overlay::create(const text_overlay_create_info *pInfo)
 {
     m_imageCount = pInfo->imageCount;
-    m_descriptorSets = pInfo->allocator->allocPermanent<VkDescriptorSet>(m_imageCount);
-    this->cmdBuffers = pInfo->allocator->allocPermanent<VkCommandBuffer>(m_imageCount);
+    m_descriptorSets = pInfo->sharedPermanent->push<VkDescriptorSet>(m_imageCount);
+    this->cmdBuffers = pInfo->sharedPermanent->push<VkCommandBuffer>(m_imageCount);
     m_quadCount = 0;
     m_zOrder = Z_ORDER_GUI_DEFAULT;
     m_vertShaderModule = pInfo->vertex;
@@ -84,7 +84,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
     result = vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_setLayout);
 
-    prepareDescriptorSets(pInfo->allocator);
+    prepareDescriptorSets(pInfo->sharedTransient);
     prepareRenderpass();
     preparePipeline();
     prepareRenderBuffers();
@@ -108,7 +108,7 @@ void text_overlay::destroy()
     vkDestroySampler(m_device->device, m_sampler, nullptr);
 }
 
-void text_overlay::onWindowResize(mv_allocator *allocator, VkCommandPool commandPool)
+void text_overlay::onWindowResize(linear_storage *transient, VkCommandPool commandPool)
 {
     m_cmdPool = commandPool;
 
@@ -116,7 +116,7 @@ void text_overlay::onWindowResize(mv_allocator *allocator, VkCommandPool command
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
     vkResetDescriptorPool(m_device->device, m_descriptorPool, VkFlags(0));
 
-    prepareDescriptorSets(allocator);
+    prepareDescriptorSets(transient);
     preparePipeline();
 }
 
@@ -385,9 +385,9 @@ void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
     vkCreateImageView(m_device->device, &viewInfo, nullptr, &m_fontBuffer.view);
 }
 
-void text_overlay::prepareDescriptorSets(mv_allocator *allocator)
+void text_overlay::prepareDescriptorSets(linear_storage *transient)
 {
-    auto layouts = allocator->allocTransient<VkDescriptorSetLayout>(m_imageCount);
+    auto layouts = transient->push<VkDescriptorSetLayout>(m_imageCount);
     for(size_t i = 0; i < m_imageCount; i++)
         layouts[i] = m_setLayout;
 
