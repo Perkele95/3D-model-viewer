@@ -130,6 +130,8 @@ void model_viewer::testProc(const input_state *input, float dt)
 
 void model_viewer::run(const input_state *input, uint32_t flags, float dt)
 {
+    m_allocator.flushTransientBuffer();
+
     if(m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 

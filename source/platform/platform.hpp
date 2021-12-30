@@ -27,9 +27,6 @@ namespace Platform
     // Sizeof(device_T), use to allocate device buffer
     extern const size_t DeviceSize;
 
-    void *Map(size_t size);
-    bool Unmap(void *mapped);
-
     namespace io
     {
         bool close(file_t *file);

@@ -21,13 +21,13 @@ namespace Platform
 
     extern const size_t DeviceSize = sizeof(logical_device);
 
-    void *Map(size_t size)
+    inline void *Map(size_t size)
     {
         auto ptr = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
         return static_cast<void*>(ptr);
     }
 
-    bool Unmap(void *mapped)
+    inline bool Unmap(void *mapped)
     {
         const bool result = VirtualFree(mapped, 0, MEM_RELEASE);
         return result;

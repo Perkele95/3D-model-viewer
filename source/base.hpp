@@ -2,6 +2,7 @@
 
 #include "mv_utils/view.hpp"
 #include "mv_utils/vec.hpp"
+#include "mv_utils/static_allocator.hpp"
 #include "platform/platform.hpp"
 
 #if defined(_DEBUG)
