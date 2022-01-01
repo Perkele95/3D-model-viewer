@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../base.hpp"
-#include "vulkan_tools.hpp"
+#include "buffer.hpp"
 
 constexpr VkMemoryPropertyFlags VISIBLE_BUFFER_FLAGS = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                                        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -25,8 +25,7 @@ struct vulkan_device
     VkResult buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainKHR *pSwapchain) const;
 
     VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
-    VkResult makeBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                        VkMemoryPropertyFlags flags, buffer_t *pBuffer) const;
+    VkResult makeBuffer(buffer_t *pBuffer) const;
     VkResult makeImage(VkFormat format, VkExtent2D imageExtent, VkImageUsageFlags usage,
                        VkMemoryPropertyFlags flags, image_buffer *pImage) const;
     VkResult fillBuffer(buffer_t *pDst, const void *src, size_t size) const;

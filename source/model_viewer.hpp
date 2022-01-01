@@ -5,12 +5,20 @@
 #include "mv_utils/linear_storage.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vulkan_text_overlay.hpp"
+#include "backend/shader.hpp"
 #include "backend/camera.hpp"
+#include "backend/lights.hpp"
 #include "backend/model.hpp"
 
 #include "mv_utils/mat4.hpp"
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
+
+struct uniform_buffer
+{
+    buffer_t camera;
+    buffer_t lights;
+};
 
 struct model_viewer
 {
@@ -35,10 +43,14 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
+    void buildDescriptorPool();
     void buildUniformBuffers();
     void buildDescriptorSets();
     void buildPipeline();
     void buildMeshBuffers();
+
+    void updateCamera();
+    void updateLights();
     void updateCmdBuffers();
 
     linear_storage m_permanentStorage, m_transientStorage;
@@ -66,7 +78,7 @@ private:
     VkCommandBuffer *m_commandBuffers;
     VkPipeline m_pipeline;
     VkPipelineLayout m_pipelineLayout;
-    VkShaderModule m_vertShaderModule, m_fragShaderModule;
+    shader_object m_shaders[2];
     buffer_t m_vertexBuffer, m_indexBuffer;
 
     camera m_mainCamera;
@@ -74,7 +86,6 @@ private:
     VkDescriptorPool m_descriptorPool;
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkDescriptorSet *m_descriptorSets;
-    buffer_t *m_uniformBuffers;
 
-    model3D m_model;
+    uniform_buffer *m_uniformBuffers;
 };

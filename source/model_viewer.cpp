@@ -1,7 +1,6 @@
 #include "model_viewer.hpp"
-#include "backend/vulkan_tools.hpp"
 
-#if defined(_DEBUG)
+#if defined(MV_DEBUG)
 static const bool s_validation = true;
 #else
 static const bool s_validation = false;
@@ -20,23 +19,12 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
 
     buildResources();
 
-    VkShaderModule vertexModule, fragmentModule;
-    auto shader = Platform::io::read("../shaders/gui_vert.spv");
-    m_device->loadShader(&shader, &vertexModule);
-    Platform::io::close(&shader);
-
-    shader = Platform::io::read("../shaders/gui_frag.spv");
-    m_device->loadShader(&shader, &fragmentModule);
-    Platform::io::close(&shader);
-
     text_overlay_create_info overlayInfo;
     overlayInfo.sharedPermanent = &m_permanentStorage;
     overlayInfo.sharedTransient = &m_transientStorage;
     overlayInfo.device = m_device;
     overlayInfo.cmdPool = m_cmdPool;
     overlayInfo.imageCount = m_imageCount;
-    overlayInfo.vertex = vertexModule;
-    overlayInfo.fragment = fragmentModule;
     overlayInfo.depthFormat = m_depthFormat;
     m_overlay->create(&overlayInfo);
 
@@ -65,14 +53,17 @@ model_viewer::~model_viewer()
 
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
-    vkDestroyShaderModule(m_device->device, m_vertShaderModule, nullptr);
-    vkDestroyShaderModule(m_device->device, m_fragShaderModule, nullptr);
+
+    for (size_t i = 0; i < arraysize(m_shaders); i++)
+        m_shaders[i].destroy(m_device->device);
 
     vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(m_device->device, m_descriptorSetLayout, nullptr);
 
-    for(size_t i = 0; i < m_imageCount; i++)
-        m_uniformBuffers[i].destroy(m_device->device);
+    for(size_t i = 0; i < m_imageCount; i++){
+        m_uniformBuffers[i].camera.destroy(m_device->device);
+        m_uniformBuffers[i].lights.destroy(m_device->device);
+    }
 
     m_vertexBuffer.destroy(m_device->device);
     m_indexBuffer.destroy(m_device->device);
@@ -120,13 +111,7 @@ void model_viewer::testProc(const input_state *input, float dt)
     else if(Platform::IsKeyDown(KeyCode::RIGHT))
         m_mainCamera.move(camera::direction::right, dt);
 
-    m_mainCamera.update();
-
-    const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    const auto mvp = m_mainCamera.calculateMvp(aspectRatio);
-
-    for (size_t i = 0; i < m_imageCount; i++)
-        m_device->fillBuffer(&m_uniformBuffers[i], &mvp, sizeof(mvp));
+    updateCamera();
 }
 
 void model_viewer::run(const input_state *input, uint32_t flags, float dt)
@@ -260,7 +245,7 @@ void model_viewer::buildResources()
     m_imagesInFlight = m_permanentStorage.push<VkFence>(m_imageCount);
     m_commandBuffers = m_permanentStorage.push<VkCommandBuffer>(m_imageCount);
     m_descriptorSets = m_permanentStorage.push<VkDescriptorSet>(m_imageCount);
-    m_uniformBuffers = m_permanentStorage.push<buffer_t>(m_imageCount);
+    m_uniformBuffers = m_permanentStorage.push<uniform_buffer>(m_imageCount);
 
     vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
 
@@ -270,29 +255,7 @@ void model_viewer::buildResources()
     buildRenderPass();
     buildFramebuffers();
     buildSyncObjects();
-
-    const VkDescriptorPoolSize poolSizes[] = {
-        mvp_matrix::poolSize(m_imageCount)
-    };
-
-    auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
-    descriptorPoolInfo.pPoolSizes = poolSizes;
-    descriptorPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
-
-    for (size_t i = 0; i < arraysize(poolSizes); i++)
-        descriptorPoolInfo.maxSets += poolSizes[i].descriptorCount;
-
-    vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
-
-    const VkDescriptorSetLayoutBinding bindings[] = {
-        mvp_matrix::binding()
-    };
-
-    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
-    setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    setLayoutInfo.pBindings = bindings;
-    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
-    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
+    buildDescriptorPool();
 
     buildUniformBuffers();
     buildDescriptorSets();
@@ -300,17 +263,16 @@ void model_viewer::buildResources()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
 
-    auto vertexShader = Platform::io::read("../shaders/scene_vert.spv");
-    auto fragmentShader = Platform::io::read("../shaders/scene_frag.spv");
+    m_shaders[0] = shader_object("../shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    m_shaders[1] = shader_object("../shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    m_device->loadShader(&vertexShader, &m_vertShaderModule);
-    m_device->loadShader(&fragmentShader, &m_fragShaderModule);
+    for (size_t i = 0; i < arraysize(m_shaders); i++)
+        m_shaders[i].load(m_device->device);
 
-    Platform::io::close(&vertexShader);
-    Platform::io::close(&fragmentShader);
     buildPipeline();
     buildMeshBuffers();
 
+    updateLights();
     updateCmdBuffers();
 }
 
@@ -471,11 +433,44 @@ void model_viewer::buildSyncObjects()
     }
 }
 
+void model_viewer::buildDescriptorPool()
+{
+    const VkDescriptorPoolSize poolSizes[] = {
+        mvp_matrix::poolSize(m_imageCount),
+        light_data::poolSize(m_imageCount)
+    };
+
+    auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
+    descriptorPoolInfo.pPoolSizes = poolSizes;
+    descriptorPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
+
+    for (size_t i = 0; i < arraysize(poolSizes); i++)
+        descriptorPoolInfo.maxSets += poolSizes[i].descriptorCount;
+
+    vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
+
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        mvp_matrix::binding(),
+        light_data::binding()
+    };
+
+    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
+    setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    setLayoutInfo.pBindings = bindings;
+    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
+    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
+
+}
+
 void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
-        m_device->makeBuffer(sizeof(mvp_matrix), mvp_matrix::usageFlags(),
-                             mvp_matrix::bufferMemFlags(), &m_uniformBuffers[i]);
+        m_uniformBuffers[i].camera = buffer_t(mvp_matrix::usageFlags(), mvp_matrix::bufferMemFlags(),
+                                              sizeof(mvp_matrix));
+        m_uniformBuffers[i].lights = buffer_t(light_data::usageFlags(), light_data::bufferMemFlags(),
+                                              sizeof(light_data));
+        m_device->makeBuffer(&m_uniformBuffers[i].camera);
+        m_device->makeBuffer(&m_uniformBuffers[i].lights);
     }
 }
 
@@ -489,19 +484,15 @@ void model_viewer::buildDescriptorSets()
     allocInfo.pSetLayouts = layouts.data;
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
-    VkDescriptorBufferInfo uniformBufferInfo{};
-    uniformBufferInfo.range = sizeof(mvp_matrix);
-    uniformBufferInfo.offset = 0;
-
-    auto uniformWrite = mvp_matrix::descriptorWrite();
-    uniformWrite.pBufferInfo = &uniformBufferInfo;
-
     for (size_t i = 0; i < m_imageCount; i++){
-        uniformBufferInfo.buffer = m_uniformBuffers[i].data;
-        uniformWrite.dstSet = m_descriptorSets[i];
+        const auto cameraBufferInfo = m_uniformBuffers[i].camera.descriptor(0);
+        auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i]);
+
+        const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
+        auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i]);
 
         const VkWriteDescriptorSet writes[] = {
-            uniformWrite
+            cameraWrite, lightWrite
         };
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -511,8 +502,7 @@ void model_viewer::buildDescriptorSets()
 void model_viewer::buildPipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        vkInits::shaderStageInfo(VK_SHADER_STAGE_VERTEX_BIT, m_vertShaderModule),
-        vkInits::shaderStageInfo(VK_SHADER_STAGE_FRAGMENT_BIT, m_fragShaderModule),
+        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()
     };
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh3D::vertex));
@@ -583,26 +573,20 @@ void model_viewer::buildMeshBuffers()
 {
     constexpr auto tint = vec4(1.0f);
 
-    buffer_t vertexTransfer{}, indexTransfer{};
-    m_device->makeBuffer(sizeof(s_MeshVertices),
-                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                              VISIBLE_BUFFER_FLAGS,
-                              &vertexTransfer);
+    auto vertexTransfer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VISIBLE_BUFFER_FLAGS, sizeof(s_MeshVertices));
+    auto indexTransfer = buffer_t(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                                  VISIBLE_BUFFER_FLAGS, sizeof(s_MeshIndices));
 
-    m_device->makeBuffer(vertexTransfer.size,
-                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                              &m_vertexBuffer);
+    m_vertexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexTransfer.size);
+    m_indexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexTransfer.size);
 
-    m_device->makeBuffer(sizeof(s_MeshIndices),
-                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                              VISIBLE_BUFFER_FLAGS,
-                              &indexTransfer);
-
-    m_device->makeBuffer(indexTransfer.size,
-                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                              &m_indexBuffer);
+    m_device->makeBuffer(&vertexTransfer);
+    m_device->makeBuffer(&indexTransfer);
+    m_device->makeBuffer(&m_vertexBuffer);
+    m_device->makeBuffer(&m_indexBuffer);
 
     m_device->fillBuffer(&vertexTransfer, s_MeshVertices, sizeof(s_MeshVertices));
     m_device->fillBuffer(&indexTransfer, s_MeshIndices, sizeof(s_MeshIndices));
@@ -611,8 +595,8 @@ void model_viewer::buildMeshBuffers()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, arraysize(cpyCmds));
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, cpyCmds);
 
-    vkTools::CmdCopyBuffer(cpyCmds[0], &m_vertexBuffer, &vertexTransfer);
-    vkTools::CmdCopyBuffer(cpyCmds[1], &m_indexBuffer, &indexTransfer);
+    vertexTransfer.copyToBuffer(cpyCmds[0], &m_vertexBuffer);
+    indexTransfer.copyToBuffer(cpyCmds[0], &m_indexBuffer);
 
     auto submitInfo = vkInits::submitInfo(cpyCmds, arraysize(cpyCmds));
     vkQueueSubmit(m_device->graphics.queue, 1, &submitInfo, VK_NULL_HANDLE);
@@ -622,6 +606,35 @@ void model_viewer::buildMeshBuffers()
 
     vertexTransfer.destroy(m_device->device);
     indexTransfer.destroy(m_device->device);
+}
+
+void model_viewer::updateCamera()
+{
+    m_mainCamera.update();
+    const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
+    const auto mvp = m_mainCamera.calculateMvp(aspectRatio);
+
+    for (size_t i = 0; i < m_imageCount; i++)
+        m_device->fillBuffer(&m_uniformBuffers[i].camera, &mvp, sizeof(mvp));
+}
+
+void model_viewer::updateLights()
+{
+    auto lights = light_data();
+    lights.positions[0] = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    lights.colours[0] = GetColour(255, 255, 255);
+
+    lights.positions[1] = vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+    lights.colours[1] = GetColour(255, 255, 255);
+
+    lights.positions[2] = vec4(0.0f, 1.0f, 0.0f, 0.0f);
+    lights.colours[2] = GetColour(255, 255, 255);
+
+    lights.positions[3] = vec4(0.0f, 0.0f, 1.0f, 0.0f);
+    lights.colours[3] = GetColour(255, 255, 255);
+
+    for (size_t i = 0; i < m_imageCount; i++)
+        m_device->fillBuffer(&m_uniformBuffers[i].lights, &lights, sizeof(lights));
 }
 
 void model_viewer::updateCmdBuffers()

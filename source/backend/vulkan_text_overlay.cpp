@@ -1,6 +1,5 @@
 #include "../../vendor/stb/stb_font_courier_40_latin1.inl"
 #include "vulkan_text_overlay.hpp"
-#include "vulkan_tools.hpp"
 #include <string.h>
 
 constexpr size_t QUAD_VERTEX_COUNT = 4;
@@ -30,11 +29,15 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     this->cmdBuffers = pInfo->sharedPermanent->push<VkCommandBuffer>(m_imageCount);
     m_quadCount = 0;
     m_zOrder = Z_ORDER_GUI_DEFAULT;
-    m_vertShaderModule = pInfo->vertex;
-    m_fragShaderModule = pInfo->fragment;
     m_device = pInfo->device;
     m_cmdPool = pInfo->cmdPool;
     m_depthFormat = pInfo->depthFormat;
+
+    m_shaders[0] = shader_object("../shaders/gui_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    m_shaders[1] = shader_object("../shaders/gui_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+    for (size_t i = 0; i < arraysize(m_shaders); i++)
+        m_shaders[i].load(m_device->device);
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, this->cmdBuffers);
@@ -103,8 +106,9 @@ void text_overlay::destroy()
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
 
-    vkDestroyShaderModule(m_device->device, m_vertShaderModule, nullptr);
-    vkDestroyShaderModule(m_device->device, m_fragShaderModule, nullptr);
+    for (size_t i = 0; i < arraysize(m_shaders); i++)
+        m_shaders[i].destroy(m_device->device);
+
     vkDestroySampler(m_device->device, m_sampler, nullptr);
 }
 
@@ -330,12 +334,8 @@ void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
 
     const VkDeviceSize size = bitmapExtent.width * bitmapExtent.height;
 
-    buffer_t transfer;
-    m_device->makeBuffer(size,
-                              VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                              VISIBLE_BUFFER_FLAGS,
-                              &transfer);
-
+    auto transfer = buffer_t(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VISIBLE_BUFFER_FLAGS, size);
+    m_device->makeBuffer(&transfer);
     m_device->fillBuffer(&transfer, src, size);
 
     VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
@@ -355,10 +355,7 @@ void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
                          0, nullptr, 1, &imageBarrier);
     vkEndCommandBuffer(imageCmds[0]);
 
-    vkTools::CmdCopyBufferToImage(imageCmds[1],
-                                  &m_fontBuffer,
-                                  &transfer,
-                                  bitmapExtent);
+    transfer.copyToImage(imageCmds[1], &m_fontBuffer, bitmapExtent);
 
     vkBeginCommandBuffer(imageCmds[2], &cmdBufferBeginInfo);
     imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -414,8 +411,7 @@ void text_overlay::prepareDescriptorSets(linear_storage *transient)
 void text_overlay::preparePipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        vkInits::shaderStageInfo(VK_SHADER_STAGE_VERTEX_BIT, m_vertShaderModule),
-        vkInits::shaderStageInfo(VK_SHADER_STAGE_FRAGMENT_BIT, m_fragShaderModule),
+        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()
     };
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(quad_vertex));
@@ -472,13 +468,9 @@ void text_overlay::preparePipeline()
 
 void text_overlay::prepareRenderBuffers()
 {
-    m_device->makeBuffer(GUI_VERTEX_BUFFER_SIZE,
-                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                              VISIBLE_BUFFER_FLAGS,
-                              &m_vertexBuffer);
+    m_vertexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS, GUI_VERTEX_BUFFER_SIZE);
+    m_indexBuffer = buffer_t(VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS, GUI_INDEX_BUFFER_SIZE);
 
-    m_device->makeBuffer(GUI_INDEX_BUFFER_SIZE,
-                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                              VISIBLE_BUFFER_FLAGS,
-                              &m_indexBuffer);
+    m_device->makeBuffer(&m_vertexBuffer);
+    m_device->makeBuffer(&m_indexBuffer);
 }

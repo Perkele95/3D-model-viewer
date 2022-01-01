@@ -5,7 +5,7 @@
 #include "mv_utils/linear_storage.hpp"
 #include "platform/platform.hpp"
 
-#if defined(_DEBUG)
+#if defined(MV_DEBUG)
     #if defined(_WIN32)
         #define WIN32_LEAN_AND_MEAN
         #define NOMINMAX

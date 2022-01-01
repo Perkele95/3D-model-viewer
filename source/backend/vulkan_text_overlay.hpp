@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vulkan_device.hpp"
-#include "vulkan_tools.hpp"
+#include "shader.hpp"
 
 struct alignas(4) quad_vertex
 {
@@ -20,7 +20,6 @@ struct text_overlay_create_info
     const vulkan_device *device;
     VkCommandPool cmdPool;
     size_t imageCount;
-    VkShaderModule vertex, fragment;
     VkFormat depthFormat;
 };
 
@@ -67,7 +66,7 @@ private:
     VkDescriptorSet *m_descriptorSets;
     VkPipeline m_pipeline;
     VkPipelineLayout m_pipelineLayout;
-    VkShaderModule m_vertShaderModule, m_fragShaderModule;
+    shader_object m_shaders[2];
     buffer_t m_vertexBuffer, m_indexBuffer;
 
     VkSampler m_sampler;

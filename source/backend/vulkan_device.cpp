@@ -137,17 +137,15 @@ VkMemoryAllocateInfo vulkan_device::getMemoryAllocInfo(VkMemoryRequirements memR
     return allocInfo;
 }
 
-VkResult vulkan_device::makeBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
-                                   VkMemoryPropertyFlags flags, buffer_t *pBuffer) const
+VkResult vulkan_device::makeBuffer(buffer_t *pBuffer) const
 {
-    pBuffer->size = size;
-    auto bufferInfo = vkInits::bufferCreateInfo(size, usage);
+    auto bufferInfo = vkInits::bufferCreateInfo(pBuffer->size, pBuffer->usageFlags);
     vkCreateBuffer(this->device, &bufferInfo, nullptr, &pBuffer->data);
 
     VkMemoryRequirements memReqs;
     vkGetBufferMemoryRequirements(this->device, pBuffer->data, &memReqs);
 
-    auto allocInfo = getMemoryAllocInfo(memReqs, flags);
+    auto allocInfo = getMemoryAllocInfo(memReqs, pBuffer->memFlags);
     vkAllocateMemory(this->device, &allocInfo, nullptr, &pBuffer->memory);
     return vkBindBufferMemory(this->device, pBuffer->data, pBuffer->memory, 0);
 }

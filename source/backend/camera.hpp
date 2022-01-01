@@ -23,13 +23,14 @@ struct alignas(16) mvp_matrix
         return setBinding;
     }
 
-    static VkWriteDescriptorSet descriptorWrite()
+    static VkWriteDescriptorSet descriptorWrite(VkDescriptorSet dstSet)
     {
         VkWriteDescriptorSet set{};
         set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         set.dstBinding = 0;
         set.descriptorCount = uint32_t(1);
         set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        set.dstSet = dstSet;
         return set;
     }
 
