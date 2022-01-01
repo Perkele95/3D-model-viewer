@@ -16,8 +16,9 @@ struct shader_object
     {
         auto src = Platform::io::read(m_path);
         const auto loadInfo = vkInits::shaderModuleCreateInfo(&src);
+        const auto result = vkCreateShaderModule(device, &loadInfo, nullptr, &m_module);
         Platform::io::close(&src);
-        return vkCreateShaderModule(device, &loadInfo, nullptr, &m_module);
+        return result;
     }
 
     void destroy(VkDevice device)

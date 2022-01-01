@@ -486,10 +486,10 @@ void model_viewer::buildDescriptorSets()
 
     for (size_t i = 0; i < m_imageCount; i++){
         const auto cameraBufferInfo = m_uniformBuffers[i].camera.descriptor(0);
-        auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i]);
+        auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i], &cameraBufferInfo);
 
         const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
-        auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i]);
+        auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i], &lightBufferInfo);
 
         const VkWriteDescriptorSet writes[] = {
             cameraWrite, lightWrite
@@ -580,7 +580,7 @@ void model_viewer::buildMeshBuffers()
 
     m_vertexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexTransfer.size);
-    m_indexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    m_indexBuffer = buffer_t(VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                              VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexTransfer.size);
 
     m_device->makeBuffer(&vertexTransfer);
@@ -596,7 +596,7 @@ void model_viewer::buildMeshBuffers()
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, cpyCmds);
 
     vertexTransfer.copyToBuffer(cpyCmds[0], &m_vertexBuffer);
-    indexTransfer.copyToBuffer(cpyCmds[0], &m_indexBuffer);
+    indexTransfer.copyToBuffer(cpyCmds[1], &m_indexBuffer);
 
     auto submitInfo = vkInits::submitInfo(cpyCmds, arraysize(cpyCmds));
     vkQueueSubmit(m_device->graphics.queue, 1, &submitInfo, VK_NULL_HANDLE);

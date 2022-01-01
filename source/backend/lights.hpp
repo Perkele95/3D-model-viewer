@@ -24,7 +24,7 @@ struct alignas(16) light_data
         return setBinding;
     }
 
-    static VkWriteDescriptorSet descriptorWrite(VkDescriptorSet dstSet)
+    static VkWriteDescriptorSet descriptorWrite(VkDescriptorSet dstSet, const VkDescriptorBufferInfo *pInfo)
     {
         VkWriteDescriptorSet set{};
         set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -32,6 +32,7 @@ struct alignas(16) light_data
         set.descriptorCount = uint32_t(1);
         set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         set.dstSet = dstSet;
+        set.pBufferInfo = pInfo;
         return set;
     }
 
