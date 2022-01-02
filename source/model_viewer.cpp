@@ -509,8 +509,7 @@ void model_viewer::buildPipeline()
 
     constexpr VkVertexInputAttributeDescription attributes[] = {
         mesh3D::positionAttribute(),
-        mesh3D::normalAttribute(),
-        mesh3D::colourAttribute()
+        mesh3D::normalAttribute()
     };
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
@@ -621,16 +620,16 @@ void model_viewer::updateCamera()
 void model_viewer::updateLights()
 {
     auto lights = light_data();
-    lights.positions[0] = vec4(2.0f, 0.0f, 0.0f, 0.0f);
+    lights.positions[0] = vec4(-10.0f, 10.0f, 10.0f, 0.0f);
     lights.colours[0] = GetColour(255, 255, 255);
 
-    lights.positions[1] = vec4(-2.0f, 0.0f, 0.0f, 0.0f);
+    lights.positions[1] = vec4(10.0f, 10.0f, 10.0f, 0.0f);
     lights.colours[1] = GetColour(255, 255, 255);
 
-    lights.positions[2] = vec4(0.0f, 2.0f, 0.0f, 0.0f);
+    lights.positions[2] = vec4(-10.0f, -10.0f, 10.0f, 0.0f);
     lights.colours[2] = GetColour(255, 255, 255);
 
-    lights.positions[3] = vec4(0.0f, 0.0f, 2.0f, 0.0f);
+    lights.positions[3] = vec4(10.0f, -10.0f, 10.0f, 0.0f);
     lights.colours[3] = GetColour(255, 255, 255);
 
     for (size_t i = 0; i < m_imageCount; i++)
