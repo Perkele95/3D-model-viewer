@@ -621,16 +621,16 @@ void model_viewer::updateCamera()
 void model_viewer::updateLights()
 {
     auto lights = light_data();
-    lights.positions[0] = vec4(1.0f, 0.0f, 0.0f, 0.0f);
+    lights.positions[0] = vec4(2.0f, 0.0f, 0.0f, 0.0f);
     lights.colours[0] = GetColour(255, 255, 255);
 
-    lights.positions[1] = vec4(-1.0f, 0.0f, 0.0f, 0.0f);
+    lights.positions[1] = vec4(-2.0f, 0.0f, 0.0f, 0.0f);
     lights.colours[1] = GetColour(255, 255, 255);
 
-    lights.positions[2] = vec4(0.0f, 1.0f, 0.0f, 0.0f);
+    lights.positions[2] = vec4(0.0f, 2.0f, 0.0f, 0.0f);
     lights.colours[2] = GetColour(255, 255, 255);
 
-    lights.positions[3] = vec4(0.0f, 0.0f, 1.0f, 0.0f);
+    lights.positions[3] = vec4(0.0f, 0.0f, 2.0f, 0.0f);
     lights.colours[3] = GetColour(255, 255, 255);
 
     for (size_t i = 0; i < m_imageCount; i++)
@@ -659,7 +659,7 @@ void model_viewer::updateCmdBuffers()
         renderBeginInfo.framebuffer = m_framebuffers[i];
         vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        MATERIAL_GOLD.bind(cmdBuffer, m_pipelineLayout);
+        MATERIAL_TEST.bind(cmdBuffer, m_pipelineLayout);
 
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
         const VkDeviceSize vertexOffset = 0;

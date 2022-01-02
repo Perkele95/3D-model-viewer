@@ -8,6 +8,7 @@ layout(location = 2) in vec4 inColour;
 layout(location = 0) out vec3 fragPosition;
 layout(location = 1) out vec3 fragNormal;
 layout(location = 2) out vec4 fragColour;
+layout(location = 3) out vec3 cameraPosition;
 
 layout(binding = 0) uniform camera_data
 {
@@ -24,5 +25,6 @@ void main()
     fragPosition = vec3(camera.model * vec4(inPosition, 1.0));
     fragNormal = mat3(camera.model) * inNormal;
     fragColour = inColour;
+    cameraPosition = vec3(camera.position);
     gl_Position = camera.proj * camera.view * vec4(fragPosition, 1.0);
 }

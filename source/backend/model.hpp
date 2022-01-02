@@ -2,11 +2,11 @@
 
 #include "vulkan_initialisers.hpp"
 
-struct alignas(16) material3D
+struct material3D
 {
     material3D() = default;
-    constexpr material3D(vec3<float> amb, vec3<float> diff, vec3<float> spec, float shine)
-    : ambient(amb, 1.0f), diffuse(diff, 1.0f), specular(spec), shininess(shine) {}
+    constexpr material3D(vec3<float> rgb, float r, float m, float ao)
+    : albedo(rgb), roughness(r), metallic(r), ambientOcclusion(ao) {}
 
     static VkPushConstantRange pushConstant()
     {
@@ -28,24 +28,16 @@ struct alignas(16) material3D
                            this);
     }
 
-    vec4<float> ambient;
-    vec4<float> diffuse;
-    vec3<float> specular;
-    float shininess;
+    vec3<float> albedo;
+    float roughness;
+    float metallic;
+    float ambientOcclusion;
 };
 
-constexpr auto MATERIAL_BRONZE = material3D(
-    vec3(0.2125f, 0.1275f, 0.054f),
-    vec3(0.714f, 0.4284f, 0.18144f),
-    vec3(0.393548f, 0.271906f, 0.166721f),
-    0.2f
-);
+static_assert(sizeof(material3D) == 24 && alignof(material3D) == 4);
 
-constexpr auto MATERIAL_GOLD = material3D(
-    vec3(0.24725f, 0.1995f, 0.0745f),
-    vec3(0.75164f, 0.60648f, 0.22648f),
-    vec3(0.628281f, 0.555802f, 0.366065f),
-    0.4f
+constexpr auto MATERIAL_TEST = material3D(
+    vec3(1.0f, 0.0f, 0.0f), 0.5f, 0.5f, 0.1f
 );
 
 struct mesh3D
