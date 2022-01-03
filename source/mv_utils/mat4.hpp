@@ -93,33 +93,26 @@ struct mat4x4
     static mat4x4 VECTOR_API lookAt(vec3<float> eye, vec3<float> centre, vec3<float> up)
     {
         auto Z = vec3(eye - centre).normalise();
-        auto Y = up;
-        auto X = Y.crossProduct(Z);
-        Y = Z.crossProduct(X);
+        auto X = up.crossProduct(Z).normalise();
+        auto Y = Z.crossProduct(X).normalise();
 
-        X.normalise();
-        Y.normalise();
+        auto translation = eye - Z;
 
-        mat4x4 result;
+        auto result = mat4x4::identity();
         result.data[0][0] = X.x;
         result.data[1][0] = X.y;
         result.data[2][0] = X.z;
-        result.data[3][0] = -X.dotProduct(eye);
+        result.data[3][0] = -X.dotProduct(translation);
 
         result.data[0][1] = Y.x;
         result.data[1][1] = Y.y;
         result.data[2][1] = Y.z;
-        result.data[3][1] = -Y.dotProduct(eye);
+        result.data[3][1] = -Y.dotProduct(translation);
 
         result.data[0][2] = Z.x;
         result.data[1][2] = Z.y;
         result.data[2][2] = Z.z;
-        result.data[3][2] = -Z.dotProduct(eye);
-
-        result.data[0][3] = 0.0f;
-        result.data[1][3] = 0.0f;
-        result.data[2][3] = 0.0f;
-        result.data[3][3] = 1.0f;
+        result.data[3][2] = -Z.dotProduct(translation);
         return result;
     }
 
@@ -131,7 +124,7 @@ struct mat4x4
         result.data[1][1] = -1.0f / t;
         result.data[2][2] = -(zFar + zNear) / (zFar - zNear);
         result.data[2][3] = -1.0f;
-        result.data[3][2] = -2.0f * zFar * zNear / (zFar - zNear);
+        result.data[3][2] = -(2.0f * zFar * zNear) / (zFar - zNear);
         return result;
     }
 

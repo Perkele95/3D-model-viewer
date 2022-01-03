@@ -37,7 +37,7 @@ struct material3D
 static_assert(sizeof(material3D) == 24 && alignof(material3D) == 4);
 
 constexpr auto MATERIAL_TEST = material3D(
-    vec3(1.0f, 0.0f, 0.0f), 0.3f, 0.8f, 1.0f
+    vec3(1.0f, 0.0f, 0.0f), 0.1f, 1.0f, 0.5f
 );
 
 struct mesh3D

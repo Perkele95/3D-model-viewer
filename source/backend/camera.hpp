@@ -16,7 +16,7 @@ struct alignas(16) mvp_matrix
     static VkDescriptorSetLayoutBinding binding()
     {
         VkDescriptorSetLayoutBinding setBinding{};
-        setBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        setBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         setBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         setBinding.descriptorCount = uint32_t(1);
         setBinding.binding = 0;
@@ -89,10 +89,10 @@ struct camera
     {
         const auto speed = this->sensitivity * dt;
         switch (dir){
-            case direction::up: m_pitch -= speed; break;
-            case direction::down: m_pitch += speed; break;
-            case direction::left: m_yaw += speed; break;
-            case direction::right: m_yaw -= speed; break;
+            case direction::up: m_pitch += speed; break;
+            case direction::down: m_pitch -= speed; break;
+            case direction::left: m_yaw -= speed; break;
+            case direction::right: m_yaw += speed; break;
             default: break;
         };
     }
@@ -102,8 +102,8 @@ struct camera
         switch (dir){
             case direction::forward: m_position += m_front * dt; break;
             case direction::backward: m_position -= m_front * dt; break;
-            case direction::left: m_position += m_right * dt; break;
-            case direction::right: m_position -= m_right * dt; break;
+            case direction::left: m_position -= m_right * dt; break;
+            case direction::right: m_position += m_right * dt; break;
             default: break;
         };
     }
@@ -127,7 +127,7 @@ struct camera
 
         m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
         m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
-        m_up = (m_front.crossProduct(m_right)).normalise();
+        m_up = (m_right.crossProduct(m_front)).normalise();
     }
 
     mvp_matrix calculateMvp(float aspectRatio)

@@ -3,9 +3,16 @@
 
 layout(location = 0) in vec3 fragPosition;
 layout(location = 1) in vec3 fragNormal;
-layout(location = 2) in vec3 cameraPosition;
 
 layout(location = 0) out vec4 outColour;
+
+layout(binding = 0) uniform camera_data
+{
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    vec4 position;
+} camera;
 
 layout(binding = 1) uniform light_data
 {
@@ -83,7 +90,7 @@ vec3 BRDF(vec3 N, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position,
 void main()
 {
 	const vec3 N = normalize(fragNormal);
-	const vec3 V = normalize(cameraPosition - fragPosition);
+	const vec3 V = normalize(camera.position.xyz - fragPosition);
     const vec3 albedo = material.albedo;
 
     // Specular contribution
