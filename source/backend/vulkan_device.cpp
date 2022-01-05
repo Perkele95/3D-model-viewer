@@ -137,46 +137,6 @@ VkMemoryAllocateInfo vulkan_device::getMemoryAllocInfo(VkMemoryRequirements memR
     return allocInfo;
 }
 
-VkResult vulkan_device::makeBuffer(buffer_t *pBuffer) const
-{
-    auto bufferInfo = vkInits::bufferCreateInfo(pBuffer->size, pBuffer->usageFlags);
-    vkCreateBuffer(this->device, &bufferInfo, nullptr, &pBuffer->data);
-
-    VkMemoryRequirements memReqs;
-    vkGetBufferMemoryRequirements(this->device, pBuffer->data, &memReqs);
-
-    auto allocInfo = getMemoryAllocInfo(memReqs, pBuffer->memFlags);
-    vkAllocateMemory(this->device, &allocInfo, nullptr, &pBuffer->memory);
-    return vkBindBufferMemory(this->device, pBuffer->data, pBuffer->memory, 0);
-}
-
-VkResult vulkan_device::makeImage(VkFormat format, VkExtent2D imageExtent, VkImageUsageFlags usage,
-                                  VkMemoryPropertyFlags flags, image_buffer *pImage) const
-{
-    auto imageInfo = vkInits::imageCreateInfo();
-    imageInfo.extent = {imageExtent.width, imageExtent.height, 1};
-    imageInfo.format = format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = usage;
-    vkCreateImage(this->device, &imageInfo, nullptr, &pImage->image);
-
-    VkMemoryRequirements memReqs{};
-    vkGetImageMemoryRequirements(this->device, pImage->image, &memReqs);
-
-    auto allocInfo = getMemoryAllocInfo(memReqs, flags);
-    vkAllocateMemory(this->device, &allocInfo, nullptr, &pImage->memory);
-    return vkBindImageMemory(this->device, pImage->image, pImage->memory, 0);
-}
-
-VkResult vulkan_device::fillBuffer(buffer_t *pDst, const void *src, size_t size) const
-{
-    void *mapped = nullptr;
-    const auto result = vkMapMemory(this->device, pDst->memory, 0, size, 0, &mapped);
-    memcpy(mapped, src, size);
-    vkUnmapMemory(this->device, pDst->memory);
-    return result;
-}
-
 void vulkan_device::pickPhysicalDevice(linear_storage *transient)
 {
     uint32_t physDeviceCount = 0;

@@ -55,8 +55,8 @@ struct alignas(16) mvp_matrix
 
 struct camera
 {
-    static constexpr float DEFAULT_FOV = GetRadians(75.0f);
-    static constexpr float DEFAULT_ZNEAR = 0.005f;
+    static constexpr float DEFAULT_FOV = GetRadians(60.0f);
+    static constexpr float DEFAULT_ZNEAR = 0.1f;
     static constexpr float DEFAULT_ZFAR = 100.0f;
     static constexpr float DEFAULT_YAW = GetRadians(90.0f);
     static constexpr float PITCH_CLAMP = GetRadians(90.0f) - 0.01f;

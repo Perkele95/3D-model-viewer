@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan_device.hpp"
+#include "buffer.hpp"
 #include "shader.hpp"
 
 struct alignas(4) quad_vertex

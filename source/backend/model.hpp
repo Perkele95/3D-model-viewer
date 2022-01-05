@@ -1,102 +1,65 @@
 #pragma once
 
 #include "vulkan_initialisers.hpp"
+#include "vulkan_device.hpp"
+#include "material.hpp"
 
-struct material3D
+struct mesh_vertex
 {
-    material3D() = default;
-    constexpr material3D(vec3<float> rgb, float r, float m, float ao)
-    : albedo(rgb), roughness(r), metallic(r), ambientOcclusion(ao) {}
-
-    static VkPushConstantRange pushConstant()
-    {
-        VkPushConstantRange range;
-        range.offset = 0;
-        range.size = sizeof(material3D);
-        range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        return range;
-    }
-
-    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const
-    {
-        const auto pc = pushConstant();
-        vkCmdPushConstants(commandBuffer,
-                           layout,
-                           pc.stageFlags,
-                           pc.offset,
-                           pc.size,
-                           this);
-    }
-
-    vec3<float> albedo;
-    float roughness;
-    float metallic;
-    float ambientOcclusion;
-};
-
-static_assert(sizeof(material3D) == 24 && alignof(material3D) == 4);
-
-constexpr auto MATERIAL_TEST = material3D(
-    vec3(1.0f, 0.0f, 0.0f), 0.1f, 1.0f, 0.5f
-);
-
-struct mesh3D
-{
-    struct vertex
-    {
-        vec3<float> position;
-        vec3<float> normal;
-    };
-    using index = uint32_t;
-
-    mesh3D() = default;
-
     static constexpr VkVertexInputAttributeDescription positionAttribute()
     {
-        return {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh3D::vertex, position)};
+        return {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, position)};
     }
 
     static constexpr VkVertexInputAttributeDescription normalAttribute()
     {
-        return {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh3D::vertex, normal)};
+        return {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, normal)};
     }
 
-    void load(view<vertex> vertices, view<index> indices)
-    {
-        //
-    }
-
-    void unload()
-    {
-        //
-    }
-
-    void bind()
-    {
-        //
-    }
-
-private:
-    buffer_t m_vertices, m_indices;
+    vec3<float> position;
+    vec3<float> normal;
 };
+using mesh_index = uint32_t;
 
 struct model3D
 {
     model3D() = default;
-    model3D(const vulkan_device *device)
+    model3D(material3D material)
     {
-        m_device = device;
+        m_indexCount = 0;
+        m_material = material;
     }
 
-    void draw(VkCommandBuffer cmd, VkDescriptorSet set)
+    void load(const vulkan_device *device, view<mesh_vertex> vertices,
+                                           view<mesh_index> indices)
     {
         //
     }
 
+    void destroy(VkDevice device)
+    {
+        m_vertices.destroy(device);
+        m_indices.destroy(device);
+    }
+
+    void draw(VkCommandBuffer cmd, VkPipelineLayout layout)
+    {
+        m_material.bind(cmd, layout);
+
+        const VkDeviceSize vertexOffset = 0;
+        vkCmdBindVertexBuffers(cmd, 0, 1, &m_vertices.data, &vertexOffset);
+
+        const VkDeviceSize indexOffset = 0;
+        vkCmdBindIndexBuffer(cmd, m_indices.data, indexOffset, VK_INDEX_TYPE_UINT32);
+
+        vkCmdDrawIndexed(cmd, uint32_t(m_indexCount), 1, 0, 0, 0);
+    }
+
 private:
-    mesh3D m_mesh;
+    buffer_t m_vertices;
+    buffer_t m_indices;
+    size_t m_indexCount;
     material3D m_material;
-    const vulkan_device *m_device;
 };
 
 static constexpr auto s_MeshSzf = 0.5f;
@@ -110,7 +73,7 @@ static constexpr auto s_NormalBottom = vec3(0.0f, -1.0f, 0.0f);
 static constexpr auto s_NormalLeft = vec3(1.0f, 0.0f, 0.0f);
 static constexpr auto s_NormalRight = vec3(-1.0f, 0.0f, 0.0f);
 
-static mesh3D::vertex s_MeshVertices[] = {
+static mesh_vertex s_MeshVertices[] = {
     // Front
     {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront},
     {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront},
@@ -143,7 +106,7 @@ static mesh3D::vertex s_MeshVertices[] = {
     {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight},
 };
 
-static mesh3D::index s_MeshIndices[] = {
+static mesh_index s_MeshIndices[] = {
     0, 1, 2, 2, 3, 0, // Front
     4, 7, 6, 6, 5, 4, // Back
     8, 9, 10, 10, 11, 8, // Top

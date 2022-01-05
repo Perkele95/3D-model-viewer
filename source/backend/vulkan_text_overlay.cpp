@@ -326,17 +326,17 @@ void text_overlay::prepareRenderpass()
 
 void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
 {
-    m_device->makeImage(VK_FORMAT_R8_UNORM,
-                             bitmapExtent,
-                             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                             &m_fontBuffer);
+    m_fontBuffer.create(m_device,
+                        VK_FORMAT_R8_UNORM,
+                        bitmapExtent,
+                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     const VkDeviceSize size = bitmapExtent.width * bitmapExtent.height;
 
-    auto transfer = buffer_t(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VISIBLE_BUFFER_FLAGS, size);
-    m_device->makeBuffer(&transfer);
-    m_device->fillBuffer(&transfer, src, size);
+    auto transfer = buffer_t(size);
+    transfer.create(m_device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VISIBLE_BUFFER_FLAGS);
+    transfer.fill(m_device->device, src, size);
 
     VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
 
@@ -468,9 +468,9 @@ void text_overlay::preparePipeline()
 
 void text_overlay::prepareRenderBuffers()
 {
-    m_vertexBuffer = buffer_t(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS, GUI_VERTEX_BUFFER_SIZE);
-    m_indexBuffer = buffer_t(VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS, GUI_INDEX_BUFFER_SIZE);
+    m_vertexBuffer = buffer_t(GUI_VERTEX_BUFFER_SIZE);
+    m_indexBuffer = buffer_t(GUI_INDEX_BUFFER_SIZE);
 
-    m_device->makeBuffer(&m_vertexBuffer);
-    m_device->makeBuffer(&m_indexBuffer);
+    m_vertexBuffer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS);
+    m_indexBuffer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS);
 }

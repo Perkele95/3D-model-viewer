@@ -1,9 +1,28 @@
 #pragma once
 
 #include "vulkan_initialisers.hpp"
+#include "vulkan_device.hpp"
 
 struct image_buffer
 {
+    VkResult create(const vulkan_device *device, VkFormat format, VkExtent2D imageExtent,
+                    VkImageUsageFlags usage, VkMemoryPropertyFlags flags)
+    {
+        auto imageInfo = vkInits::imageCreateInfo();
+        imageInfo.extent = {imageExtent.width, imageExtent.height, 1};
+        imageInfo.format = format;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.usage = usage;
+        vkCreateImage(device->device, &imageInfo, nullptr, &this->image);
+
+        VkMemoryRequirements memReqs{};
+        vkGetImageMemoryRequirements(device->device, this->image, &memReqs);
+
+        auto allocInfo = device->getMemoryAllocInfo(memReqs, flags);
+        vkAllocateMemory(device->device, &allocInfo, nullptr, &this->memory);
+        return vkBindImageMemory(device->device, this->image, this->memory, 0);
+    }
+
     void destroy(VkDevice device)
     {
         vkDestroyImage(device, this->image, nullptr);
@@ -22,12 +41,20 @@ struct image_buffer
 struct buffer_t
 {
     buffer_t() = default;
+    buffer_t(size_t bufferSize) : size(bufferSize) {}
 
-    buffer_t(VkBufferUsageFlags usage, VkMemoryPropertyFlags mem, VkDeviceSize sz)
+    VkResult create(const vulkan_device *device, VkBufferUsageFlags usage,
+                    VkMemoryPropertyFlags memFlags)
     {
-        usageFlags = usage;
-        memFlags = mem;
-        size = sz;
+        auto bufferInfo = vkInits::bufferCreateInfo(this->size, usage);
+        vkCreateBuffer(device->device, &bufferInfo, nullptr, &this->data);
+
+        VkMemoryRequirements memReqs;
+        vkGetBufferMemoryRequirements(device->device, this->data, &memReqs);
+
+        auto allocInfo = device->getMemoryAllocInfo(memReqs, memFlags);
+        vkAllocateMemory(device->device, &allocInfo, nullptr, &this->memory);
+        return vkBindBufferMemory(device->device, this->data, this->memory, 0);
     }
 
     void destroy(VkDevice device)
@@ -46,6 +73,15 @@ struct buffer_t
         desc.range = this->size;
         desc.offset = offset;
         return desc;
+    }
+
+    VkResult fill(VkDevice device, const void *src, size_t sz)
+    {
+        void *mapped = nullptr;
+        const auto result = vkMapMemory(device, this->memory, 0, sz, 0, &mapped);
+        memcpy(mapped, src, sz);
+        vkUnmapMemory(device, this->memory);
+        return result;
     }
 
     void copyToBuffer(VkCommandBuffer cmd, buffer_t *pDst)
@@ -77,7 +113,4 @@ struct buffer_t
     VkBuffer data;
     VkDeviceMemory memory;
     VkDeviceSize size;
-
-    VkBufferUsageFlags usageFlags;
-    VkMemoryPropertyFlags memFlags;
 };
