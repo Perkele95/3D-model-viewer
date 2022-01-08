@@ -330,12 +330,12 @@ void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
                         VK_FORMAT_R8_UNORM,
                         bitmapExtent,
                         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                        MEM_FLAG_GPU_LOCAL);
 
     const VkDeviceSize size = bitmapExtent.width * bitmapExtent.height;
 
     auto transfer = buffer_t(size);
-    transfer.create(m_device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VISIBLE_BUFFER_FLAGS);
+    transfer.create(m_device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE);
     transfer.fill(m_device->device, src, size);
 
     VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
@@ -471,6 +471,6 @@ void text_overlay::prepareRenderBuffers()
     m_vertexBuffer = buffer_t(GUI_VERTEX_BUFFER_SIZE);
     m_indexBuffer = buffer_t(GUI_INDEX_BUFFER_SIZE);
 
-    m_vertexBuffer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS);
-    m_indexBuffer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VISIBLE_BUFFER_FLAGS);
+    m_vertexBuffer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE);
+    m_indexBuffer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE);
 }

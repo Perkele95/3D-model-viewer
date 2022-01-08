@@ -65,8 +65,7 @@ model_viewer::~model_viewer()
         m_uniformBuffers[i].lights.destroy(m_device->device);
     }
 
-    m_vertexBuffer.destroy(m_device->device);
-    m_indexBuffer.destroy(m_device->device);
+    m_model.destroy(m_device->device);
 
     for (size_t i = 0; i < m_imageCount; i++)
         vkDestroyFramebuffer(m_device->device, m_framebuffers[i], nullptr);
@@ -270,7 +269,9 @@ void model_viewer::buildResources()
         m_shaders[i].load(m_device->device);
 
     buildPipeline();
-    buildMeshBuffers();
+
+    m_model = model3D(MATERIAL_TEST);
+    m_model.load(m_device, m_cmdPool, s_MeshVertices, s_MeshIndices);
 
     updateLights();
     updateCmdBuffers();
@@ -459,7 +460,6 @@ void model_viewer::buildDescriptorPool()
     setLayoutInfo.pBindings = bindings;
     setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
     vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
-
 }
 
 void model_viewer::buildUniformBuffers()
@@ -567,45 +567,6 @@ void model_viewer::buildPipeline()
                               &pipelineInfo, nullptr, &m_pipeline);
 }
 
-void model_viewer::buildMeshBuffers()
-{
-    auto vertexTransfer = buffer_t(sizeof(s_MeshVertices));
-    auto indexTransfer = buffer_t(sizeof(s_MeshIndices));
-
-    vertexTransfer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                          VISIBLE_BUFFER_FLAGS);
-    indexTransfer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                         VISIBLE_BUFFER_FLAGS);
-
-    vertexTransfer.fill(m_device->device, s_MeshVertices, sizeof(s_MeshVertices));
-    indexTransfer.fill(m_device->device, s_MeshIndices, sizeof(s_MeshIndices));
-
-    m_vertexBuffer.size = vertexTransfer.size;
-    m_indexBuffer.size = indexTransfer.size;
-    m_vertexBuffer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    m_indexBuffer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-    VkCommandBuffer cpyCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, arraysize(cpyCmds));
-    vkAllocateCommandBuffers(m_device->device, &cmdInfo, cpyCmds);
-
-    vertexTransfer.copyToBuffer(cpyCmds[0], &m_vertexBuffer);
-    indexTransfer.copyToBuffer(cpyCmds[1], &m_indexBuffer);
-
-    auto submitInfo = vkInits::submitInfo(cpyCmds, arraysize(cpyCmds));
-    vkQueueSubmit(m_device->graphics.queue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_device->graphics.queue);
-
-    vkFreeCommandBuffers(m_device->device, m_cmdPool, uint32_t(arraysize(cpyCmds)), cpyCmds);
-
-    vertexTransfer.destroy(m_device->device);
-    indexTransfer.destroy(m_device->device);
-}
-
 void model_viewer::updateCamera()
 {
     m_mainCamera.update();
@@ -667,16 +628,7 @@ void model_viewer::updateCmdBuffers()
                                 0,
                                 nullptr);
 
-        MATERIAL_TEST.bind(cmdBuffer, m_pipelineLayout);
-
-        const VkDeviceSize vertexOffset = 0;
-        vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &m_vertexBuffer.data, &vertexOffset);
-
-        const VkDeviceSize indexOffset = 0;
-        vkCmdBindIndexBuffer(cmdBuffer, m_indexBuffer.data, indexOffset, VK_INDEX_TYPE_UINT32);
-
-        const auto indexCount = uint32_t(arraysize(s_MeshIndices));
-        vkCmdDrawIndexed(cmdBuffer, indexCount, 1, 0, 0, 0);
+        m_model.draw(cmdBuffer, m_pipelineLayout);
 
         vkCmdEndRenderPass(cmdBuffer);
         vkEndCommandBuffer(cmdBuffer);

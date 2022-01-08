@@ -3,8 +3,24 @@
 #include "../base.hpp"
 #include "vulkan_initialisers.hpp"
 
-constexpr VkMemoryPropertyFlags VISIBLE_BUFFER_FLAGS = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+enum MEMORY_FLAGS : VkMemoryPropertyFlags
+{
+    MEM_FLAG_HOST_VISIBLE = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    MEM_FLAG_GPU_LOCAL = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+};
+
+enum USAGE_FLAGS : VkBufferUsageFlags
+{
+    USAGE_VERTEX_TRANSFER_SRC = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    USAGE_VERTEX_TRANSFER_DST = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                                VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    USAGE_INDEX_TRANSFER_SRC = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    USAGE_INDEX_TRANSFER_DST = VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+};
 
 struct queue_data
 {

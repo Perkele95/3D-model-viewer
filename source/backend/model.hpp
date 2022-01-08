@@ -30,10 +30,39 @@ struct model3D
         m_material = material;
     }
 
-    void load(const vulkan_device *device, view<mesh_vertex> vertices,
-                                           view<mesh_index> indices)
+    void load(const vulkan_device *device, VkCommandPool cmdPool,
+              view<mesh_vertex> vertices, view<mesh_index> indices)
     {
-        //
+        auto vertexTransfer = buffer_t(sizeof(mesh_vertex) * vertices.count);
+        auto indexTransfer = buffer_t(sizeof(mesh_index) * indices.count);
+        m_indexCount = indices.count;
+
+        vertexTransfer.create(device, USAGE_VERTEX_TRANSFER_SRC, MEM_FLAG_HOST_VISIBLE);
+        indexTransfer.create(device, USAGE_INDEX_TRANSFER_SRC, MEM_FLAG_HOST_VISIBLE);
+
+        vertexTransfer.fill(device->device, vertices.data, vertexTransfer.size);
+        indexTransfer.fill(device->device, indices.data, indexTransfer.size);
+
+        m_vertices.size = vertexTransfer.size;
+        m_indices.size = indexTransfer.size;
+        m_vertices.create(device, USAGE_VERTEX_TRANSFER_DST, MEM_FLAG_GPU_LOCAL);
+        m_indices.create(device, USAGE_INDEX_TRANSFER_DST, MEM_FLAG_GPU_LOCAL);
+
+        VkCommandBuffer copyCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+        auto cmdInfo = vkInits::commandBufferAllocateInfo(cmdPool, arraysize(copyCmds));
+        vkAllocateCommandBuffers(device->device, &cmdInfo, copyCmds);
+
+        vertexTransfer.copyToBuffer(copyCmds[0], &m_vertices);
+        indexTransfer.copyToBuffer(copyCmds[1], &m_indices);
+
+        auto submitInfo = vkInits::submitInfo(copyCmds, arraysize(copyCmds));
+        vkQueueSubmit(device->graphics.queue, 1, &submitInfo, VK_NULL_HANDLE);
+        vkQueueWaitIdle(device->graphics.queue);
+
+        vkFreeCommandBuffers(device->device, cmdPool, uint32_t(arraysize(copyCmds)), copyCmds);
+
+        vertexTransfer.destroy(device->device);
+        indexTransfer.destroy(device->device);
     }
 
     void destroy(VkDevice device)

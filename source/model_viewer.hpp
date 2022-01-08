@@ -47,7 +47,6 @@ private:
     void buildUniformBuffers();
     void buildDescriptorSets();
     void buildPipeline();
-    void buildMeshBuffers();
 
     void updateCamera();
     void updateLights();
@@ -79,13 +78,13 @@ private:
     VkPipeline m_pipeline;
     VkPipelineLayout m_pipelineLayout;
     shader_object m_shaders[2];
-    buffer_t m_vertexBuffer, m_indexBuffer;
 
     camera m_mainCamera;
+    uniform_buffer *m_uniformBuffers;
 
     VkDescriptorPool m_descriptorPool;
     VkDescriptorSetLayout m_descriptorSetLayout;
     VkDescriptorSet *m_descriptorSets;
 
-    uniform_buffer *m_uniformBuffers;
+    model3D m_model;
 };
