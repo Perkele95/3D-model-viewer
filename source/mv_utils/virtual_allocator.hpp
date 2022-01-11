@@ -9,15 +9,17 @@
     //
 #endif
 
-struct static_allocator
+class virtual_allocator
 {
-    static_allocator() = default;
+public:
+    virtual_allocator() = default;
 
-    static_allocator(const static_allocator &src) = delete;
-    static_allocator(const static_allocator &&src) = delete;
-    static_allocator &operator=(const static_allocator &src) = delete;
-    static_allocator &operator=(const static_allocator &&src) = delete;
+    virtual_allocator(const virtual_allocator &src) = delete;
+    virtual_allocator(const virtual_allocator &&src) = delete;
+    virtual_allocator &operator=(const virtual_allocator &src) = delete;
+    virtual_allocator &operator=(const virtual_allocator &&src) = delete;
 
+protected:
     template<typename T>
     T *allocate(size_t count) const
     {

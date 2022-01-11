@@ -1,9 +1,9 @@
 #pragma once
 
-#include "static_allocator.hpp"
+#include "virtual_allocator.hpp"
 #include "view.hpp"
 
-struct linear_storage : static_allocator
+struct linear_storage : virtual_allocator
 {
     linear_storage(size_t capacity)
     {

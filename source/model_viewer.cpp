@@ -270,8 +270,7 @@ void model_viewer::buildResources()
 
     buildPipeline();
 
-    m_model = model3D(MATERIAL_TEST);
-    m_model.load(m_device, m_cmdPool, s_MeshVertices, s_MeshIndices);
+    m_model = UVSphere(&m_transientStorage, m_device, m_cmdPool);
 
     updateLights();
     updateCmdBuffers();
@@ -529,7 +528,7 @@ void model_viewer::buildPipeline()
     viewportState.scissorCount = 1;
     viewportState.pScissors = &scissor;
 
-    auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_CLOCKWISE);
+    auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_COUNTER_CLOCKWISE);
     auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(m_device->sampleCount);
 
     auto depthStencil = vkInits::depthStencilStateInfo();

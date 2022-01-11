@@ -143,3 +143,96 @@ static mesh_index s_MeshIndices[] = {
     16, 17, 18, 18, 19, 16, // Left
     20, 21, 22, 22, 23, 20, // Right
 };
+
+template<int N_STACKS = 32, int N_SLICES = 32>
+model3D UVSphere(linear_storage *storage, const vulkan_device *device, VkCommandPool cmdPool)
+{
+    auto model = model3D(MATERIAL_TEST);
+    auto vertices = storage->pushView<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
+    auto vertex = vertices.data;
+
+    // Top vertex
+    vertex->position = vec3(0.0f, 1.0f, 0.0f);
+    vertex->normal = vertex->position;
+    vertex++;
+
+    // Vertex fill
+    for (size_t i = 0; i < N_STACKS - 1; i++){
+        const auto phi = PI32 * float(i + 1) / float(N_STACKS);
+        for (size_t j = 0; j < N_SLICES; j++){
+            const auto theta = 2.0f * PI32 * float(j) / float(N_SLICES);
+            vertex->position.x = sinf(phi) * cosf(theta);
+            vertex->position.y = cosf(phi);
+            vertex->position.z = sinf(phi) * sinf(theta);
+            vertex->normal = vertex->position;
+            vertex++;
+        }
+    }
+
+    // Bottom vertex
+    vertex->position = vec3(0.0f, -1.0f, 0.0f);
+    vertex->normal = vertex->position;
+
+    // 3 idx per triangle * (top + bottom) * num slices
+    constexpr auto idxCountTriangles = 3 * 2 * N_SLICES;
+    // 6 idx per quad * (only quad stacks) * num slices
+    constexpr auto idxCountQuads = 6 * (N_STACKS - 2) * N_SLICES;
+    //TODO(arle): check if N - 2 is 0 or less
+
+    auto indices = storage->pushView<mesh_index>(idxCountTriangles + idxCountQuads);
+    auto index = indices.data;
+
+    const auto indexLast = uint32_t(vertices.count - 1);
+
+    // Top and bottom triangles
+    for (uint32_t i = 0; i < N_SLICES; i++){
+        auto i0 = i + 1;
+        auto i1 = i0 % N_SLICES + 1;
+        *index = 0;
+        index++;
+        *index = i1;
+        index++;
+        *index = i0;
+        index++;
+
+        i0 += N_SLICES * (N_STACKS - 2);
+        i1 += N_SLICES * (N_STACKS - 2);
+        *index = indexLast;
+        index++;
+        *index = i0;
+        index++;
+        *index = i1;
+        index++;
+    }
+
+    // Quad fill the rest of the sphere
+    for (uint32_t i = 0; i < N_STACKS - 2; i++){
+        const auto i0 = i * N_SLICES + 1;
+        const auto i1 = (i + 1) * N_SLICES + 1;
+        for (uint32_t j = 0; j < N_SLICES; j++){
+            const auto j0 = i0 + j;
+            const auto j1 = i0 + (j + 1) % N_SLICES;
+            const auto j2 = i1 + (j + 1) % N_SLICES;
+            const auto j3 = i1 + j;
+
+            *index = j0;
+            index++;
+            *index = j1;
+            index++;
+            *index = j2;
+            index++;
+            *index = j0;
+            index++;
+            *index = j2;
+            index++;
+            *index = j3;
+            index++;
+        }
+    }
+
+    model.load(device, cmdPool, vertices, indices);
+
+    // Stack quad faces
+
+    return model;
+}
