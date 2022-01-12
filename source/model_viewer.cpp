@@ -270,7 +270,7 @@ void model_viewer::buildResources()
 
     buildPipeline();
 
-    m_model = UVSphere(&m_transientStorage, m_device, m_cmdPool);
+    m_model = UVSphere(m_device, m_cmdPool);
 
     updateLights();
     updateCmdBuffers();

@@ -145,11 +145,11 @@ static mesh_index s_MeshIndices[] = {
 };
 
 template<int N_STACKS = 32, int N_SLICES = 32>
-model3D UVSphere(linear_storage *storage, const vulkan_device *device, VkCommandPool cmdPool)
+model3D UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
 {
     auto model = model3D(MATERIAL_TEST);
-    auto vertices = storage->pushView<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
-    auto vertex = vertices.data;
+    auto vertices = dyn_array<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
+    auto vertex = vertices.data();
 
     // Top vertex
     vertex->position = vec3(0.0f, 1.0f, 0.0f);
@@ -179,10 +179,10 @@ model3D UVSphere(linear_storage *storage, const vulkan_device *device, VkCommand
     constexpr auto idxCountQuads = 6 * (N_STACKS - 2) * N_SLICES;
     //TODO(arle): check if N - 2 is 0 or less
 
-    auto indices = storage->pushView<mesh_index>(idxCountTriangles + idxCountQuads);
-    auto index = indices.data;
+    auto indices = dyn_array<mesh_index>(idxCountTriangles + idxCountQuads);
+    auto index = indices.data();
 
-    const auto indexLast = uint32_t(vertices.count - 1);
+    const auto indexLast = uint32_t(vertices.count() - 1);
 
     // Top and bottom triangles
     for (uint32_t i = 0; i < N_SLICES; i++){
@@ -231,8 +231,6 @@ model3D UVSphere(linear_storage *storage, const vulkan_device *device, VkCommand
     }
 
     model.load(device, cmdPool, vertices, indices);
-
-    // Stack quad faces
 
     return model;
 }

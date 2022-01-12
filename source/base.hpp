@@ -1,7 +1,8 @@
 #pragma once
 
 #include "mv_utils/view.hpp"
-#include "mv_utils/vec.hpp"
+#include "mv_utils/dyn_array.hpp"
+#include "mv_utils/linear_storage.hpp"
 #include "mv_utils/linear_storage.hpp"
 #include "platform/platform.hpp"
 
