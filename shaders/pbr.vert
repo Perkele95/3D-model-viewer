@@ -9,17 +9,19 @@ layout(location = 1) out vec3 fragNormal;
 
 layout(binding = 0) uniform camera_data
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
     vec4 position;
 } camera;
 
+layout(push_constant) uniform object_data
+{
+    layout(offset = 32) mat4 model;
+} object;
+
 void main()
 {
-    const vec3 objectPosition = vec3(0.0);
-
-    fragPosition = vec3(camera.model * vec4(inPosition, 1.0));
-    fragNormal = mat3(camera.model) * inNormal;
+    fragPosition = vec3(object.model * vec4(inPosition, 1.0));
+    fragNormal = mat3(object.model) * inNormal;
     gl_Position = camera.proj * camera.view * vec4(fragPosition, 1.0);
 }

@@ -538,6 +538,7 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
+        transform3D::pushConstant(),
         material3D::pushConstant()
     };
 

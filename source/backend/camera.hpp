@@ -45,7 +45,6 @@ struct alignas(16) mvp_matrix
         return VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
     }
 
-    mat4x4 model;
     mat4x4 view;
     mat4x4 proj;
     vec4<float> position;
@@ -133,7 +132,6 @@ struct camera
     mvp_matrix calculateMvp(float aspectRatio)
     {
         auto mvp = mvp_matrix();
-        mvp.model = mat4x4::identity();
         mvp.view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
         mvp.proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
         mvp.position = vec4(m_position, 1.0f);

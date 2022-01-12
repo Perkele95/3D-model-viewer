@@ -4,6 +4,36 @@
 #include "vulkan_device.hpp"
 #include "material.hpp"
 
+struct alignas(16) transform3D
+{
+    constexpr transform3D()
+    : matrix(mat4x4::identity())
+    {
+    }
+
+    static VkPushConstantRange pushConstant()
+    {
+        VkPushConstantRange range;
+        range.offset = 32;
+        range.size = sizeof(transform3D);
+        range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        return range;
+    }
+
+    void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const
+    {
+        const auto pc = pushConstant();
+        vkCmdPushConstants(commandBuffer,
+                           layout,
+                           pc.stageFlags,
+                           pc.offset,
+                           pc.size,
+                           this);
+    }
+
+    mat4x4 matrix;
+};
+
 struct mesh_vertex
 {
     static constexpr VkVertexInputAttributeDescription positionAttribute()
@@ -73,6 +103,7 @@ struct model3D
 
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout)
     {
+        transform.bind(cmd, layout);
         m_material.bind(cmd, layout);
 
         const VkDeviceSize vertexOffset = 0;
@@ -83,6 +114,8 @@ struct model3D
 
         vkCmdDrawIndexed(cmd, uint32_t(m_indexCount), 1, 0, 0, 0);
     }
+
+    transform3D transform;
 
 private:
     buffer_t m_vertices;

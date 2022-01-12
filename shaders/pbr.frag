@@ -8,7 +8,6 @@ layout(location = 0) out vec4 outColour;
 
 layout(binding = 0) uniform camera_data
 {
-    mat4 model;
     mat4 view;
     mat4 proj;
     vec4 position;
