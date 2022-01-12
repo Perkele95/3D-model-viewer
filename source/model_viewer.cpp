@@ -37,7 +37,7 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
 
     m_overlay->begin();
 
-    constexpr auto titleString = view("3D model viewer");
+    constexpr auto titleString = view("PBR demo");
     m_overlay->draw(titleString, vec2(50.0f, 12.0f));
 
     m_overlay->end();
@@ -579,17 +579,24 @@ void model_viewer::updateCamera()
 void model_viewer::updateLights()
 {
     auto lights = light_data();
-    lights.positions[0] = vec4(-10.0f, 5.0f, 5.0f, 0.0f);
-    lights.colours[0] = GetColour(255, 255, 255);
+    lights.positions[0] = vec4(-10.0f, 10.0f, -10.0f, 0.0f);
+    lights.colours[0] = GetColour(0xea00d9ff);
 
-    lights.positions[1] = vec4(10.0f, 5.0f, 5.0f, 0.0f);
-    lights.colours[1] = GetColour(255, 255, 255);
+    lights.positions[1] = vec4(10.0f, 10.0f, -10.0f, 0.0f);
+    lights.colours[1] = GetColour(0x0abdc6ff);
 
-    lights.positions[2] = vec4(-10.0f, -5.0f, 5.0f, 0.0f);
-    lights.colours[2] = GetColour(255, 255, 255);
+    lights.positions[2] = vec4(-10.0f, -10.0f, -10.0f, 0.0f);
+    lights.colours[2] = GetColour(0x133e7cff);
 
-    lights.positions[3] = vec4(10.0f, -5.0f, 5.0f, 0.0f);
-    lights.colours[3] = GetColour(255, 255, 255);
+    lights.positions[3] = vec4(10.0f, -10.0f, -10.0f, 0.0f);
+    lights.colours[3] = GetColour(0x711c91ff);
+
+    constexpr float lightStrength = 200.0f;
+    for (size_t i = 0; i < arraysize(lights.colours); i++){
+        lights.colours[i].x *= lightStrength;
+        lights.colours[i].y *= lightStrength;
+        lights.colours[i].z *= lightStrength;
+    }
 
     for (size_t i = 0; i < m_imageCount; i++)
         m_uniformBuffers[i].lights.fill(m_device->device, &lights, sizeof(lights));

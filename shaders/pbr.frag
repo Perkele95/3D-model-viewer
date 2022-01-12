@@ -25,7 +25,7 @@ layout(push_constant) uniform pbr_material
     layout(offset = 0) vec3 albedo;
     layout(offset = 12) float roughness;
     layout(offset = 16) float metallic;
-    layout(offset = 20) float ambientOcclusion;
+    layout(offset = 20) float ao;
 } material;
 
 const float PI = 3.14159265359;
@@ -41,7 +41,7 @@ float DistributionGGX(float dotNH, float roughness)
 vec3 FresnelSchlick(float cosTheta, vec3 albedo, float metallic)
 {
     const vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    const vec3 F = F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+    const vec3 F = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
     return F;
 }
 
@@ -56,8 +56,7 @@ float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
     return GL * GV;
 }
 
-vec3 BRDF(vec3 N, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position,
-          vec3 albedo, float metallic, float roughness)
+vec3 BRDF(vec3 N, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position)
 {
     const vec3 L = normalize(lightPosition - position);
     const vec3 H = normalize(V + L); // halfway vector
@@ -67,44 +66,39 @@ vec3 BRDF(vec3 N, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position,
     const float dotNH = max(dot(N, H), 0.0);
     const float dotHV = max(dot(H, V), 0.0);
 
-    vec3 colour = vec3(0.0);
-
     const float dist = length(lightPosition - position);
     const float attenuation = 1.0 / (dist * dist);
     const vec3 radiance = lightColour * attenuation;
 
-    const float D = DistributionGGX(dotNH, roughness);
-    const vec3 F = FresnelSchlick(dotHV, albedo, metallic);
-    const float G = GeometrySchlickSmithGGX(dotNL, dotNV, roughness);
+    const float D = DistributionGGX(dotNH, material.roughness);
+    const vec3 F = FresnelSchlick(dotHV, material.albedo, material.metallic);
+    const float G = GeometrySchlickSmithGGX(dotNL, dotNV, material.roughness);
 
     const vec3 Ks = F;
-    const vec3 Kd = (vec3(1.0) - Ks) * (1.0 - metallic);
+    const vec3 Kd = (vec3(1.0) - Ks) * (1.0 - material.metallic);
 
     const vec3 numerator = D * F * G;
     const float denominator = 4.0 * dotNV * dotNL + 0.0001; // + avoids dividing by zero
     const vec3 specular = numerator / denominator;
 
-    return (Kd * albedo / PI + specular) * radiance * dotNL;
+    return (Kd * material.albedo / PI + specular) * radiance * dotNL;
 }
 
 void main()
 {
 	const vec3 N = normalize(fragNormal);
 	const vec3 V = normalize(camera.position.xyz - fragPosition);
-    const vec3 albedo = material.albedo;
 
     // Specular contribution
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < lights.positions.length(); i++){
         const vec3 lp = lights.positions[i].xyz;
         const vec3 lc = lights.colours[i].xyz;
-        const float r = material.roughness;
-        const float m = material.metallic;
-        Lo += BRDF(N, V, lp, lc, fragPosition, albedo, m, r);
+        Lo += BRDF(N, V, lp, lc, fragPosition);
     }
 
     // Ambient combine
-    const vec3 ambient = vec3(0.03) * albedo * material.ambientOcclusion;
+    const vec3 ambient = vec3(0.02) * material.albedo * material.ao;
     vec3 colour = ambient + Lo;
 
     // HDR tonemapping

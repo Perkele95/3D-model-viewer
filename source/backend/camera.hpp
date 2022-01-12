@@ -78,7 +78,7 @@ struct camera
         this->fov = DEFAULT_FOV;
         m_zNear = DEFAULT_ZNEAR;
         m_zFar = DEFAULT_ZFAR;
-        m_position = vec3(0.0f, 0.0f, -2.0f);
+        m_position = vec3(0.0f, 0.0f, -5.0f);
         this->sensitivity = 2.0f;
         m_yaw = DEFAULT_YAW;
         m_pitch = 0.0f;

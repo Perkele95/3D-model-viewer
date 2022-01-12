@@ -39,9 +39,9 @@ struct mat4x4
     static mat4x4 VECTOR_API translate(vec3<float> t)
     {
         auto result = identity();
-        result.data[0][3] = t.x;
-        result.data[1][3] = t.y;
-        result.data[2][3] = t.z;
+        result.data[3][0] = t.x;
+        result.data[3][1] = t.y;
+        result.data[3][2] = t.z;
         return result;
     }
 

@@ -41,6 +41,8 @@ private:
     float m_ao;
 };
 
+constexpr auto MATR_COLOUR = GetColour(0xeeeeeeff);
+
 constexpr auto MATERIAL_TEST = material3D(
-    vec3(1.0f, 0.0f, 0.0f), 0.6f, 0.8f, 0.5f
+    vec3(MATR_COLOUR.x, MATR_COLOUR.y, MATR_COLOUR.z), 0.2f, 0.8f, 0.02f
 );
