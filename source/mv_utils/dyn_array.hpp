@@ -21,7 +21,7 @@ struct dyn_array
     dyn_array<T> &operator=(const dyn_array<T> &src);
     dyn_array<T> &operator=(const dyn_array<T> &&src);
 
-    constexpr dyn_array<T> &operator[](size_t index)
+    constexpr T &operator[](size_t index)
     {
         return m_data[index];
     }

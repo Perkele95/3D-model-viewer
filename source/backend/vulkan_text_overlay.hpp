@@ -17,7 +17,7 @@ enum class text_coord_type{absolute, relative};
 
 struct text_overlay_create_info
 {
-    linear_storage *sharedPermanent, *sharedTransient;
+    linear_storage *sharedPermanent;
     const vulkan_device *device;
     VkCommandPool cmdPool;
     size_t imageCount;
@@ -34,7 +34,7 @@ struct text_overlay
     text_overlay &operator=(const text_overlay &src) = delete;
     text_overlay &operator=(const text_overlay &&src) = delete;
 
-    void onWindowResize(linear_storage *transient, VkCommandPool commandPool);
+    void onWindowResize(VkCommandPool commandPool);
 
     void begin();
     void draw(view<const char> stringView, vec2<float> position);
@@ -51,7 +51,7 @@ struct text_overlay
 private:
     void prepareRenderpass();
     void prepareFontBuffer(const void *src, VkExtent2D bitmapExtent);
-    void prepareDescriptorSets(linear_storage *transient);
+    void prepareDescriptorSets();
     void preparePipeline();
     void prepareRenderBuffers();
 

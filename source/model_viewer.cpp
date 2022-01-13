@@ -7,12 +7,12 @@ static const bool s_validation = false;
 #endif
 
 model_viewer::model_viewer(Platform::lDevice platformDevice)
-: m_permanentStorage(MegaBytes(64)), m_transientStorage(MegaBytes(512))
+: m_permanentStorage(MegaBytes(64))
 {
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
 
-    m_device->init(platformDevice, &m_transientStorage, s_validation, false);
+    m_device->init(platformDevice, s_validation, false);
 
     m_depthFormat = m_device->getDepthFormat();
     m_mainCamera = camera();
@@ -21,7 +21,6 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
 
     text_overlay_create_info overlayInfo;
     overlayInfo.sharedPermanent = &m_permanentStorage;
-    overlayInfo.sharedTransient = &m_transientStorage;
     overlayInfo.device = m_device;
     overlayInfo.cmdPool = m_cmdPool;
     overlayInfo.imageCount = m_imageCount;
@@ -115,8 +114,6 @@ void model_viewer::testProc(const input_state *input, float dt)
 
 void model_viewer::run(const input_state *input, uint32_t flags, float dt)
 {
-    m_transientStorage.flush();
-
     if(m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
@@ -222,7 +219,7 @@ void model_viewer::onWindowResize()
     buildMsaa();
     buildFramebuffers();
 
-    m_overlay->onWindowResize(&m_transientStorage, m_cmdPool);
+    m_overlay->onWindowResize(m_cmdPool);
     m_overlay->updateCmdBuffers(m_framebuffers);
 }
 
@@ -474,12 +471,12 @@ void model_viewer::buildUniformBuffers()
 
 void model_viewer::buildDescriptorSets()
 {
-    auto layouts = m_transientStorage.pushView<VkDescriptorSetLayout>(m_imageCount);
+    auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
     layouts.fill(m_descriptorSetLayout);
 
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool);
     allocInfo.descriptorSetCount = uint32_t(m_imageCount);
-    allocInfo.pSetLayouts = layouts.data;
+    allocInfo.pSetLayouts = layouts.data();
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
     for (size_t i = 0; i < m_imageCount; i++){

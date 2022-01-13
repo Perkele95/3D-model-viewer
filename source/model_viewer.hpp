@@ -52,7 +52,7 @@ private:
     void updateLights();
     void updateCmdBuffers();
 
-    linear_storage m_permanentStorage, m_transientStorage;
+    linear_storage m_permanentStorage;
 
     vulkan_device *m_device;
     text_overlay *m_overlay;

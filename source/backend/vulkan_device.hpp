@@ -30,7 +30,7 @@ struct queue_data
 
 struct vulkan_device
 {
-    void init(Platform::lDevice platformDevice, linear_storage *transient, bool validation, bool vSync);
+    void init(Platform::lDevice platformDevice, bool validation, bool vSync);
     ~vulkan_device();
     void refresh();
 
@@ -55,10 +55,10 @@ struct vulkan_device
     uint32_t minImageCount;
 
 private:
-    void pickPhysicalDevice(linear_storage *transient);
+    void pickPhysicalDevice();
     void prepareLogicalDevice(bool validation);
-    void pickSurfaceFormat(linear_storage *transient);
-    void pickPresentMode(linear_storage *transient, VkPresentModeKHR preferredMode);
+    void pickSurfaceFormat();
+    void pickPresentMode(VkPresentModeKHR preferredMode);
 
     void getSampleCount();
 

@@ -87,7 +87,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
     result = vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_setLayout);
 
-    prepareDescriptorSets(pInfo->sharedTransient);
+    prepareDescriptorSets();
     prepareRenderpass();
     preparePipeline();
     prepareRenderBuffers();
@@ -112,7 +112,7 @@ void text_overlay::destroy()
     vkDestroySampler(m_device->device, m_sampler, nullptr);
 }
 
-void text_overlay::onWindowResize(linear_storage *transient, VkCommandPool commandPool)
+void text_overlay::onWindowResize(VkCommandPool commandPool)
 {
     m_cmdPool = commandPool;
 
@@ -120,7 +120,7 @@ void text_overlay::onWindowResize(linear_storage *transient, VkCommandPool comma
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
     vkResetDescriptorPool(m_device->device, m_descriptorPool, VkFlags(0));
 
-    prepareDescriptorSets(transient);
+    prepareDescriptorSets();
     preparePipeline();
 }
 
@@ -382,15 +382,14 @@ void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
     vkCreateImageView(m_device->device, &viewInfo, nullptr, &m_fontBuffer.view);
 }
 
-void text_overlay::prepareDescriptorSets(linear_storage *transient)
+void text_overlay::prepareDescriptorSets()
 {
-    auto layouts = transient->push<VkDescriptorSetLayout>(m_imageCount);
-    for(size_t i = 0; i < m_imageCount; i++)
-        layouts[i] = m_setLayout;
+    auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
+    layouts.fill(m_setLayout);
 
     auto descriptorSetAllocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool);
     descriptorSetAllocInfo.descriptorSetCount = uint32_t(m_imageCount);
-    descriptorSetAllocInfo.pSetLayouts = layouts;
+    descriptorSetAllocInfo.pSetLayouts = layouts.data();
     vkAllocateDescriptorSets(m_device->device, &descriptorSetAllocInfo, m_descriptorSets);
 
     for(size_t i = 0; i < m_imageCount; i++){
