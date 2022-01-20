@@ -30,8 +30,9 @@ struct queue_data
 
 struct vulkan_device
 {
-    void init(Platform::lDevice platformDevice, bool validation, bool vSync);
+    vulkan_device(Platform::lDevice platformDevice, bool validation, bool vSync);
     ~vulkan_device();
+
     void refresh();
 
     // Tools

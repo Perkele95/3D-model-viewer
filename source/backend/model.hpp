@@ -115,6 +115,9 @@ struct model3D
         vkCmdDrawIndexed(cmd, uint32_t(m_indexCount), 1, 0, 0, 0);
     }
 
+    template<int N_STACKS = 32, int N_SLICES = 32>
+    void UVSphere(const vulkan_device *device, VkCommandPool cmdPool);
+
     transform3D transform;
 
 private:
@@ -177,10 +180,9 @@ static mesh_index s_MeshIndices[] = {
     20, 21, 22, 22, 23, 20, // Right
 };
 
-template<int N_STACKS = 32, int N_SLICES = 32>
-model3D UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
+template<int N_STACKS, int N_SLICES>
+void model3D::UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
 {
-    auto model = model3D(MATERIAL_TEST);
     auto vertices = dyn_array<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
     auto vertex = vertices.data();
 
@@ -221,21 +223,15 @@ model3D UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
     for (uint32_t i = 0; i < N_SLICES; i++){
         auto i0 = i + 1;
         auto i1 = i0 % N_SLICES + 1;
-        *index = 0;
-        index++;
-        *index = i1;
-        index++;
-        *index = i0;
-        index++;
+        *(index++) = 0;
+        *(index++) = i1;
+        *(index++) = i0;
 
         i0 += N_SLICES * (N_STACKS - 2);
         i1 += N_SLICES * (N_STACKS - 2);
-        *index = indexLast;
-        index++;
-        *index = i0;
-        index++;
-        *index = i1;
-        index++;
+        *(index++) = indexLast;
+        *(index++) = i0;
+        *(index++) = i1;
     }
 
     // Quad fill the rest of the sphere
@@ -248,22 +244,14 @@ model3D UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
             const auto j2 = i1 + (j + 1) % N_SLICES;
             const auto j3 = i1 + j;
 
-            *index = j0;
-            index++;
-            *index = j1;
-            index++;
-            *index = j2;
-            index++;
-            *index = j0;
-            index++;
-            *index = j2;
-            index++;
-            *index = j3;
-            index++;
+            *(index++) = j0;
+            *(index++) = j1;
+            *(index++) = j2;
+            *(index++) = j0;
+            *(index++) = j2;
+            *(index++) = j3;
         }
     }
 
-    model.load(device, cmdPool, vertices, indices);
-
-    return model;
+    load(device, cmdPool, vertices, indices);
 }

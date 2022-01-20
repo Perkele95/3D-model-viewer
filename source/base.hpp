@@ -6,6 +6,12 @@
 #include "mv_utils/linear_storage.hpp"
 #include "platform/platform.hpp"
 
+inline void *operator new(size_t size, void *ptr) noexcept
+{
+    (void)size;
+    return ptr;
+}
+
 #if defined(MV_DEBUG)
     #if defined(_WIN32)
         #define WIN32_LEAN_AND_MEAN

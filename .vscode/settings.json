@@ -26,6 +26,8 @@
         "xlocinfo": "cpp",
         "xlocmon": "cpp",
         "xlocnum": "cpp",
-        "system_error": "cpp"
+        "system_error": "cpp",
+        "new": "cpp",
+        "vcruntime_new.h": "c"
     }
 }

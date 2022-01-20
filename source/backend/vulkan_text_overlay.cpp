@@ -22,7 +22,7 @@ constexpr static VkVertexInputAttributeDescription s_OverlayAttributes[] = {
 
 static stb_fontchar s_Fontdata[STB_SOMEFONT_NUM_CHARS];
 
-void text_overlay::create(const text_overlay_create_info *pInfo)
+text_overlay::text_overlay(const text_overlay_create_info *pInfo)
 {
     m_imageCount = pInfo->imageCount;
     m_descriptorSets = pInfo->sharedPermanent->push<VkDescriptorSet>(m_imageCount);
@@ -93,7 +93,7 @@ void text_overlay::create(const text_overlay_create_info *pInfo)
     prepareRenderBuffers();
 }
 
-void text_overlay::destroy()
+text_overlay::~text_overlay()
 {
     vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(m_device->device, m_setLayout, nullptr);

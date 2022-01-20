@@ -26,8 +26,8 @@ struct text_overlay_create_info
 
 struct text_overlay
 {
-    void create(const text_overlay_create_info *pInfo);
-    void destroy();
+    text_overlay(const text_overlay_create_info *pInfo);
+    ~text_overlay();
 
     text_overlay(const text_overlay &src) = delete;
     text_overlay(const text_overlay &&src) = delete;

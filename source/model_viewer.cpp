@@ -12,10 +12,10 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
 
-    m_device->init(platformDevice, s_validation, false);
+    new (m_device) vulkan_device(platformDevice, s_validation, false);
 
     m_depthFormat = m_device->getDepthFormat();
-    m_mainCamera = camera();
+    new (&m_mainCamera) camera();
 
     buildResources();
 
@@ -25,7 +25,7 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
     overlayInfo.cmdPool = m_cmdPool;
     overlayInfo.imageCount = m_imageCount;
     overlayInfo.depthFormat = m_depthFormat;
-    m_overlay->create(&overlayInfo);
+    new (m_overlay) text_overlay(&overlayInfo);
 
     m_currentFrame = 0;
 
@@ -46,7 +46,7 @@ model_viewer::model_viewer(Platform::lDevice platformDevice)
 model_viewer::~model_viewer()
 {
     vkDeviceWaitIdle(m_device->device);
-    m_overlay->destroy();
+    m_overlay->~text_overlay();
 
     vkDestroyCommandPool(m_device->device, m_cmdPool, nullptr);
 
@@ -259,15 +259,16 @@ void model_viewer::buildResources()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
 
-    m_shaders[0] = shader_object("../shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    m_shaders[1] = shader_object("../shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    new (&m_shaders[0]) shader_object("../shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    new (&m_shaders[1]) shader_object("../shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     for (size_t i = 0; i < arraysize(m_shaders); i++)
         m_shaders[i].load(m_device->device);
 
     buildPipeline();
 
-    m_model = UVSphere(m_device, m_cmdPool);
+    new (&m_model) model3D(MATERIAL_TEST);
+    m_model.UVSphere(m_device, m_cmdPool);
 
     updateLights();
     updateCmdBuffers();
