@@ -4,6 +4,7 @@
 #include "mv_utils/dyn_array.hpp"
 #include "mv_utils/linear_storage.hpp"
 #include "mv_utils/linear_storage.hpp"
+#include "mv_utils/result.hpp"
 #include "platform/platform.hpp"
 
 inline void *operator new(size_t size, void *ptr) noexcept

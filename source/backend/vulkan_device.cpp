@@ -79,13 +79,6 @@ VkFormat vulkan_device::getDepthFormat() const
     return format;
 }
 
-VkResult vulkan_device::loadShader(const file_t *src, VkShaderModule *pModule) const
-{
-    auto shaderInfo = vkInits::shaderModuleCreateInfo(src);
-    VkResult result = vkCreateShaderModule(this->device, &shaderInfo, nullptr, pModule);
-    return result;
-}
-
 VkResult vulkan_device::buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainKHR *pSwapchain) const
 {
     auto info = vkInits::swapchainCreateInfo(oldSwapchain);

@@ -38,7 +38,6 @@ struct vulkan_device
     // Tools
 
     VkFormat getDepthFormat() const;
-    VkResult loadShader(const file_t *src, VkShaderModule *pModule) const;
     VkResult buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainKHR *pSwapchain) const;
 
     VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
