@@ -57,10 +57,7 @@ text_overlay::text_overlay(const text_overlay_create_info *pInfo)
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     VkResult result = vkCreateSampler(m_device->device, &samplerInfo, nullptr, &m_sampler);
 
-    uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
-    STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
-
-    prepareFontBuffer(fontpixels, {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT});
+    prepareFontBuffer();
 
     const VkDescriptorPoolSize samplerImageSize = {
         VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(m_imageCount)
@@ -324,62 +321,26 @@ void text_overlay::prepareRenderpass()
     vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
 }
 
-void text_overlay::prepareFontBuffer(const void *src, VkExtent2D bitmapExtent)
+void text_overlay::prepareFontBuffer()
 {
-    m_fontBuffer.create(m_device,
-                        VK_FORMAT_R8_UNORM,
-                        bitmapExtent,
-                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                        MEM_FLAG_GPU_LOCAL);
+    uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
+    STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
-    const VkDeviceSize size = bitmapExtent.width * bitmapExtent.height;
+    auto transferInfo = vkInits::bufferCreateInfo(sizeof(fontpixels), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    auto transfer = buffer_t(m_device, &transferInfo, MEM_FLAG_HOST_VISIBLE);
+    transfer.fill(m_device->device, fontpixels, sizeof(fontpixels));
 
-    auto transfer = buffer_t(size);
-    transfer.create(m_device, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE);
-    transfer.fill(m_device->device, src, size);
+    auto fontBufferInfo = vkInits::imageCreateInfo();
+    fontBufferInfo.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT, 1};
+    fontBufferInfo.format = VK_FORMAT_R8_UNORM;
+    fontBufferInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    fontBufferInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    fontBufferInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    new (&m_fontBuffer) image_buffer(m_device, &fontBufferInfo, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
-
-    auto cmdBufferAllocInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, arraysize(imageCmds));
-    vkAllocateCommandBuffers(m_device->device, &cmdBufferAllocInfo, imageCmds);
-
-    auto cmdBufferBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    vkBeginCommandBuffer(imageCmds[0], &cmdBufferBeginInfo);
-    auto imageBarrier = vkInits::imageMemoryBarrier(m_fontBuffer.image,
-                                                    VK_IMAGE_LAYOUT_UNDEFINED,
-                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                    VkAccessFlags(0),
-                                                    VK_ACCESS_TRANSFER_WRITE_BIT);
-    vkCmdPipelineBarrier(imageCmds[0], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[0]);
-
-    transfer.copyToImage(imageCmds[1], &m_fontBuffer, bitmapExtent);
-
-    vkBeginCommandBuffer(imageCmds[2], &cmdBufferBeginInfo);
-    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(imageCmds[2], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[2]);
-
-    auto queueSubmitInfo = vkInits::submitInfo(imageCmds, arraysize(imageCmds));
-    vkQueueSubmit(m_device->graphics.queue, 1, &queueSubmitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_device->graphics.queue);
-
-    vkFreeCommandBuffers(m_device->device, m_cmdPool, uint32_t(arraysize(imageCmds)), imageCmds);
+    m_fontBuffer.copyFromBuffer(m_device, m_cmdPool, &transfer);
 
     transfer.destroy(m_device->device);
-
-    auto viewInfo = vkInits::imageViewCreateInfo();
-    viewInfo.image = m_fontBuffer.image;
-    viewInfo.format = VK_FORMAT_R8_UNORM;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    vkCreateImageView(m_device->device, &viewInfo, nullptr, &m_fontBuffer.view);
 }
 
 void text_overlay::prepareDescriptorSets()
@@ -393,16 +354,13 @@ void text_overlay::prepareDescriptorSets()
     vkAllocateDescriptorSets(m_device->device, &descriptorSetAllocInfo, m_descriptorSets);
 
     for(size_t i = 0; i < m_imageCount; i++){
-        VkDescriptorImageInfo samplerDescInfo{};
-        samplerDescInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        samplerDescInfo.imageView = m_fontBuffer.view;
-        samplerDescInfo.sampler = m_sampler;
+        auto samplerImageDesc = m_fontBuffer.descriptor(m_sampler);
 
         auto samplerImageWrite = vkInits::writeDescriptorSet(0);
         samplerImageWrite.dstSet = m_descriptorSets[i];
         samplerImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         samplerImageWrite.descriptorCount = 1;
-        samplerImageWrite.pImageInfo = &samplerDescInfo;
+        samplerImageWrite.pImageInfo = &samplerImageDesc;
         vkUpdateDescriptorSets(m_device->device, 1, &samplerImageWrite, 0, nullptr);
     }
 }
@@ -467,9 +425,9 @@ void text_overlay::preparePipeline()
 
 void text_overlay::prepareRenderBuffers()
 {
-    m_vertexBuffer = buffer_t(GUI_VERTEX_BUFFER_SIZE);
-    m_indexBuffer = buffer_t(GUI_INDEX_BUFFER_SIZE);
+    auto vertexInfo = vkInits::bufferCreateInfo(GUI_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+    new (&m_vertexBuffer) buffer_t(m_device, &vertexInfo, MEM_FLAG_HOST_VISIBLE);
 
-    m_vertexBuffer.create(m_device, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE);
-    m_indexBuffer.create(m_device, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE);
+    auto indexInfo = vkInits::bufferCreateInfo(GUI_INDEX_BUFFER_SIZE, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+    new (&m_indexBuffer) buffer_t(m_device, &indexInfo, MEM_FLAG_HOST_VISIBLE);
 }

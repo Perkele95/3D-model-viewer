@@ -50,7 +50,7 @@ struct text_overlay
 
 private:
     void prepareRenderpass();
-    void prepareFontBuffer(const void *src, VkExtent2D bitmapExtent);
+    void prepareFontBuffer();
     void prepareDescriptorSets();
     void preparePipeline();
     void prepareRenderBuffers();

@@ -41,11 +41,6 @@ struct alignas(16) light_data
         return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
-    static VkMemoryPropertyFlags bufferMemFlags()
-    {
-        return VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-
     vec4<float> positions[LIGHTS_COUNT];
     vec4<float> colours[LIGHTS_COUNT];
 };

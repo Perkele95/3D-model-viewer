@@ -40,11 +40,6 @@ struct alignas(16) mvp_matrix
         return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
 
-    static VkMemoryPropertyFlags bufferMemFlags()
-    {
-        return VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    }
-
     mat4x4 view;
     mat4x4 proj;
     vec4<float> position;

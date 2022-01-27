@@ -287,51 +287,25 @@ void model_viewer::buildSwapchainViews()
 
 void model_viewer::buildMsaa()
 {
-    auto imageInfo = vkInits::imageCreateInfo();
-    imageInfo.samples = m_device->sampleCount;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
-    imageInfo.format = m_device->surfaceFormat.format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    vkCreateImage(m_device->device, &imageInfo, nullptr, &m_msaa.image);
-
-    VkMemoryRequirements memReqs{};
-    vkGetImageMemoryRequirements(m_device->device, m_msaa.image, &memReqs);
-
-    auto allocInfo = m_device->getMemoryAllocInfo(memReqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    vkAllocateMemory(m_device->device, &allocInfo, nullptr, &m_msaa.memory);
-    vkBindImageMemory(m_device->device, m_msaa.image, m_msaa.memory, 0);
-
-    auto viewInfo = vkInits::imageViewCreateInfo();
-    viewInfo.image = m_msaa.image;
-    viewInfo.format = m_device->surfaceFormat.format;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    vkCreateImageView(m_device->device, &viewInfo, nullptr, &m_msaa.view);
+    auto msaaInfo = vkInits::imageCreateInfo();
+    msaaInfo.samples = m_device->sampleCount;
+    msaaInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    msaaInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
+    msaaInfo.format = m_device->surfaceFormat.format;
+    msaaInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    msaaInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    new (&m_msaa) image_buffer(m_device, &msaaInfo, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void model_viewer::buildDepth()
 {
-    auto imageInfo = vkInits::imageCreateInfo();
-    imageInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
-    imageInfo.format = m_depthFormat;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.samples = m_device->sampleCount;
-    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    VkResult result = vkCreateImage(m_device->device, &imageInfo, nullptr, &m_depth.image);
-
-    VkMemoryRequirements memReqs;
-    vkGetImageMemoryRequirements(m_device->device, m_depth.image, &memReqs);
-
-    auto allocInfo = m_device->getMemoryAllocInfo(memReqs, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    result = vkAllocateMemory(m_device->device, &allocInfo, nullptr, &m_depth.memory);
-    result = vkBindImageMemory(m_device->device, m_depth.image, m_depth.memory, 0);
-
-    auto depthCreateInfo = vkInits::imageViewCreateInfo();
-    depthCreateInfo.image = m_depth.image;
-    depthCreateInfo.format = m_depthFormat;
-    depthCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-    result = vkCreateImageView(m_device->device, &depthCreateInfo, nullptr, &m_depth.view);
+    auto depthInfo = vkInits::imageCreateInfo();
+    depthInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
+    depthInfo.format = m_depthFormat;
+    depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    depthInfo.samples = m_device->sampleCount;
+    depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    new (&m_depth) image_buffer(m_device, &depthInfo, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void model_viewer::buildRenderPass()
@@ -462,11 +436,11 @@ void model_viewer::buildDescriptorPool()
 void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
-        m_uniformBuffers[i].camera.size = sizeof(mvp_matrix);
-        m_uniformBuffers[i].camera.create(m_device, mvp_matrix::usageFlags(), mvp_matrix::bufferMemFlags());
+        auto cameraBufferInfo = vkInits::bufferCreateInfo(sizeof(mvp_matrix), mvp_matrix::usageFlags());
+        new (&m_uniformBuffers[i].camera) buffer_t(m_device, &cameraBufferInfo, MEM_FLAG_HOST_VISIBLE);
 
-        m_uniformBuffers[i].lights.size = sizeof(light_data);
-        m_uniformBuffers[i].lights.create(m_device, light_data::usageFlags(), light_data::bufferMemFlags());
+        auto lightsBufferInfo = vkInits::bufferCreateInfo(sizeof(light_data), light_data::usageFlags());
+        new (&m_uniformBuffers[i].lights) buffer_t(m_device, &lightsBufferInfo, MEM_FLAG_HOST_VISIBLE);
     }
 }
 

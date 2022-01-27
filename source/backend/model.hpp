@@ -63,20 +63,21 @@ struct model3D
     void load(const vulkan_device *device, VkCommandPool cmdPool,
               view<mesh_vertex> vertices, view<mesh_index> indices)
     {
-        auto vertexTransfer = buffer_t(sizeof(mesh_vertex) * vertices.count);
-        auto indexTransfer = buffer_t(sizeof(mesh_index) * indices.count);
-        m_indexCount = indices.count;
+        auto vertexInfo = vkInits::bufferCreateInfo(sizeof(mesh_vertex) * vertices.count, USAGE_VERTEX_TRANSFER_SRC);
+        auto vertexTransfer = buffer_t(device, &vertexInfo, MEM_FLAG_HOST_VISIBLE);
 
-        vertexTransfer.create(device, USAGE_VERTEX_TRANSFER_SRC, MEM_FLAG_HOST_VISIBLE);
-        indexTransfer.create(device, USAGE_INDEX_TRANSFER_SRC, MEM_FLAG_HOST_VISIBLE);
+        auto indexInfo = vkInits::bufferCreateInfo(sizeof(mesh_index) * indices.count, USAGE_INDEX_TRANSFER_SRC);
+        auto indexTransfer = buffer_t(device, &indexInfo, MEM_FLAG_HOST_VISIBLE);
+        m_indexCount = indices.count;
 
         vertexTransfer.fill(device->device, vertices.data, vertexTransfer.size);
         indexTransfer.fill(device->device, indices.data, indexTransfer.size);
 
-        m_vertices.size = vertexTransfer.size;
-        m_indices.size = indexTransfer.size;
-        m_vertices.create(device, USAGE_VERTEX_TRANSFER_DST, MEM_FLAG_GPU_LOCAL);
-        m_indices.create(device, USAGE_INDEX_TRANSFER_DST, MEM_FLAG_GPU_LOCAL);
+        vertexInfo.usage = USAGE_VERTEX_TRANSFER_DST;
+        new (&m_vertices) buffer_t(device, &vertexInfo, MEM_FLAG_GPU_LOCAL);
+
+        indexInfo.usage = USAGE_INDEX_TRANSFER_DST;
+        new (&m_indices) buffer_t(device, &indexInfo, MEM_FLAG_GPU_LOCAL);
 
         VkCommandBuffer copyCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
         auto cmdInfo = vkInits::commandBufferAllocateInfo(cmdPool, arraysize(copyCmds));
