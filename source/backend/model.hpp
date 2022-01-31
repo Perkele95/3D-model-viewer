@@ -119,6 +119,8 @@ struct model3D
     template<int N_STACKS = 32, int N_SLICES = 32>
     void UVSphere(const vulkan_device *device, VkCommandPool cmdPool);
 
+    void Box(const vulkan_device *device, VkCommandPool cmdPool);
+
     transform3D transform;
 
 private:
@@ -128,58 +130,8 @@ private:
     material3D m_material;
 };
 
-static constexpr auto s_MeshSzf = 0.5f;
 constexpr auto TINT_BRONZE = GetColour(0xb08d57FF);
 constexpr auto TINT_GOLD = GetColour(0xFFD700FF);
-
-static constexpr auto s_NormalFront = vec3(0.0f, 0.0f, -1.0f);
-static constexpr auto s_NormalBack = vec3(0.0f, 0.0f, 1.0f);
-static constexpr auto s_NormalTop = vec3(0.0f, 1.0f, 0.0f);
-static constexpr auto s_NormalBottom = vec3(0.0f, -1.0f, 0.0f);
-static constexpr auto s_NormalLeft = vec3(1.0f, 0.0f, 0.0f);
-static constexpr auto s_NormalRight = vec3(-1.0f, 0.0f, 0.0f);
-
-static mesh_vertex s_MeshVertices[] = {
-    // Front
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalFront},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalFront},
-    // Back
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBack},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalBack},
-    // Top
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalTop},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalTop},
-    // Bottom
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalBottom},
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalBottom},
-    // Left
-    {vec3(-s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalLeft},
-    {vec3(-s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalLeft},
-    {vec3(-s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalLeft},
-    {vec3(-s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalLeft},
-    // Right
-    {vec3(s_MeshSzf, -s_MeshSzf, -s_MeshSzf), s_NormalRight},
-    {vec3(s_MeshSzf, -s_MeshSzf, s_MeshSzf), s_NormalRight},
-    {vec3(s_MeshSzf, s_MeshSzf, s_MeshSzf), s_NormalRight},
-    {vec3(s_MeshSzf, s_MeshSzf, -s_MeshSzf), s_NormalRight},
-};
-
-static mesh_index s_MeshIndices[] = {
-    0, 1, 2, 2, 3, 0, // Front
-    4, 7, 6, 6, 5, 4, // Back
-    8, 9, 10, 10, 11, 8, // Top
-    12, 13, 14, 14, 15, 12, // Bottom
-    16, 17, 18, 18, 19, 16, // Left
-    20, 21, 22, 22, 23, 20, // Right
-};
 
 template<int N_STACKS, int N_SLICES>
 void model3D::UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
@@ -252,6 +204,73 @@ void model3D::UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
             *(index++) = j2;
             *(index++) = j3;
         }
+    }
+
+    load(device, cmdPool, vertices, indices);
+}
+
+inline void model3D::Box(const vulkan_device *device, VkCommandPool cmdPool)
+{
+    constexpr auto normalFront = vec3(0.0f, 0.0f, -1.0f);
+    constexpr auto normalBack = vec3(0.0f, 0.0f, 1.0f);
+    constexpr auto normalTop = vec3(0.0f, 1.0f, 0.0f);
+    constexpr auto normalBottom = vec3(0.0f, -1.0f, 0.0f);
+    constexpr auto normalLeft = vec3(1.0f, 0.0f, 0.0f);
+    constexpr auto normalRight = vec3(-1.0f, 0.0f, 0.0f);
+
+    const float size = 0.5f;
+    const vec3<float> points[] = {
+        vec3(-size, -size, -size),
+        vec3(size, -size, -size),
+        vec3(size, size, -size),
+        vec3(-size, size, -size),
+        vec3(-size, -size, size),
+        vec3(size, -size, size),
+        vec3(size, size, size),
+        vec3(-size, size, size),
+    };
+
+    auto vertices = dyn_array<mesh_vertex>(24);
+    vertices[0] = {points[0], normalFront};
+    vertices[1] = {points[3], normalFront};
+    vertices[2] = {points[2], normalFront};
+    vertices[3] = {points[1], normalFront};
+
+    vertices[4] = {points[4], normalBack};
+    vertices[5] = {points[5], normalBack};
+    vertices[6] = {points[6], normalBack};
+    vertices[7] = {points[7], normalBack};
+
+    vertices[8] = {points[3], normalTop};
+    vertices[9] = {points[7], normalTop};
+    vertices[10] = {points[6], normalTop};
+    vertices[11] = {points[2], normalTop};
+
+    vertices[12] = {points[4], normalBottom};
+    vertices[13] = {points[0], normalBottom};
+    vertices[14] = {points[1], normalBottom};
+    vertices[15] = {points[5], normalBottom};
+
+    vertices[16] = {points[4], normalRight};
+    vertices[17] = {points[7], normalRight};
+    vertices[18] = {points[3], normalRight};
+    vertices[19] = {points[0], normalRight};
+
+    vertices[20] = {points[1], normalLeft};
+    vertices[21] = {points[2], normalLeft};
+    vertices[22] = {points[6], normalLeft};
+    vertices[23] = {points[5], normalLeft};
+
+    auto indices = dyn_array<mesh_index>(36);
+    for (uint32_t i = 0; i < 6; i++){
+        const auto index = 6 * i;
+        const auto offset = 4 * i;
+        indices[index] = offset;
+        indices[index + 1] = offset + 1;
+        indices[index + 2] = offset + 2;
+        indices[index + 3] = offset + 2;
+        indices[index + 4] = offset + 3;
+        indices[index + 5] = offset;
     }
 
     load(device, cmdPool, vertices, indices);
