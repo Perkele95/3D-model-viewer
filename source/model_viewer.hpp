@@ -21,8 +21,9 @@ struct uniform_buffer
     buffer_t lights;
 };
 
-struct model_viewer
+class model_viewer
 {
+public:
     model_viewer(Platform::lDevice platformDevice);
     ~model_viewer();
 

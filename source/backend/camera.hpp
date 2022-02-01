@@ -47,8 +47,9 @@ struct alignas(16) mvp_matrix
 
 // NOTE(arle): radians, not degrees
 
-struct camera
+class camera
 {
+public:
     static constexpr float DEFAULT_FOV = GetRadians(60.0f);
     static constexpr float DEFAULT_ZNEAR = 0.1f;
     static constexpr float DEFAULT_ZFAR = 100.0f;

@@ -3,8 +3,9 @@
 #include "virtual_allocator.hpp"
 #include "view.hpp"
 
-struct linear_storage : virtual_allocator
+class linear_storage : virtual_allocator
 {
+public:
     linear_storage(size_t capacity)
     {
         m_begin = allocate<void>(capacity);

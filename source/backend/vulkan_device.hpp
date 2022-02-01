@@ -28,8 +28,9 @@ struct queue_data
     uint32_t family;
 };
 
-struct vulkan_device
+class vulkan_device
 {
+public:
     vulkan_device(Platform::lDevice platformDevice, bool validation, bool vSync);
     ~vulkan_device();
 

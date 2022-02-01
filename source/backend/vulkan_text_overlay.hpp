@@ -24,8 +24,9 @@ struct text_overlay_create_info
     VkFormat depthFormat;
 };
 
-struct text_overlay
+class text_overlay
 {
+public:
     text_overlay(const text_overlay_create_info *pInfo);
     ~text_overlay();
 

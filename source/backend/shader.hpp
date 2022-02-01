@@ -3,8 +3,9 @@
 #include "../base.hpp"
 #include "vulkan_initialisers.hpp"
 
-struct shader_object
+class shader_object
 {
+public:
     shader_object() = default;
     shader_object(const char *path, VkShaderStageFlagBits stageFlag)
     {

@@ -3,8 +3,9 @@
 #include <stdint.h>
 
 template<typename T>
-struct dyn_array
+class dyn_array
 {
+public:
     dyn_array(size_t count)
     : m_count(count)
     {

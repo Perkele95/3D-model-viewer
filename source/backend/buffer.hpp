@@ -3,10 +3,11 @@
 #include "vulkan_initialisers.hpp"
 #include "vulkan_device.hpp"
 
-struct buffer_t;
+class buffer_t;
 
-struct image_buffer
+class image_buffer
 {
+public:
     image_buffer() = default;
     image_buffer(const vulkan_device *device, const VkImageCreateInfo *pCreateInfo,
                  VkImageAspectFlags aspect);
@@ -25,8 +26,9 @@ private:
     friend buffer_t;
 };
 
-struct buffer_t
+class buffer_t
 {
+public:
     buffer_t() = default;
     buffer_t(const vulkan_device *device, const VkBufferCreateInfo *pCreateInfo,
              VkMemoryPropertyFlags memFlags);
