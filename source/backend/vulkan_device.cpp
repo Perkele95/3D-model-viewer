@@ -5,7 +5,7 @@ constexpr char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 constexpr char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
-vulkan_device::vulkan_device(Platform::lDevice platformDevice, bool validation, bool vSync)
+vulkan_device::vulkan_device(plt::device d, bool validation, bool vSync)
 {
     auto appInfo = vkInits::applicationInfo("3D model viewer");
     auto instanceInfo = vkInits::instanceCreateInfo();
@@ -18,7 +18,7 @@ vulkan_device::vulkan_device(Platform::lDevice platformDevice, bool validation, 
     }
     vkCreateInstance(&instanceInfo, 0, &m_instance);
 
-    Platform::SetupVkSurface(platformDevice, m_instance, &m_surface);
+    plt::CreateSurface(d, m_instance, &m_surface);
 
     pickPhysicalDevice();
     prepareLogicalDevice(validation);

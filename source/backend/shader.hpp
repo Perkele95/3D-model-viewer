@@ -7,7 +7,7 @@ class shader_object
 {
 public:
     shader_object() = default;
-    shader_object(const char *path, VkShaderStageFlagBits stageFlag)
+    shader_object(plt::file_path path, VkShaderStageFlagBits stageFlag)
     {
         m_stage = stageFlag;
         m_path = path;
@@ -15,10 +15,10 @@ public:
 
     VkResult load(VkDevice device)
     {
-        auto src = Platform::io::read(m_path);
+        auto src = plt::filesystem::read(m_path);
         const auto loadInfo = vkInits::shaderModuleCreateInfo(&src);
         const auto result = vkCreateShaderModule(device, &loadInfo, nullptr, &m_module);
-        Platform::io::close(&src);
+        plt::filesystem::close(src);
         return result;
     }
 
@@ -36,5 +36,5 @@ public:
 private:
     VkShaderStageFlagBits m_stage;
     VkShaderModule m_module;
-    const char *m_path;
+    plt::file_path m_path;
 };

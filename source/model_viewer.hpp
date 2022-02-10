@@ -24,7 +24,7 @@ struct uniform_buffer
 class model_viewer
 {
 public:
-    model_viewer(Platform::lDevice platformDevice);
+    model_viewer(plt::device d);
     ~model_viewer();
 
     model_viewer(const model_viewer &src) = delete;
@@ -32,10 +32,10 @@ public:
     model_viewer &operator=(const model_viewer &src) = delete;
     model_viewer &operator=(const model_viewer &&src) = delete;
 
-    void run(const input_state *input, uint32_t flags, float dt);
+    void run(plt::device d, float dt);
 
 private:
-    void testProc(const input_state *input, float dt);
+    void testProc(plt::device d, float dt);
     void onWindowResize();
 
     void buildResources();

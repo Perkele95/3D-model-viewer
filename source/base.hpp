@@ -41,16 +41,6 @@ inline T clamp(T value, T min, T max)
     return result > max ? max : result;
 }
 
-enum CORE_FLAG_BITS
-{
-    CORE_FLAG_RUNNING = BIT(0),
-    CORE_FLAG_WINDOW_RESIZED = BIT(1),
-    CORE_FLAG_WINDOW_FULLSCREEN = BIT(2),
-    CORE_FLAG_ENABLE_VALIDATION = BIT(3),
-    CORE_FLAG_ENABLE_VSYNC = BIT(4),
-    CORE_FLAG_CONSTRAIN_MOUSE = BIT(5),
-};
-
 constexpr float PI32 = 3.141592741f;
 constexpr float GetRadians(float angle) {return angle / 180.0f * PI32;}
 

@@ -1,33 +1,25 @@
 #include "base.hpp"
 #include "model_viewer.hpp"
 
-void ApplicationEntryPoint(Platform::lDevice device)
+void EntryPoint(plt::device d)
 {
-    const auto permanentCapacity = MegaBytes(64);
-    const auto transientCapacity = MegaBytes(512);
+    plt::SpawnWindow(d, "3D model viewer");
 
-    Platform::SetupWindow(device, "3D model viewer");
-
-    auto app = model_viewer(device);
+    auto app = model_viewer(d);
 
     float dt = 0.001f;
-    auto flags = Platform::QueryFlags(device);
-    while (flags & Platform::FLAG_RUNNING){
-        auto input = Platform::PollEvents(device);
 
-        if(Platform::IsKeyDown(KeyCode::ALT)){
-            if(input->keyPressEvents & KEY_EVENT_F4){
-                Platform::Terminate(device);
-                break;
-            }
+    while(plt::GetFlag(d, plt::core_flag::running)){
+        plt::PollEvents(d);
 
-            if(input->keyPressEvents & KEY_EVENT_F)
-                Platform::ToggleFullscreen(device);
+        if(plt::IsKeyDown(plt::key_code::alt)){
+            if(plt::KeyEvent(d, plt::key_event::f4))
+                plt::Terminate(d);
+            else if(plt::KeyEvent(d, plt::key_event::f))
+                plt::ToggleFullScreen(d);
         }
 
-        app.run(input, flags, dt);
-
-        flags = Platform::QueryFlags(device);
-        dt = Platform::GetTimestep(device);
+        app.run(d, dt);
+        dt = plt::GetTimestep(d);
     }
 }

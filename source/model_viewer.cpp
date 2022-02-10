@@ -6,13 +6,13 @@ static const bool s_validation = true;
 static const bool s_validation = false;
 #endif
 
-model_viewer::model_viewer(Platform::lDevice platformDevice)
+model_viewer::model_viewer(plt::device d)
 : m_permanentStorage(MegaBytes(64))
 {
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
 
-    new (m_device) vulkan_device(platformDevice, s_validation, false);
+    new (m_device) vulkan_device(d, s_validation, false);
 
     m_depthFormat = m_device->getDepthFormat();
     new (&m_mainCamera) camera();
@@ -87,37 +87,37 @@ model_viewer::~model_viewer()
     m_device->~vulkan_device();
 }
 
-void model_viewer::testProc(const input_state *input, float dt)
+void model_viewer::testProc(plt::device d, float dt)
 {
-    if(Platform::IsKeyDown(KeyCode::W))
+    if(plt::IsKeyDown(plt::key_code::w))
         m_mainCamera.rotate(camera::direction::up, dt);
-    else if(Platform::IsKeyDown(KeyCode::S))
+    else if(plt::IsKeyDown(plt::key_code::s))
         m_mainCamera.rotate(camera::direction::down, dt);
 
-    if(Platform::IsKeyDown(KeyCode::A))
+    if(plt::IsKeyDown(plt::key_code::a))
         m_mainCamera.rotate(camera::direction::left, dt);
-    else if(Platform::IsKeyDown(KeyCode::D))
+    else if(plt::IsKeyDown(plt::key_code::d))
         m_mainCamera.rotate(camera::direction::right, dt);
 
-    if(Platform::IsKeyDown(KeyCode::UP))
+    if(plt::IsKeyDown(plt::key_code::up))
         m_mainCamera.move(camera::direction::forward, dt);
-    else if(Platform::IsKeyDown(KeyCode::DOWN))
+    else if(plt::IsKeyDown(plt::key_code::down))
         m_mainCamera.move(camera::direction::backward, dt);
 
-    if(Platform::IsKeyDown(KeyCode::LEFT))
+    if(plt::IsKeyDown(plt::key_code::left))
         m_mainCamera.move(camera::direction::left, dt);
-    else if(Platform::IsKeyDown(KeyCode::RIGHT))
+    else if(plt::IsKeyDown(plt::key_code::right))
         m_mainCamera.move(camera::direction::right, dt);
 
     updateCamera();
 }
 
-void model_viewer::run(const input_state *input, uint32_t flags, float dt)
+void model_viewer::run(plt::device d, float dt)
 {
     if(m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
-    testProc(input, dt);
+    testProc(d, dt);
 
     vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame],
                     VK_TRUE, UINT64_MAX);
@@ -170,11 +170,10 @@ void model_viewer::run(const input_state *input, uint32_t flags, float dt)
 
     result = vkQueuePresentKHR(m_device->present.queue, &presentInfo);
 
-    if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-       flags & Platform::FLAG_WINDOW_RESIZED)
-    {
+    const auto vulkanErrorResize = result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR;
+    const auto windowErrorResize = plt::GetFlag(d, plt::core_flag::window_resized);
+    if(vulkanErrorResize || windowErrorResize)
         onWindowResize();
-    }
 
     m_currentFrame = (m_currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
 }
