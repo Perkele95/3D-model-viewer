@@ -16,9 +16,11 @@ public:
     VkDescriptorImageInfo descriptor(VkSampler sampler);
     VkResult copyFromBuffer(const vulkan_device *device, VkCommandPool cmdPool, buffer_t *pSrc);
 
-    VkImageView view;
+    VkImageView view(){return m_view;}
+
 private:
     VkImage m_image;
+    VkImageView m_view;
     VkDeviceMemory m_memory;
     VkExtent2D m_extent;
     VkFormat m_format;

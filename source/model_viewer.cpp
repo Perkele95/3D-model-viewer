@@ -376,8 +376,8 @@ void model_viewer::buildFramebuffers()
 {
     for(size_t i = 0; i < m_imageCount; i++){
         const VkImageView frameBufferAttachments[] = {
-            m_msaa.view,
-            m_depth.view,
+            m_msaa.view(),
+            m_depth.view(),
             m_swapchainViews[i]
         };
 

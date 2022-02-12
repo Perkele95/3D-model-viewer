@@ -3,6 +3,7 @@
 #include "vulkan_device.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"
+#include "texture2D.hpp"
 
 struct alignas(4) quad_vertex
 {
@@ -51,7 +52,7 @@ public:
 
 private:
     void prepareRenderpass();
-    void prepareFontBuffer();
+    void prepareFontTexture();
     void prepareDescriptorSets();
     void preparePipeline();
     void prepareRenderBuffers();
@@ -71,8 +72,7 @@ private:
     shader_object m_shaders[2];
     buffer_t m_vertexBuffer, m_indexBuffer;
 
-    VkSampler m_sampler;
-    image_buffer m_fontBuffer;
+    texture2D m_fontTexture;
 
     quad_vertex *m_mappedVertices;
     quad_index *m_mappedIndices;

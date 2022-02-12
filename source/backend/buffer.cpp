@@ -18,28 +18,28 @@ image_buffer::image_buffer(const vulkan_device *device, const VkImageCreateInfo 
     viewInfo.image = m_image;
     viewInfo.format = pCreateInfo->format;
     viewInfo.subresourceRange.aspectMask = aspect;
-    vkCreateImageView(device->device, &viewInfo, nullptr, &view);
+    vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
 }
 
 void image_buffer::destroy(VkDevice device)
 {
     vkDestroyImage(device, m_image, nullptr);
-    vkDestroyImageView(device, view, nullptr);
+    vkDestroyImageView(device, m_view, nullptr);
     vkFreeMemory(device, m_memory, nullptr);
     m_image = VK_NULL_HANDLE;
     m_memory = VK_NULL_HANDLE;
-    view = VK_NULL_HANDLE;
+    m_view = VK_NULL_HANDLE;
 }
 
 VkDescriptorImageInfo image_buffer::descriptor(VkSampler sampler)
 {
     VkDescriptorImageInfo info;
     info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    info.imageView = view;
+    info.imageView = m_view;
     info.sampler = sampler;
     return info;
 }
-
+#if 0
 VkResult image_buffer::copyFromBuffer(const vulkan_device *device, VkCommandPool cmdPool, buffer_t *pSrc)
 {
     const VkDeviceSize size = m_extent.width * m_extent.height;
@@ -83,7 +83,7 @@ VkResult image_buffer::copyFromBuffer(const vulkan_device *device, VkCommandPool
 
     return VK_SUCCESS;
 }
-
+#endif
 buffer_t::buffer_t(const vulkan_device *device, const VkBufferCreateInfo *pCreateInfo,
                    VkMemoryPropertyFlags memFlags)
                    : size(pCreateInfo->size)

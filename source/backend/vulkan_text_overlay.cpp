@@ -42,25 +42,10 @@ text_overlay::text_overlay(const text_overlay_create_info *pInfo)
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, this->cmdBuffers);
 
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.anisotropyEnable = VK_FALSE;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    VkResult result = vkCreateSampler(m_device->device, &samplerInfo, nullptr, &m_sampler);
-
-    prepareFontBuffer();
+    prepareFontTexture();
 
     const VkDescriptorPoolSize samplerImageSize = {
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(m_imageCount)
+        texture2D::descriptorType(), uint32_t(m_imageCount)
     };
 
     const VkDescriptorPoolSize poolSizes[] = {samplerImageSize};
@@ -71,9 +56,9 @@ text_overlay::text_overlay(const text_overlay_create_info *pInfo)
     descPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
     descPoolInfo.pPoolSizes = poolSizes;
     descPoolInfo.maxSets = maxSets;
-    result = vkCreateDescriptorPool(m_device->device, &descPoolInfo, nullptr, &m_descriptorPool);
+    auto result = vkCreateDescriptorPool(m_device->device, &descPoolInfo, nullptr, &m_descriptorPool);
 
-    const auto samplerBinding = vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+    const auto samplerBinding = vkInits::descriptorSetLayoutBinding(0, texture2D::descriptorType(),
                                                                     VK_SHADER_STAGE_FRAGMENT_BIT);
 
     const VkDescriptorSetLayoutBinding bindings[] = {samplerBinding};
@@ -97,7 +82,7 @@ text_overlay::~text_overlay()
 
     m_vertexBuffer.destroy(m_device->device);
     m_indexBuffer.destroy(m_device->device);
-    m_fontBuffer.destroy(m_device->device);
+    m_fontTexture.destroy(m_device->device);
 
     vkDestroyRenderPass(m_device->device, m_renderPass, nullptr);
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
@@ -105,8 +90,6 @@ text_overlay::~text_overlay()
 
     for (size_t i = 0; i < arraysize(m_shaders); i++)
         m_shaders[i].destroy(m_device->device);
-
-    vkDestroySampler(m_device->device, m_sampler, nullptr);
 }
 
 void text_overlay::onWindowResize(VkCommandPool commandPool)
@@ -321,14 +304,10 @@ void text_overlay::prepareRenderpass()
     vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
 }
 
-void text_overlay::prepareFontBuffer()
+void text_overlay::prepareFontTexture()
 {
     uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
     STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
-
-    auto transferInfo = vkInits::bufferCreateInfo(sizeof(fontpixels), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = buffer_t(m_device, &transferInfo, MEM_FLAG_HOST_VISIBLE);
-    transfer.fill(m_device->device, fontpixels, sizeof(fontpixels));
 
     auto fontBufferInfo = vkInits::imageCreateInfo();
     fontBufferInfo.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT, 1};
@@ -336,11 +315,9 @@ void text_overlay::prepareFontBuffer()
     fontBufferInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     fontBufferInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     fontBufferInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    new (&m_fontBuffer) image_buffer(m_device, &fontBufferInfo, VK_IMAGE_ASPECT_COLOR_BIT);
+    new (&m_fontTexture) texture2D(m_device, &fontBufferInfo, VK_IMAGE_ASPECT_COLOR_BIT);
 
-    m_fontBuffer.copyFromBuffer(m_device, m_cmdPool, &transfer);
-
-    transfer.destroy(m_device->device);
+    m_fontTexture.load(m_device, m_cmdPool, fontpixels);
 }
 
 void text_overlay::prepareDescriptorSets()
@@ -354,7 +331,7 @@ void text_overlay::prepareDescriptorSets()
     vkAllocateDescriptorSets(m_device->device, &descriptorSetAllocInfo, m_descriptorSets);
 
     for(size_t i = 0; i < m_imageCount; i++){
-        auto samplerImageDesc = m_fontBuffer.descriptor(m_sampler);
+        const auto samplerImageDesc = m_fontTexture.descriptor();
 
         auto samplerImageWrite = vkInits::writeDescriptorSet(0);
         samplerImageWrite.dstSet = m_descriptorSets[i];
