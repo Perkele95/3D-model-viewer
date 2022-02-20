@@ -48,8 +48,8 @@ struct mat4x4
     static mat4x4 rotateX(float radians)
     {
         auto result = identity();
-        float c = cosf(radians);
-        float s = sinf(radians);
+        const auto c = std::cos(radians);
+        const auto s = std::sin(radians);
         result.data[1][1] = c;
         result.data[1][2] = -s;
         result.data[2][1] = s;
@@ -60,8 +60,8 @@ struct mat4x4
     static mat4x4 rotateY(float radians)
     {
         auto result = identity();
-        float c = cosf(radians);
-        float s = sinf(radians);
+        const auto c = std::cos(radians);
+        const auto s = std::sin(radians);
         result.data[0][0] = c;
         result.data[0][2] = s;
         result.data[2][0] = -s;
@@ -72,8 +72,8 @@ struct mat4x4
     static mat4x4 rotateZ(float radians)
     {
         auto result = identity();
-        float c = cosf(radians);
-        float s = sinf(radians);
+        const auto c = std::cos(radians);
+        const auto s = std::sin(radians);
         result.data[0][0] = c;
         result.data[0][1] = -s;
         result.data[1][0] = s;

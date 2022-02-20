@@ -13,6 +13,9 @@ namespace plt
     struct device_T
     {
         device_T(HINSTANCE hInstance)
+            : keyEventsDown(0), mouseEventsDown(0),
+            mouse(vec2(0i32)), mouseDelta(vec2(0i32)),
+            mousePrev(vec2(0i32)), mouseWheel(0)
         {
             instance = hInstance;
             window = NULL;
@@ -153,9 +156,9 @@ namespace plt
 
     namespace filesystem
     {
-        file read(file_path path)
+        file read(path filePath)
         {
-            HANDLE fileHandle = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ,
+            HANDLE fileHandle = CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ,
                                             0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 
             file f = {};
@@ -178,9 +181,9 @@ namespace plt
             return f;
         }
 
-        bool write(file_path path, file &file)
+        bool write(path filePath, file &file)
         {
-            HANDLE fileHandle = CreateFileA(path, GENERIC_WRITE, 0,
+            HANDLE fileHandle = CreateFileA(filePath, GENERIC_WRITE, 0,
                                 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
             bool result = false;
             if(fileHandle != INVALID_HANDLE_VALUE){
@@ -201,10 +204,10 @@ namespace plt
             return result;
         }
 
-        bool exists(file_path path)
+        bool exists(path filePath)
         {
-            WIN32_FIND_DATA findData{};
-            HANDLE hFindFile = FindFirstFileA(path, &findData);
+            WIN32_FIND_DATAA findData{};
+            HANDLE hFindFile = FindFirstFileA(filePath, &findData);
 
             bool result = false;
             if(hFindFile != INVALID_HANDLE_VALUE){
@@ -301,9 +304,10 @@ namespace plt
     }
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                   LPSTR lpCmdLine, int nShowCmd)
+INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
+                   _In_ PSTR lpCmdLine, _In_ INT nCmdShow)
 {
     auto device = plt::device_T(hInstance);
     EntryPoint(&device);
+    return 0;
 }

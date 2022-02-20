@@ -104,9 +104,9 @@ void model3D::UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
         const auto phi = PI32 * float(i + 1) / float(N_STACKS);
         for (size_t j = 0; j < N_SLICES; j++){
             const auto theta = 2.0f * PI32 * float(j) / float(N_SLICES);
-            vertex->position.x = sinf(phi) * cosf(theta);
-            vertex->position.y = cosf(phi);
-            vertex->position.z = sinf(phi) * sinf(theta);
+            vertex->position.x = std::sin(phi) * std::cos(theta);
+            vertex->position.y = std::cos(phi);
+            vertex->position.z = std::sin(phi) * std::sin(theta);
             vertex->normal = vertex->position;
             vertex++;
         }

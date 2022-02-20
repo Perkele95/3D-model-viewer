@@ -7,8 +7,9 @@ class shader_object
 {
 public:
     shader_object() = default;
-    shader_object(plt::file_path path, VkShaderStageFlagBits stageFlag)
+    shader_object(plt::filesystem::path path, VkShaderStageFlagBits stageFlag)
     {
+        m_module = VK_NULL_HANDLE;
         m_stage = stageFlag;
         m_path = path;
     }
@@ -36,5 +37,5 @@ public:
 private:
     VkShaderStageFlagBits m_stage;
     VkShaderModule m_module;
-    plt::file_path m_path;
+    plt::filesystem::path m_path;
 };

@@ -1,9 +1,9 @@
 #include "vulkan_device.hpp"
 #include <string.h>
 
-constexpr char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
-constexpr char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-constexpr char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
+constexpr const char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
+constexpr const char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+constexpr const char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
 vulkan_device::vulkan_device(plt::device d, bool validation, bool vSync)
 {

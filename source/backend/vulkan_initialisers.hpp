@@ -94,7 +94,7 @@ namespace vkInits
         return attachmentDescription;
     }
 
-    INIT_API shaderModuleCreateInfo(const plt::file *file)
+    INIT_API shaderModuleCreateInfo(const plt::filesystem::file *file)
     {
         VkShaderModuleCreateInfo shaderModuleInfo{};
         shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

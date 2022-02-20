@@ -258,8 +258,8 @@ void model_viewer::buildResources()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
 
-    new (&m_shaders[0]) shader_object("../shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    new (&m_shaders[1]) shader_object("../shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    new (&m_shaders[0]) shader_object("shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    new (&m_shaders[1]) shader_object("shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     for (size_t i = 0; i < arraysize(m_shaders); i++)
         m_shaders[i].load(m_device->device);

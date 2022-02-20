@@ -45,21 +45,21 @@ namespace plt
 
     // Files
 
-    using file_path = const char*;
-    using file_handle = void*;
-
-    struct file
-    {
-        file_handle handle;
-        size_t size;
-    };
-
     namespace filesystem
     {
-        file read(file_path path);
-        bool write(file_path path, file &file);
+        using path = const char*;
+        using handle = void*;
+
+        struct file
+        {
+            handle handle;
+            size_t size;
+        };
+
+        file read(path filePath);
+        bool write(path filePath, file &file);
         bool close(file &file);
-        bool exists(file_path path);
+        bool exists(path filePath);
     }
 
     // Input

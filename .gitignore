@@ -26,17 +26,25 @@
 *.a
 *.lib
 
-# Executables
+# Binaries
 *.exe
 *.out
 *.app
-
-# Shaders
 *.spv
 
+# Visual studio files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+.vs
+obj
+
 # Folders
-stb
+vendor
 1.2.162.0
 assets
 scripts
 bin
+build
+.xmake

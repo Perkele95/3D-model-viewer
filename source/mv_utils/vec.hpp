@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <math.h>
+#include <cmath>
 
 #if defined(_MSC_VER)
     #define VECTOR_API __vectorcall

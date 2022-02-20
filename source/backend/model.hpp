@@ -9,7 +9,7 @@ struct alignas(16) transform3D
 {
     constexpr transform3D();
 
-    static VkPushConstantRange transform3D::pushConstant();
+    static VkPushConstantRange pushConstant();
 
     void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const;
 

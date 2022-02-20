@@ -115,10 +115,10 @@ public:
         else if(m_yaw < 0.0f)
             m_yaw = YAW_MOD;
 
-        const auto yawCosine = cosf(m_yaw);
-        const auto yawSine = sinf(m_yaw);
-        const auto pitchCosine = cosf(m_pitch);
-        const auto pitchSine = sinf(m_pitch);
+        const auto yawCosine = std::cos(m_yaw);
+        const auto yawSine = std::sin(m_yaw);
+        const auto pitchCosine = std::cos(m_pitch);
+        const auto pitchSine = std::sin(m_pitch);
 
         m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
         m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
