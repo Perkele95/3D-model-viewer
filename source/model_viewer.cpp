@@ -1,5 +1,8 @@
 #include "model_viewer.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "../vendor/stb/stb_image.h"
+
 #if defined(MV_DEBUG)
 static const bool s_validation = true;
 #else
@@ -7,7 +10,7 @@ static const bool s_validation = false;
 #endif
 
 model_viewer::model_viewer(plt::device d)
-: m_permanentStorage(MegaBytes(64))
+: m_permanentStorage(MegaBytes(64)), m_currentFrame(0)
 {
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
@@ -26,8 +29,6 @@ model_viewer::model_viewer(plt::device d)
     overlayInfo.imageCount = m_imageCount;
     overlayInfo.depthFormat = m_depthFormat;
     new (m_overlay) text_overlay(&overlayInfo);
-
-    m_currentFrame = 0;
 
     m_overlay->textTint = vec4(1.0f);
     m_overlay->textAlignment = text_align::centre;
@@ -266,11 +267,40 @@ void model_viewer::buildResources()
 
     buildPipeline();
 
-    new (&m_model) model3D(MATERIAL_TEST);
+    new (&m_model) model3D(m_device, m_cmdPool);
     m_model.UVSphere(m_device, m_cmdPool);
+
+    loadTextures();
 
     updateLights();
     updateCmdBuffers();
+}
+
+void model_viewer::loadTextures()
+{
+    const auto loadFile = [this](texture_type type, plt::file_path path)
+    {
+        auto file = plt::filesystem::read(path);
+
+        int x, y, channels;
+        auto pixels = stbi_load_from_memory(static_cast<stbi_uc*>(file.handle), int(file.size),
+                                            &x, &y, &channels, STBI_rgb_alpha);
+
+        if(pixels){
+            texture_load_info textureLoadInfo;
+            textureLoadInfo.type = type;
+            textureLoadInfo.source = pixels;
+            textureLoadInfo.extent = {uint32_t(x), uint32_t(y)};
+            m_model.loadTexture(m_device, m_cmdPool, &textureLoadInfo);
+            stbi_image_free(pixels);
+        }
+    };
+
+    loadFile(texture_type::albedo, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-albedo.png");
+    loadFile(texture_type::normal, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-normal.png");
+    loadFile(texture_type::rougness, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-roughness.png");
+    loadFile(texture_type::metallic, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-metallic.png");
+    loadFile(texture_type::ambient, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-ao.png");
 }
 
 void model_viewer::buildSwapchainViews()
@@ -455,13 +485,36 @@ void model_viewer::buildDescriptorSets()
 
     for (size_t i = 0; i < m_imageCount; i++){
         const auto cameraBufferInfo = m_uniformBuffers[i].camera.descriptor(0);
-        auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i], &cameraBufferInfo);
+        const auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i], &cameraBufferInfo);
 
         const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
-        auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i], &lightBufferInfo);
+        const auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i], &lightBufferInfo);
+
+        const VkDescriptorImageInfo textureInfos[] = {
+            m_model.descriptor(texture_type::albedo),
+            m_model.descriptor(texture_type::normal),
+            m_model.descriptor(texture_type::rougness),
+            m_model.descriptor(texture_type::metallic),
+            m_model.descriptor(texture_type::ambient),
+        };
+
+        const auto getWrite = [&, this](uint32_t binding, const VkDescriptorImageInfo *pInfo)
+        {
+            auto set = vkInits::writeDescriptorSet(2);
+            set.dstBinding = binding;
+            set.descriptorType = texture2D::descriptorType();
+            set.dstSet = m_descriptorSets[i];
+            set.pImageInfo = pInfo;
+            return set;
+        };
 
         const VkWriteDescriptorSet writes[] = {
-            cameraWrite, lightWrite
+            cameraWrite, lightWrite,
+            getWrite(2, &textureInfos[0]),
+            getWrite(3, &textureInfos[1]),
+            getWrite(4, &textureInfos[2]),
+            getWrite(5, &textureInfos[3]),
+            getWrite(6, &textureInfos[4])
         };
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -476,17 +529,12 @@ void model_viewer::buildPipeline()
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh_vertex));
 
-    constexpr VkVertexInputAttributeDescription attributes[] = {
-        mesh_vertex::positionAttribute(),
-        mesh_vertex::normalAttribute()
-    };
-
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(MeshAttributes));
+    vertexInputInfo.pVertexAttributeDescriptions = MeshAttributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewport = vkInits::viewportInfo(m_device->extent);
@@ -509,8 +557,7 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        transform3D::pushConstant(),
-        material3D::pushConstant()
+        transform3D::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};

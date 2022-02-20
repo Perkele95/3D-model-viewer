@@ -309,15 +309,14 @@ void text_overlay::prepareFontTexture()
     uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
     STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
-    auto fontBufferInfo = vkInits::imageCreateInfo();
-    fontBufferInfo.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT, 1};
+    texture2D_create_info fontBufferInfo;
+    fontBufferInfo.aspectFlags = 0;
+    fontBufferInfo.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT};
+    fontBufferInfo.flags = 0;
     fontBufferInfo.format = VK_FORMAT_R8_UNORM;
     fontBufferInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    fontBufferInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    fontBufferInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    new (&m_fontTexture) texture2D(m_device, &fontBufferInfo, VK_IMAGE_ASPECT_COLOR_BIT);
-
-    m_fontTexture.load(m_device, m_cmdPool, fontpixels);
+    fontBufferInfo.source = fontpixels;
+    new (&m_fontTexture) texture2D(m_device, m_cmdPool, &fontBufferInfo);
 }
 
 void text_overlay::prepareDescriptorSets()

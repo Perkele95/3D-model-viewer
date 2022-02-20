@@ -7,7 +7,7 @@ constexpr transform3D::transform3D() : matrix(mat4x4::identity())
 VkPushConstantRange transform3D::pushConstant()
 {
     VkPushConstantRange range;
-    range.offset = 32;
+    range.offset = 0;
     range.size = sizeof(transform3D);
     range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     return range;
@@ -24,24 +24,35 @@ void transform3D::bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) c
                         this);
 }
 
-model3D::model3D(material3D material)
+model3D::model3D(const vulkan_device *device)
+: m_device(device), m_indexCount(0)
 {
-    m_indexCount = 0;
-    m_material = material;
 }
 
-void model3D::load(const vulkan_device *device, VkCommandPool cmdPool,
-            view<mesh_vertex> vertices, view<mesh_index> indices)
+void model3D::load(VkCommandBuffer cmd, view<mesh_vertex> vertices)
 {
-    auto vertexInfo = vkInits::bufferCreateInfo(sizeof(mesh_vertex) * vertices.count, USAGE_VERTEX_TRANSFER_SRC);
+    //
+}
+
+void model3D::load(VkCommandBuffer cmd, view<mesh_index> indices)
+{
+    //
+}
+
+void model3D::load(VkCommandPool cmdPool, texture_load_info (&textureInfos)[5])
+{
+    //
+}
+
+{
+    auto vertexInfo = vkInits::bufferCreateInfo(sizeof(mesh_vertex) * pInfo->vertices.count, USAGE_VERTEX_TRANSFER_SRC);
     auto vertexTransfer = buffer_t(device, &vertexInfo, MEM_FLAG_HOST_VISIBLE);
 
-    auto indexInfo = vkInits::bufferCreateInfo(sizeof(mesh_index) * indices.count, USAGE_INDEX_TRANSFER_SRC);
+    auto indexInfo = vkInits::bufferCreateInfo(sizeof(mesh_index) * pInfo->indices.count, USAGE_INDEX_TRANSFER_SRC);
     auto indexTransfer = buffer_t(device, &indexInfo, MEM_FLAG_HOST_VISIBLE);
-    m_indexCount = indices.count;
 
-    vertexTransfer.fill(device->device, vertices.data, vertexTransfer.size);
-    indexTransfer.fill(device->device, indices.data, indexTransfer.size);
+    vertexTransfer.fill(device->device, pInfo->vertices.data, vertexTransfer.size);
+    indexTransfer.fill(device->device, pInfo->indices.data, indexTransfer.size);
 
     vertexInfo.usage = USAGE_VERTEX_TRANSFER_DST;
     new (&m_vertices) buffer_t(device, &vertexInfo, MEM_FLAG_GPU_LOCAL);
@@ -64,18 +75,53 @@ void model3D::load(const vulkan_device *device, VkCommandPool cmdPool,
 
     vertexTransfer.destroy(device->device);
     indexTransfer.destroy(device->device);
-}
 
-void model3D::destroy(VkDevice device)
+    const uint8_t defTexture[] = {230, 230, 230, 230};
+
+    for (size_t i = 0; i < arraysize(pInfo->textureInfos); i++){
+        auto &textureView = pInfo->textureInfos[i];
+
+        auto loadInfo = textureView.source ? textureView : texture_load_info{defTexture, {1, 1}};
+
+        texture2D_create_info textureInfo;
+        textureInfo.aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+        textureInfo.extent = loadInfo.extent;
+        textureInfo.flags = 0;
+        textureInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+        textureInfo.samples = device->sampleCount;
+        textureInfo.source = loadInfo.source;
+        new (&m_textures[i]) texture2D(device, cmdPool, &textureInfo);
+    }
+}
+#if 0
+void model3D::loadTexture(const vulkan_device *device, VkCommandPool cmdPool,
+                          const texture_load_info *pInfo)
 {
-    m_vertices.destroy(device);
-    m_indices.destroy(device);
+    auto &texture = m_textures[size_t(pInfo->type)];
+
+    auto textureInfo = vkInits::imageCreateInfo();
+    textureInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+    textureInfo.extent = {pInfo->extent.width, pInfo->extent.height, 1};
+    textureInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    textureInfo.samples = device->sampleCount;
+    textureInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    new (&texture) texture2D(device, &textureInfo, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    texture.load(device, cmdPool, pInfo->source);
+}
+#endif
+void model3D::destroy()
+{
+    m_vertices.destroy(m_device->device);
+    m_indices.destroy(m_device->device);
+
+    for(size_t i = 0; i < arraysize(m_textures); i++)
+        m_textures[i].destroy(m_device->device);
 }
 
 void model3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
 {
     transform.bind(cmd, layout);
-    m_material.bind(cmd, layout);
 
     const VkDeviceSize vertexOffset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &m_vertices.data, &vertexOffset);
@@ -108,6 +154,10 @@ void model3D::UVSphere(const vulkan_device *device, VkCommandPool cmdPool)
             vertex->position.y = std::cos(phi);
             vertex->position.z = std::sin(phi) * std::sin(theta);
             vertex->normal = vertex->position;
+
+            vertex->uv.x = (asinf(vertex->normal.x) / PI32) + 0.5f;
+            vertex->uv.y = (asinf(vertex->normal.y) / PI32) + 0.5f;
+
             vertex++;
         }
     }

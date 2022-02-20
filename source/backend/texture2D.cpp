@@ -1,11 +1,17 @@
 #include "texture2D.hpp"
 
-texture2D::texture2D(const vulkan_device *device, const VkImageCreateInfo *pCreateInfo,
-                     VkImageAspectFlags aspect)
+texture2D::texture2D(const vulkan_device *device, VkCommandPool cmdPool, const texture2D_create_info *pInfo)
 {
-    vkCreateImage(device->device, pCreateInfo, nullptr, &m_image);
-    m_extent.width = pCreateInfo->extent.width;
-    m_extent.height = pCreateInfo->extent.height;
+    m_extent.width = pInfo->extent.width;
+    m_extent.height = pInfo->extent.height;
+
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.extent = {m_extent.width, m_extent.height, 1};
+    imageInfo.format = pInfo->format;
+    imageInfo.samples = pInfo->samples;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    vkCreateImage(device->device, &imageInfo, nullptr, &m_image);
 
     VkMemoryRequirements memReqs{};
     vkGetImageMemoryRequirements(device->device, m_image, &memReqs);
@@ -16,8 +22,8 @@ texture2D::texture2D(const vulkan_device *device, const VkImageCreateInfo *pCrea
 
     auto viewInfo = vkInits::imageViewCreateInfo();
     viewInfo.image = m_image;
-    viewInfo.format = pCreateInfo->format;
-    viewInfo.subresourceRange.aspectMask = aspect;
+    viewInfo.format = pInfo->format;
+    viewInfo.subresourceRange.aspectMask = pInfo->aspectFlags;
     vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
 
     VkSamplerCreateInfo samplerInfo{};
@@ -34,16 +40,13 @@ texture2D::texture2D(const vulkan_device *device, const VkImageCreateInfo *pCrea
     samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
-}
 
-void texture2D::load(const vulkan_device *device, VkCommandPool cmdPool, const void *src)
-{
     const VkDeviceSize size = m_extent.width * m_extent.height;
 
     auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     auto transfer = buffer_t(device, &transferInfo, MEM_FLAG_HOST_VISIBLE);
 
-    transfer.fill(device->device, src, size);
+    transfer.fill(device->device, pInfo->source, size);
 
     VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
 

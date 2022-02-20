@@ -23,7 +23,7 @@ struct alignas(16) light_data
         setBinding.binding = 1;
         return setBinding;
     }
-
+    // TODO(arle): move this, it's not ideal to have here
     static VkWriteDescriptorSet descriptorWrite(VkDescriptorSet dstSet, const VkDescriptorBufferInfo *pInfo)
     {
         VkWriteDescriptorSet set{};
@@ -40,7 +40,7 @@ struct alignas(16) light_data
     {
         return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     }
-
+    // NOTE(arle): consider SoA -> AoS for a light object
     vec4<float> positions[LIGHTS_COUNT];
     vec4<float> colours[LIGHTS_COUNT];
 };
