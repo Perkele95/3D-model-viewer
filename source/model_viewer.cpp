@@ -3,10 +3,10 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../vendor/stb/stb_image.h"
 
-#if defined(MV_DEBUG)
-static const bool s_validation = true;
+#if defined(DEBUG)
+static const bool C_VALIDATION = true;
 #else
-static const bool s_validation = false;
+static const bool C_VALIDATION = false;
 #endif
 
 model_viewer::model_viewer(plt::device d)
@@ -15,7 +15,7 @@ model_viewer::model_viewer(plt::device d)
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
 
-    new (m_device) vulkan_device(d, s_validation, false);
+    new (m_device) vulkan_device(d, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
     new (&m_mainCamera) camera();
@@ -65,7 +65,7 @@ model_viewer::~model_viewer()
         m_uniformBuffers[i].lights.destroy(m_device->device);
     }
 
-    m_model.destroy(m_device->device);
+    m_model.destroy();
 
     for (size_t i = 0; i < m_imageCount; i++)
         vkDestroyFramebuffer(m_device->device, m_framebuffers[i], nullptr);
@@ -254,6 +254,11 @@ void model_viewer::buildResources()
     buildDescriptorPool();
 
     buildUniformBuffers();
+
+    new (&m_model) model3D(m_device);
+
+    loadModel();
+
     buildDescriptorSets();
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
@@ -267,40 +272,35 @@ void model_viewer::buildResources()
 
     buildPipeline();
 
-    new (&m_model) model3D(m_device, m_cmdPool);
-    m_model.UVSphere(m_device, m_cmdPool);
-
-    loadTextures();
-
     updateLights();
     updateCmdBuffers();
 }
 
-void model_viewer::loadTextures()
+void model_viewer::loadModel()
 {
-    const auto loadFile = [this](texture_type type, plt::file_path path)
-    {
-        auto file = plt::filesystem::read(path);
-
-        int x, y, channels;
-        auto pixels = stbi_load_from_memory(static_cast<stbi_uc*>(file.handle), int(file.size),
-                                            &x, &y, &channels, STBI_rgb_alpha);
-
-        if(pixels){
-            texture_load_info textureLoadInfo;
-            textureLoadInfo.type = type;
-            textureLoadInfo.source = pixels;
-            textureLoadInfo.extent = {uint32_t(x), uint32_t(y)};
-            m_model.loadTexture(m_device, m_cmdPool, &textureLoadInfo);
-            stbi_image_free(pixels);
-        }
+    m_model.UVSphere(m_cmdPool);
+    // TODO(arle): simple package format
+    constexpr const char* paths[] = {
+        "assets/materials/patterned-bw-vinyl-bl/albedo.png",
+        "assets/materials/patterned-bw-vinyl-bl/normal.png",
+        "assets/materials/patterned-bw-vinyl-bl/roughness.png",
+        "assets/materials/patterned-bw-vinyl-bl/metallic.png",
+        "assets/materials/patterned-bw-vinyl-bl/ao.png"
     };
 
-    loadFile(texture_type::albedo, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-albedo.png");
-    loadFile(texture_type::normal, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-normal.png");
-    loadFile(texture_type::rougness, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-roughness.png");
-    loadFile(texture_type::metallic, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-metallic.png");
-    loadFile(texture_type::ambient, "../assets/materials/gray-granite-flecks-bl/gray-granite-flecks-ao.png");
+    for(size_t i = 0; i < arraysize(paths); i++){
+        int x, y, channels;
+        auto pixels = stbi_load(paths[i], &x, &y, &channels, STBI_rgb_alpha);
+
+        if(pixels != nullptr){
+            VkExtent2D imageExtent = {uint32_t(x), uint32_t(y)};
+            m_model.load(static_cast<pbr_material>(i), m_cmdPool, imageExtent, pixels);
+            stbi_image_free(pixels);
+        }
+        else{
+            m_model.load(static_cast<pbr_material>(i), m_cmdPool, {1, 1}, TEX2D_DEFAULT);
+        }
+    }
 }
 
 void model_viewer::buildSwapchainViews()
@@ -425,7 +425,7 @@ void model_viewer::buildFramebuffers()
 void model_viewer::buildSyncObjects()
 {
     auto semaphoreInfo = vkInits::semaphoreCreateInfo();
-    auto fenceInfo = vkInits::fenceCreateInfo();
+    auto fenceInfo = vkInits::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++){
         vkCreateSemaphore(m_device->device, &semaphoreInfo, nullptr, &m_imageAvailableSPs[i]);
@@ -466,10 +466,10 @@ void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
         auto cameraBufferInfo = vkInits::bufferCreateInfo(sizeof(mvp_matrix), mvp_matrix::usageFlags());
-        new (&m_uniformBuffers[i].camera) buffer_t(m_device, &cameraBufferInfo, MEM_FLAG_HOST_VISIBLE);
+        m_uniformBuffers[i].camera.create(m_device, &cameraBufferInfo, MEM_FLAG_HOST_VISIBLE);
 
         auto lightsBufferInfo = vkInits::bufferCreateInfo(sizeof(light_data), light_data::usageFlags());
-        new (&m_uniformBuffers[i].lights) buffer_t(m_device, &lightsBufferInfo, MEM_FLAG_HOST_VISIBLE);
+        m_uniformBuffers[i].lights.create(m_device, &lightsBufferInfo, MEM_FLAG_HOST_VISIBLE);
     }
 }
 
@@ -491,18 +491,18 @@ void model_viewer::buildDescriptorSets()
         const auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i], &lightBufferInfo);
 
         const VkDescriptorImageInfo textureInfos[] = {
-            m_model.descriptor(texture_type::albedo),
-            m_model.descriptor(texture_type::normal),
-            m_model.descriptor(texture_type::rougness),
-            m_model.descriptor(texture_type::metallic),
-            m_model.descriptor(texture_type::ambient),
+            m_model.descriptor(pbr_material::albedo),
+            m_model.descriptor(pbr_material::normal),
+            m_model.descriptor(pbr_material::rougness),
+            m_model.descriptor(pbr_material::metallic),
+            m_model.descriptor(pbr_material::ambient)
         };
 
         const auto getWrite = [&, this](uint32_t binding, const VkDescriptorImageInfo *pInfo)
         {
-            auto set = vkInits::writeDescriptorSet(2);
-            set.dstBinding = binding;
-            set.descriptorType = texture2D::descriptorType();
+            auto set = vkInits::writeDescriptorSet(binding);
+            set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            set.descriptorCount = 1;
             set.dstSet = m_descriptorSets[i];
             set.pImageInfo = pInfo;
             return set;
@@ -589,10 +589,11 @@ void model_viewer::updateCamera()
 {
     m_mainCamera.update();
     const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    const auto mvp = m_mainCamera.calculateMvp(aspectRatio);
+    auto mvp = m_mainCamera.calculateMvp(aspectRatio);
 
-    for (size_t i = 0; i < m_imageCount; i++)
-        m_uniformBuffers[i].camera.fill(m_device->device, &mvp, sizeof(mvp));
+    for (size_t i = 0; i < m_imageCount; i++){
+        m_uniformBuffers[i].camera.fill(m_device->device, &mvp);
+    }
 }
 
 void model_viewer::updateLights()
@@ -618,7 +619,7 @@ void model_viewer::updateLights()
     }
 
     for (size_t i = 0; i < m_imageCount; i++)
-        m_uniformBuffers[i].lights.fill(m_device->device, &lights, sizeof(lights));
+        m_uniformBuffers[i].lights.fill(m_device->device, &lights);
 }
 
 void model_viewer::updateCmdBuffers()

@@ -3,33 +3,35 @@
 #include "vulkan_initialisers.hpp"
 #include "buffer.hpp"
 
-struct texture2D_create_info
-{
-    VkImageCreateFlags flags;
-    VkFormat format;
-    VkExtent2D extent;
-    VkSampleCountFlagBits samples;
-    const void *source;
-    VkImageAspectFlags aspectFlags;
-};
+constexpr uint8_t TEX2D_DEFAULT[] = {255, 255, 255, 255};
 
-class texture2D
+class texture
 {
 public:
-    texture2D() = default;
-    texture2D(const vulkan_device *device, VkCommandPool cmdPool, const texture2D_create_info *pInfo);
-
+    VkDescriptorImageInfo getDescriptor();
     void destroy(VkDevice device);
-
-    static VkDescriptorType descriptorType(){return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;}
-    VkDescriptorImageInfo descriptor();
 
     VkImageView view(){return m_view;}
 
-private:
-    VkImage m_image;
-    VkImageView m_view;
-    VkDeviceMemory m_memory;
-    VkExtent2D m_extent;
-    VkSampler m_sampler;
+protected:
+    void setImageLayout(VkCommandBuffer cmd,
+                        VkImageLayout newLayout,
+                        VkPipelineStageFlags srcStage,
+                        VkPipelineStageFlags dstStage);
+
+    VkImage         m_image;
+    VkImageView     m_view;
+    VkDeviceMemory  m_memory;
+    VkExtent2D      m_extent;
+    VkSampler       m_sampler;
+	uint32_t        m_mipLevels;
+	VkImageLayout   m_layout;
+};
+
+class texture2D : public texture
+{
+public:
+    texture2D();
+
+    void load(const vulkan_device *device, VkCommandPool cmdPool, VkFormat format, VkExtent2D extent, const void *src);
 };

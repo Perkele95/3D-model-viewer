@@ -1,16 +1,97 @@
 #include "texture2D.hpp"
 
-texture2D::texture2D(const vulkan_device *device, VkCommandPool cmdPool, const texture2D_create_info *pInfo)
+VkDescriptorImageInfo texture::getDescriptor()
 {
-    m_extent.width = pInfo->extent.width;
-    m_extent.height = pInfo->extent.height;
+    VkDescriptorImageInfo desc{};
+    desc.imageLayout = m_layout;
+    desc.imageView = m_view;
+    desc.sampler = m_sampler;
+    return desc;
+}
+
+void texture::destroy(VkDevice device)
+{
+    vkDestroySampler(device, m_sampler, nullptr);
+    vkFreeMemory(device, m_memory, nullptr);
+    vkDestroyImageView(device, m_view, nullptr);
+    vkDestroyImage(device, m_image, nullptr);
+}
+
+void texture::setImageLayout(VkCommandBuffer cmd,
+                             VkImageLayout newLayout,
+                             VkPipelineStageFlags srcStage,
+                             VkPipelineStageFlags dstStage)
+{
+    auto imageBarrier = vkInits::imageMemoryBarrier(m_image, m_layout, newLayout);
+
+    switch (m_layout){
+        case VK_IMAGE_LAYOUT_UNDEFINED:
+            imageBarrier.srcAccessMask = VK_ACCESS_NONE;
+            break;
+        case VK_IMAGE_LAYOUT_PREINITIALIZED:
+            imageBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            imageBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            imageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+        default: break;
+    }
+
+    switch (newLayout){
+        case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+            imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+            imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+            imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+            imageBarrier.dstAccessMask = imageBarrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            break;
+        case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+            if(imageBarrier.srcAccessMask == VK_ACCESS_NONE)
+                imageBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            break;
+        default: break;
+    }
+
+    vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr,
+                         0, nullptr, 1, &imageBarrier);
+    m_layout = newLayout;
+}
+
+texture2D::texture2D()
+{
+    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_mipLevels = 1;
+}
+
+void texture2D::load(const vulkan_device *device, VkCommandPool cmdPool, VkFormat format, VkExtent2D extent, const void *src)
+{
+    m_extent = extent;
 
     auto imageInfo = vkInits::imageCreateInfo();
     imageInfo.extent = {m_extent.width, m_extent.height, 1};
-    imageInfo.format = pInfo->format;
-    imageInfo.samples = pInfo->samples;
+    imageInfo.format = format;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.mipLevels = m_mipLevels;
     vkCreateImage(device->device, &imageInfo, nullptr, &m_image);
 
     VkMemoryRequirements memReqs{};
@@ -22,8 +103,8 @@ texture2D::texture2D(const vulkan_device *device, VkCommandPool cmdPool, const t
 
     auto viewInfo = vkInits::imageViewCreateInfo();
     viewInfo.image = m_image;
-    viewInfo.format = pInfo->format;
-    viewInfo.subresourceRange.aspectMask = pInfo->aspectFlags;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
 
     VkSamplerCreateInfo samplerInfo{};
@@ -41,70 +122,28 @@ texture2D::texture2D(const vulkan_device *device, VkCommandPool cmdPool, const t
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
 
-    const VkDeviceSize size = m_extent.width * m_extent.height;
+    const VkDeviceSize size = 4 * m_extent.width * m_extent.height;
 
     auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = buffer_t(device, &transferInfo, MEM_FLAG_HOST_VISIBLE);
+    auto transfer = buffer_t();
+    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
 
-    transfer.fill(device->device, pInfo->source, size);
+    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
 
-    VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
+    setImageLayout(command,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
 
-    auto cmdBufferAllocInfo = vkInits::commandBufferAllocateInfo(cmdPool, arraysize(imageCmds));
-    vkAllocateCommandBuffers(device->device, &cmdBufferAllocInfo, imageCmds);
+    const auto copyRegion = vkInits::bufferImageCopy(m_extent);
+    vkCmdCopyBufferToImage(command, transfer.data, m_image, m_layout, 1, &copyRegion);
 
-    auto cmdBufferBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    vkBeginCommandBuffer(imageCmds[0], &cmdBufferBeginInfo);
-    auto imageBarrier = vkInits::imageMemoryBarrier(m_image,
-                                                    VK_IMAGE_LAYOUT_UNDEFINED,
-                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                    VkAccessFlags(0),
-                                                    VK_ACCESS_TRANSFER_WRITE_BIT);
-    vkCmdPipelineBarrier(imageCmds[0], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[0]);
+    setImageLayout(command,
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-    vkBeginCommandBuffer(imageCmds[1], &cmdBufferBeginInfo);
-
-    auto cpyRegion = vkInits::bufferImageCopy(m_extent);
-    vkCmdCopyBufferToImage(imageCmds[1], transfer.data, m_image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &cpyRegion);
-
-    vkEndCommandBuffer(imageCmds[1]);
-
-    vkBeginCommandBuffer(imageCmds[2], &cmdBufferBeginInfo);
-    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(imageCmds[2], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                        nullptr, 0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[2]);
-
-    auto queueSubmitInfo = vkInits::submitInfo(imageCmds, arraysize(imageCmds));
-    vkQueueSubmit(device->graphics.queue, 1, &queueSubmitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(device->graphics.queue);
-
-    vkFreeCommandBuffers(device->device, cmdPool, uint32_t(arraysize(imageCmds)), imageCmds);
+    device->flushCommandBuffer(command, device->graphics.queue, cmdPool);
 
     transfer.destroy(device->device);
-}
-
-void texture2D::destroy(VkDevice device)
-{
-    vkDestroySampler(device, m_sampler, nullptr);
-    vkFreeMemory(device, m_memory, nullptr);
-    vkDestroyImageView(device, m_view, nullptr);
-    vkDestroyImage(device, m_image, nullptr);
-}
-
-VkDescriptorImageInfo texture2D::descriptor()
-{
-    VkDescriptorImageInfo desc;
-    desc.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    desc.imageView = m_view;
-    desc.sampler = m_sampler;
-    return desc;
 }

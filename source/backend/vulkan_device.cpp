@@ -130,6 +130,38 @@ VkMemoryAllocateInfo vulkan_device::getMemoryAllocInfo(VkMemoryRequirements memR
     return allocInfo;
 }
 
+VkCommandBuffer vulkan_device::createCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool, bool begin) const
+{
+    VkCommandBuffer command = VK_NULL_HANDLE;
+
+    auto allocateInfo = vkInits::commandBufferAllocateInfo(pool, 1);
+    allocateInfo.level = level;
+    vkAllocateCommandBuffers(device, &allocateInfo, &command);
+
+    if(begin){
+        const auto beginInfo = vkInits::commandBufferBeginInfo(0);
+        vkBeginCommandBuffer(command, &beginInfo);
+    }
+    return command;
+}
+
+void vulkan_device::flushCommandBuffer(VkCommandBuffer command, VkQueue queue, VkCommandPool pool, bool free) const
+{
+    vkEndCommandBuffer(command);
+
+    auto fenceInfo = vkInits::fenceCreateInfo(0);
+    VkFence fence = VK_NULL_HANDLE;
+    vkCreateFence(device, &fenceInfo, nullptr, &fence);
+
+    auto submitInfo = vkInits::submitInfo(&command, 1);
+    vkQueueSubmit(queue, 1, &submitInfo, fence);
+    vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(device, fence, nullptr);
+
+    if(free)
+        vkFreeCommandBuffers(device, pool, 1, &command);
+}
+
 void vulkan_device::pickPhysicalDevice()
 {
     uint32_t physDeviceCount = 0;

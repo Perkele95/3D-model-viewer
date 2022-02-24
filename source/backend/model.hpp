@@ -2,14 +2,14 @@
 
 #include "vulkan_initialisers.hpp"
 #include "vulkan_device.hpp"
-#include "texture2D.hpp"
 #include "buffer.hpp"
+#include "texture2D.hpp"
 
 struct alignas(16) transform3D
 {
     constexpr transform3D();
 
-    static VkPushConstantRange transform3D::pushConstant();
+    static VkPushConstantRange pushConstant();
 
     void bind(VkCommandBuffer commandBuffer, VkPipelineLayout layout) const;
 
@@ -31,19 +31,13 @@ static constexpr VkVertexInputAttributeDescription MeshAttributes[] = {
 
 using mesh_index = uint32_t;
 
-enum class texture_type
+enum class pbr_material
 {
     albedo,
     normal,
     rougness,
     metallic,
-    ambient,
-};
-
-struct texture_load_info
-{
-    const void *source;
-    VkExtent2D extent;
+    ambient
 };
 
 class model3D
@@ -53,28 +47,27 @@ public:
     model3D(const vulkan_device *device);
     void destroy();
 
-    VkDescriptorImageInfo descriptor(texture_type type){return m_textures[size_t(type)].descriptor();}
+    VkDescriptorImageInfo descriptor(pbr_material material){return m_textures[size_t(material)].getDescriptor();}
 
-    void load(VkCommandBuffer cmd, view<mesh_vertex> vertices);
-    void load(VkCommandBuffer cmd, view<mesh_index> indices);
-    void load(VkCommandPool cmdPool, texture_load_info (&textureInfos)[5]);
+    void load(VkCommandPool cmdPool, view<mesh_vertex> vertices, view<mesh_index> indices);
+
+    void load(pbr_material material, VkCommandPool cmdPool, VkExtent2D extent, const void* src)
+    {
+        const auto index = static_cast<size_t>(material);
+        m_textures[index].load(m_device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, extent, src);
+    }
 
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
 
-    void UVSphere(const vulkan_device *device, VkCommandPool cmdPool);
-    void Box(const vulkan_device *device, VkCommandPool cmdPool);
+    void UVSphere(VkCommandPool cmdPool);
+    void Box(VkCommandPool cmdPool);
 
     transform3D transform;
 
 private:
-    const vulkan_device *m_device;
-
-    buffer_t m_vertices;
-    buffer_t m_indices;
-    size_t m_indexCount;
-
-    texture2D m_textures[5];
+    const vulkan_device*    m_device;
+    buffer_t                m_vertices;
+    buffer_t                m_indices;
+    size_t                  m_indexCount;
+    texture2D               m_textures[5];
 };
-
-constexpr auto TINT_BRONZE = GetColour(0xb08d57FF);
-constexpr auto TINT_GOLD = GetColour(0xFFD700FF);

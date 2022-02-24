@@ -39,56 +39,14 @@ VkDescriptorImageInfo image_buffer::descriptor(VkSampler sampler)
     info.sampler = sampler;
     return info;
 }
-#if 0
-VkResult image_buffer::copyFromBuffer(const vulkan_device *device, VkCommandPool cmdPool, buffer_t *pSrc)
-{
-    const VkDeviceSize size = m_extent.width * m_extent.height;
-    if(size < pSrc->size)
-        return VK_ERROR_MEMORY_MAP_FAILED;
 
-    VkCommandBuffer imageCmds[] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
-
-    auto cmdBufferAllocInfo = vkInits::commandBufferAllocateInfo(cmdPool, arraysize(imageCmds));
-    vkAllocateCommandBuffers(device->device, &cmdBufferAllocInfo, imageCmds);
-
-    auto cmdBufferBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    vkBeginCommandBuffer(imageCmds[0], &cmdBufferBeginInfo);
-    auto imageBarrier = vkInits::imageMemoryBarrier(m_image,
-                                                    VK_IMAGE_LAYOUT_UNDEFINED,
-                                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                                    VkAccessFlags(0),
-                                                    VK_ACCESS_TRANSFER_WRITE_BIT);
-    vkCmdPipelineBarrier(imageCmds[0], VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr,
-                         0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[0]);
-
-    pSrc->copyToImage(imageCmds[1], this, m_extent);
-
-    vkBeginCommandBuffer(imageCmds[2], &cmdBufferBeginInfo);
-    imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    vkCmdPipelineBarrier(imageCmds[2], VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
-                        nullptr, 0, nullptr, 1, &imageBarrier);
-    vkEndCommandBuffer(imageCmds[2]);
-
-    auto queueSubmitInfo = vkInits::submitInfo(imageCmds, arraysize(imageCmds));
-    vkQueueSubmit(device->graphics.queue, 1, &queueSubmitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(device->graphics.queue);
-
-    vkFreeCommandBuffers(device->device, cmdPool, uint32_t(arraysize(imageCmds)), imageCmds);
-
-    return VK_SUCCESS;
-}
-#endif
-buffer_t::buffer_t(const vulkan_device *device, const VkBufferCreateInfo *pCreateInfo,
-                   VkMemoryPropertyFlags memFlags)
-                   : size(pCreateInfo->size)
+void buffer_t::create(const vulkan_device *device,
+                      const VkBufferCreateInfo *pCreateInfo,
+                      VkMemoryPropertyFlags memFlags,
+                      const void *src)
 {
     vkCreateBuffer(device->device, pCreateInfo, nullptr, &this->data);
+    this->size = pCreateInfo->size;
 
     VkMemoryRequirements memReqs;
     vkGetBufferMemoryRequirements(device->device, this->data, &memReqs);
@@ -96,6 +54,9 @@ buffer_t::buffer_t(const vulkan_device *device, const VkBufferCreateInfo *pCreat
     auto allocInfo = device->getMemoryAllocInfo(memReqs, memFlags);
     vkAllocateMemory(device->device, &allocInfo, nullptr, &this->memory);
     vkBindBufferMemory(device->device, this->data, this->memory, 0);
+
+    if(src != nullptr)
+        fill(device->device, src);
 }
 
 void buffer_t::destroy(VkDevice device)
@@ -116,37 +77,16 @@ VkDescriptorBufferInfo buffer_t::descriptor(VkDeviceSize offset)
     return desc;
 }
 
-VkResult buffer_t::fill(VkDevice device, const void *src, size_t sz)
+void buffer_t::copy(VkCommandBuffer cmd, buffer_t *pDst)
+{
+    const auto copyRegion = vkInits::bufferCopy(this->size);
+    vkCmdCopyBuffer(cmd, this->data, pDst->data, 1, &copyRegion);
+}
+
+void buffer_t::fill(VkDevice device, const void *src)
 {
     void *mapped = nullptr;
-    const auto result = vkMapMemory(device, this->memory, 0, sz, 0, &mapped);
-    memcpy(mapped, src, sz);
+    vkMapMemory(device, this->memory, 0, this->size, 0, &mapped);
+    memcpy(mapped, src, this->size);
     vkUnmapMemory(device, this->memory);
-    return result;
-}
-
-void buffer_t::copyToBuffer(VkCommandBuffer cmd, buffer_t *pDst)
-{
-    auto cmdBegin = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    vkBeginCommandBuffer(cmd, &cmdBegin);
-
-    VkBufferCopy cpyRegion{};
-    cpyRegion.dstOffset = 0;
-    cpyRegion.srcOffset = 0;
-    cpyRegion.size = this->size;
-    vkCmdCopyBuffer(cmd, this->data, pDst->data, 1, &cpyRegion);
-
-    vkEndCommandBuffer(cmd);
-}
-
-void buffer_t::copyToImage(VkCommandBuffer cmd, image_buffer *pDst, VkExtent2D extent)
-{
-    auto cmdBegin = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    vkBeginCommandBuffer(cmd, &cmdBegin);
-
-    auto cpyRegion = vkInits::bufferImageCopy(extent);
-    vkCmdCopyBufferToImage(cmd, this->data, pDst->m_image,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &cpyRegion);
-
-    vkEndCommandBuffer(cmd);
 }

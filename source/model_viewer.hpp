@@ -39,7 +39,7 @@ private:
     void onWindowResize();
 
     void buildResources();
-    void loadTextures();
+    void loadModel();
     void buildSwapchainViews();
     void buildMsaa();
     void buildDepth();

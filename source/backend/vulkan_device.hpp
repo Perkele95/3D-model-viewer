@@ -40,8 +40,9 @@ public:
 
     VkFormat getDepthFormat() const;
     VkResult buildSwapchain(VkSwapchainKHR oldSwapchain, VkSwapchainKHR *pSwapchain) const;
-
     VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
+    VkCommandBuffer createCommandBuffer(VkCommandBufferLevel level, VkCommandPool pool, bool begin = true) const;
+    void flushCommandBuffer(VkCommandBuffer command, VkQueue queue, VkCommandPool pool, bool free = true) const;
 
     // ~Tools
 

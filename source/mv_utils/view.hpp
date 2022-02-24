@@ -33,11 +33,10 @@ struct view
     {
         return this->data[i];
     }
-    // TODO(arle): remove this method and use dyn_array::fill instead
-    void fill(const T &value)
+
+    size_t size() const
     {
-        for(size_t i = 0; i < this->count; i++)
-            this->data[i] = value;
+        return sizeof(T) * count;
     }
 
     T *data;

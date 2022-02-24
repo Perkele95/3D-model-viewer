@@ -193,8 +193,14 @@ namespace vkInits
         return copyRegion;
     }
 
-    INIT_API imageMemoryBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout,
-                                VkAccessFlags srcAccess, VkAccessFlags dstAccess)
+    INIT_API bufferCopy(VkDeviceSize size)
+    {
+        VkBufferCopy bufferCopy{};
+        bufferCopy.size = size;
+        return bufferCopy;
+    }
+
+    INIT_API imageMemoryBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
     {
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -208,8 +214,8 @@ namespace vkInits
         barrier.subresourceRange.layerCount = 1;
         barrier.oldLayout = oldLayout;
         barrier.newLayout = newLayout;
-        barrier.srcAccessMask = srcAccess;
-        barrier.dstAccessMask = dstAccess;
+        barrier.srcAccessMask = VK_ACCESS_NONE;
+        barrier.dstAccessMask = VK_ACCESS_NONE;
         return barrier;
     }
 
@@ -229,11 +235,11 @@ namespace vkInits
         return semaphoreInfo;
     }
 
-    INIT_API fenceCreateInfo()
+    INIT_API fenceCreateInfo(VkFenceCreateFlags flags)
     {
         VkFenceCreateInfo fenceInfo{};
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        fenceInfo.flags = flags;// VK_FENCE_CREATE_SIGNALED_BIT;
         return fenceInfo;
     }
 
