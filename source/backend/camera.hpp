@@ -5,40 +5,7 @@
 
 struct alignas(16) mvp_matrix
 {
-    static VkDescriptorPoolSize poolSize(size_t count)
-    {
-        VkDescriptorPoolSize poolSize{};
-        poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSize.descriptorCount = uint32_t(count);
-        return poolSize;
-    }
-
-    static VkDescriptorSetLayoutBinding binding()
-    {
-        VkDescriptorSetLayoutBinding setBinding{};
-        setBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        setBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        setBinding.descriptorCount = uint32_t(1);
-        setBinding.binding = 0;
-        return setBinding;
-    }
-
-    static VkWriteDescriptorSet descriptorWrite(VkDescriptorSet dstSet, const VkDescriptorBufferInfo *pInfo)
-    {
-        VkWriteDescriptorSet set{};
-        set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        set.dstBinding = 0;
-        set.descriptorCount = uint32_t(1);
-        set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        set.dstSet = dstSet;
-        set.pBufferInfo = pInfo;
-        return set;
-    }
-
-    static VkBufferUsageFlags usageFlags()
-    {
-        return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    }
+    static VkBufferUsageFlags usageFlags() { return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; }
 
     mat4x4 view;
     mat4x4 proj;
@@ -105,15 +72,8 @@ public:
 
     void update()
     {
-        if(m_pitch > PITCH_CLAMP)
-            m_pitch = PITCH_CLAMP;
-        else if(m_pitch < -PITCH_CLAMP)
-            m_pitch = -PITCH_CLAMP;
-
-        if(m_yaw > YAW_MOD)
-            m_yaw = 0.0f;
-        else if(m_yaw < 0.0f)
-            m_yaw = YAW_MOD;
+        m_pitch = clamp(m_pitch, -PITCH_CLAMP, PITCH_CLAMP);
+        m_yaw = clamp(m_yaw, -YAW_MOD, YAW_MOD);
 
         const auto yawCosine = std::cos(m_yaw);
         const auto yawSine = std::sin(m_yaw);

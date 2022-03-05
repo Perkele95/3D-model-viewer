@@ -9,7 +9,7 @@
 #include "backend/shader.hpp"
 #include "backend/camera.hpp"
 #include "backend/lights.hpp"
-#include "backend/model.hpp"
+#include "backend/model3D.hpp"
 
 #include "mv_utils/mat4.hpp"
 
@@ -46,9 +46,8 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
-    void buildDescriptorPool();
     void buildUniformBuffers();
-    void buildDescriptorSets();
+    void buildDescriptors(const pbr_material* pMaterial);
     void buildPipeline();
 
     void updateCamera();

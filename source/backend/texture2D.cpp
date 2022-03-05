@@ -1,13 +1,7 @@
 #include "texture2D.hpp"
 
-VkDescriptorImageInfo texture::getDescriptor()
-{
-    VkDescriptorImageInfo desc{};
-    desc.imageLayout = m_layout;
-    desc.imageView = m_view;
-    desc.sampler = m_sampler;
-    return desc;
-}
+#define STB_IMAGE_IMPLEMENTATION
+#include "../../vendor/stb/stb_image.h"
 
 void texture::destroy(VkDevice device)
 {
@@ -75,13 +69,39 @@ void texture::setImageLayout(VkCommandBuffer cmd,
     m_layout = newLayout;
 }
 
+void texture::updateDescriptor()
+{
+    descriptor.imageLayout = m_layout;
+    descriptor.imageView = m_view;
+    descriptor.sampler = m_sampler;
+}
+
 texture2D::texture2D()
 {
+    descriptor = {};
     m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     m_mipLevels = 1;
 }
 
-void texture2D::load(const vulkan_device *device, VkCommandPool cmdPool, VkFormat format, VkExtent2D extent, const void *src)
+constexpr size_t GetSizeFactor(VkFormat format)
+{
+    switch (format) {
+        case VK_FORMAT_R8G8B8A8_SRGB:
+        case VK_FORMAT_R8G8B8A8_UNORM:
+            return 4;
+        case VK_FORMAT_R8_SRGB:
+        case VK_FORMAT_R8_UNORM:
+            return 1;
+        default: break;
+    }
+    return 1;
+}
+
+void texture2D::loadFromMemory(const vulkan_device *device,
+                               VkCommandPool cmdPool,
+                               VkFormat format,
+                               VkExtent2D extent,
+                               const void *src)
 {
     m_extent = extent;
 
@@ -122,7 +142,7 @@ void texture2D::load(const vulkan_device *device, VkCommandPool cmdPool, VkForma
     samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
 
-    const VkDeviceSize size = 4 * m_extent.width * m_extent.height;
+    const VkDeviceSize size = GetSizeFactor(format) * m_extent.width * m_extent.height;
 
     auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
     auto transfer = buffer_t();
@@ -146,4 +166,21 @@ void texture2D::load(const vulkan_device *device, VkCommandPool cmdPool, VkForma
     device->flushCommandBuffer(command, device->graphics.queue, cmdPool);
 
     transfer.destroy(device->device);
+
+    updateDescriptor();
+}
+
+void texture2D::loadFromFile(const vulkan_device* device, VkCommandPool cmdPool, const char* filepath)
+{
+    int x, y, channels;
+    auto pixels = stbi_load(filepath, &x, &y, &channels, STBI_rgb_alpha);
+
+    const VkExtent2D extent = { uint32_t(x), uint32_t(y) };
+
+    if (pixels != nullptr) {
+        loadFromMemory(device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, extent, pixels);
+    }
+    else {
+        loadFromMemory(device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, { 1, 1 }, TEX2D_DEFAULT);
+    }
 }

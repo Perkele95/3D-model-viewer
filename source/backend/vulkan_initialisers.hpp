@@ -54,22 +54,46 @@ namespace vkInits
         return info;
     }
 
-    INIT_API descriptorPoolCreateInfo()
+    INIT_API descriptorPoolCreateInfo(view<const VkDescriptorPoolSize> poolSizes, size_t maxSets)
     {
         VkDescriptorPoolCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        info.pPoolSizes = poolSizes.data;
+        info.poolSizeCount = uint32_t(poolSizes.count);
+        info.maxSets = uint32_t(maxSets);
         return info;
     }
 
-    INIT_API descriptorSetAllocateInfo(VkDescriptorPool pool)
+    INIT_API descriptorSetLayoutCreateInfo(view<const VkDescriptorSetLayoutBinding> bindings)
+    {
+        VkDescriptorSetLayoutCreateInfo layoutInfo{};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layoutInfo.pBindings = bindings.data;
+        layoutInfo.bindingCount = uint32_t(bindings.count);
+        return layoutInfo;
+    }
+
+    INIT_API descriptorSetAllocateInfo(VkDescriptorPool pool, view<VkDescriptorSetLayout> layouts)
     {
         VkDescriptorSetAllocateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         info.descriptorPool = pool;
+        info.descriptorSetCount = uint32_t(layouts.count);
+        info.pSetLayouts = layouts.data;
         return info;
     }
 
-    INIT_API descriptorSetLayoutBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stageFlags)
+    INIT_API descriptorPoolSize(VkDescriptorType type, size_t count)
+    {
+        VkDescriptorPoolSize poolSize{};
+        poolSize.type = type;
+        poolSize.descriptorCount = uint32_t(count);
+        return poolSize;
+    }
+
+    INIT_API descriptorSetLayoutBinding(uint32_t binding,
+                                        VkDescriptorType type,
+                                        VkShaderStageFlags stageFlags)
     {
         VkDescriptorSetLayoutBinding layoutBinding = {};
         layoutBinding.binding = binding;
@@ -78,6 +102,36 @@ namespace vkInits
         layoutBinding.stageFlags = stageFlags;
         layoutBinding.pImmutableSamplers = nullptr;
         return layoutBinding;
+    }
+
+    INIT_API writeDescriptorSet(uint32_t binding,
+                                VkDescriptorType type,
+                                VkDescriptorSet dstSet,
+                                const VkDescriptorBufferInfo *pBufferInfo)
+    {
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstBinding = binding;
+        write.descriptorCount = 1;
+        write.descriptorType = type;
+        write.dstSet = dstSet;
+        write.pBufferInfo = pBufferInfo;
+        return write;
+    }
+
+    INIT_API writeDescriptorSet(uint32_t binding,
+                                VkDescriptorType type,
+                                VkDescriptorSet dstSet,
+                                const VkDescriptorImageInfo *pImageInfo)
+    {
+        VkWriteDescriptorSet write{};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstBinding = binding;
+        write.descriptorCount = 1;
+        write.descriptorType = type;
+        write.dstSet = dstSet;
+        write.pImageInfo = pImageInfo;
+        return write;
     }
 
     INIT_API attachmentDescription(VkFormat format)
@@ -356,14 +410,6 @@ namespace vkInits
         colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
         return colorBlendAttachment;
-    }
-
-    INIT_API writeDescriptorSet(uint32_t dstBinding)
-    {
-        VkWriteDescriptorSet set{};
-        set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        set.dstBinding = dstBinding;
-        return set;
     }
 }
 

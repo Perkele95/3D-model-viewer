@@ -44,29 +44,18 @@ text_overlay::text_overlay(const text_overlay_create_info *pInfo)
 
     prepareFontTexture();
 
-    const VkDescriptorPoolSize samplerImageSize = {
-        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, uint32_t(m_imageCount)
+    const VkDescriptorPoolSize poolSizes[] = {
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_imageCount)
     };
 
-    const VkDescriptorPoolSize poolSizes[] = {samplerImageSize};
-    const uint32_t maxSets = poolSizes[0].descriptorCount;
+    const auto poolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, m_imageCount);
+    auto result = vkCreateDescriptorPool(m_device->device, &poolInfo, nullptr, &m_descriptorPool);
 
-    VkDescriptorPoolCreateInfo descPoolInfo{};
-    descPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    descPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
-    descPoolInfo.pPoolSizes = poolSizes;
-    descPoolInfo.maxSets = maxSets;
-    auto result = vkCreateDescriptorPool(m_device->device, &descPoolInfo, nullptr, &m_descriptorPool);
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
 
-    const auto samplerBinding = vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                                                    VK_SHADER_STAGE_FRAGMENT_BIT);
-
-    const VkDescriptorSetLayoutBinding bindings[] = {samplerBinding};
-
-    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
-    setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    setLayoutInfo.pBindings = bindings;
-    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
+    const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
     result = vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_setLayout);
 
     prepareDescriptorSets();
@@ -306,16 +295,16 @@ void text_overlay::prepareRenderpass()
 
 void text_overlay::prepareFontTexture()
 {
-    uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
+    static uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
     STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
     new (&m_fontTexture) texture2D();
 
-    m_fontTexture.load(m_device,
-                       m_cmdPool,
-                       VK_FORMAT_R8_UNORM,
-                       {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT},
-                       fontpixels);
+    m_fontTexture.loadFromMemory(m_device,
+                                 m_cmdPool,
+                                 VK_FORMAT_R8_UNORM,
+                                 {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT},
+                                 fontpixels);
 }
 
 void text_overlay::prepareDescriptorSets()
@@ -323,19 +312,15 @@ void text_overlay::prepareDescriptorSets()
     auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
     layouts.fill(m_setLayout);
 
-    auto descriptorSetAllocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool);
-    descriptorSetAllocInfo.descriptorSetCount = uint32_t(m_imageCount);
-    descriptorSetAllocInfo.pSetLayouts = layouts.data();
-    vkAllocateDescriptorSets(m_device->device, &descriptorSetAllocInfo, m_descriptorSets);
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
+    vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
+    const auto samplerImageDesc = m_fontTexture.descriptor;
     for(size_t i = 0; i < m_imageCount; i++){
-        const auto samplerImageDesc = m_fontTexture.getDescriptor();
-
-        auto samplerImageWrite = vkInits::writeDescriptorSet(0);
-        samplerImageWrite.dstSet = m_descriptorSets[i];
-        samplerImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        samplerImageWrite.descriptorCount = 1;
-        samplerImageWrite.pImageInfo = &samplerImageDesc;
+        const auto samplerImageWrite = vkInits::writeDescriptorSet(0,
+                                                                   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                                                   m_descriptorSets[i],
+                                                                   &samplerImageDesc);
         vkUpdateDescriptorSets(m_device->device, 1, &samplerImageWrite, 0, nullptr);
     }
 }

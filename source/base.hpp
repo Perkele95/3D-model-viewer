@@ -29,7 +29,7 @@ constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024U
 constexpr uint32_t BIT(uint32_t value){return 1 << value;}
 
 template<typename T>
-inline T clamp(T value, T min, T max)
+inline constexpr T clamp(T value, T min, T max)
 {
     const T result = value < min ? min : value;
     return result > max ? max : result;

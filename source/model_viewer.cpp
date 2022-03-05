@@ -1,8 +1,5 @@
 #include "model_viewer.hpp"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "../vendor/stb/stb_image.h"
-
 #if defined(DEBUG)
 static const bool C_VALIDATION = true;
 #else
@@ -109,7 +106,7 @@ void model_viewer::testProc(plt::device d, float dt)
         m_mainCamera.move(camera::direction::left, dt);
     else if(plt::IsKeyDown(plt::key_code::right))
         m_mainCamera.move(camera::direction::right, dt);
-
+   
     updateCamera();
 }
 
@@ -120,8 +117,7 @@ void model_viewer::run(plt::device d, float dt)
 
     testProc(d, dt);
 
-    vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame],
-                    VK_TRUE, UINT64_MAX);
+    vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex = 0;
     VkResult result = vkAcquireNextImageKHR(m_device->device, m_swapchain, UINT64_MAX,
@@ -181,7 +177,7 @@ void model_viewer::run(plt::device d, float dt)
 
 void model_viewer::onWindowResize()
 {
-    vkDeviceWaitIdle(m_device->device);
+    vkDeviceWaitIdle(m_device->device);// TODO(arle): replace with faster sync
 
     m_device->refresh();
 
@@ -251,15 +247,9 @@ void model_viewer::buildResources()
     buildRenderPass();
     buildFramebuffers();
     buildSyncObjects();
-    buildDescriptorPool();
-
     buildUniformBuffers();
 
-    new (&m_model) model3D(m_device);
-
     loadModel();
-
-    buildDescriptorSets();
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
@@ -276,31 +266,30 @@ void model_viewer::buildResources()
     updateCmdBuffers();
 }
 
+struct image_data
+{
+    VkExtent2D extent;
+    const void* src;
+};
+
 void model_viewer::loadModel()
 {
-    m_model.UVSphere(m_cmdPool);
-    // TODO(arle): simple package format
-    constexpr const char* paths[] = {
-        "assets/materials/patterned-bw-vinyl-bl/albedo.png",
-        "assets/materials/patterned-bw-vinyl-bl/normal.png",
-        "assets/materials/patterned-bw-vinyl-bl/roughness.png",
-        "assets/materials/patterned-bw-vinyl-bl/metallic.png",
-        "assets/materials/patterned-bw-vinyl-bl/ao.png"
-    };
+    auto mesh = m_permanentStorage.push<mesh3D>(1);
+    mesh->loadSphere(m_device, m_cmdPool);
 
-    for(size_t i = 0; i < arraysize(paths); i++){
-        int x, y, channels;
-        auto pixels = stbi_load(paths[i], &x, &y, &channels, STBI_rgb_alpha);
+    auto material = m_permanentStorage.push<pbr_material>(1);
 
-        if(pixels != nullptr){
-            VkExtent2D imageExtent = {uint32_t(x), uint32_t(y)};
-            m_model.load(static_cast<pbr_material>(i), m_cmdPool, imageExtent, pixels);
-            stbi_image_free(pixels);
-        }
-        else{
-            m_model.load(static_cast<pbr_material>(i), m_cmdPool, {1, 1}, TEX2D_DEFAULT);
-        }
-    }
+    new (material) pbr_material();
+
+    material->albedo.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/albedo.png");
+    material->normal.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/normal.png");
+    material->roughness.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/roughness.png");
+    material->metallic.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/metallic.png");
+    material->ao.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/ao.png");
+
+    new (&m_model) model3D(m_device, mesh, material);
+
+    buildDescriptors(material);
 }
 
 void model_viewer::buildSwapchainViews()
@@ -434,34 +423,6 @@ void model_viewer::buildSyncObjects()
     }
 }
 
-void model_viewer::buildDescriptorPool()
-{
-    const VkDescriptorPoolSize poolSizes[] = {
-        mvp_matrix::poolSize(m_imageCount),
-        light_data::poolSize(m_imageCount)
-    };
-
-    auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo();
-    descriptorPoolInfo.pPoolSizes = poolSizes;
-    descriptorPoolInfo.poolSizeCount = uint32_t(arraysize(poolSizes));
-
-    for (size_t i = 0; i < arraysize(poolSizes); i++)
-        descriptorPoolInfo.maxSets += poolSizes[i].descriptorCount;
-
-    vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
-
-    const VkDescriptorSetLayoutBinding bindings[] = {
-        mvp_matrix::binding(),
-        light_data::binding()
-    };
-
-    VkDescriptorSetLayoutCreateInfo setLayoutInfo{};
-    setLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    setLayoutInfo.pBindings = bindings;
-    setLayoutInfo.bindingCount = uint32_t(arraysize(bindings));
-    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
-}
-
 void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
@@ -473,48 +434,52 @@ void model_viewer::buildUniformBuffers()
     }
 }
 
-void model_viewer::buildDescriptorSets()
+void model_viewer::buildDescriptors(const pbr_material *pMaterial)
 {
+    const VkDescriptorPoolSize poolSizes[] = {
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)
+    };
+    
+    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * m_imageCount);
+    vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
+
+    constexpr auto combinedStage = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, combinedStage),
+        vkInits::descriptorSetLayoutBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
+
+    const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
+    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
+
+    // Sets
+
     auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
     layouts.fill(m_descriptorSetLayout);
 
-    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool);
-    allocInfo.descriptorSetCount = uint32_t(m_imageCount);
-    allocInfo.pSetLayouts = layouts.data();
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
-    for (size_t i = 0; i < m_imageCount; i++){
+    for (size_t i = 0; i < m_imageCount; i++) {
         const auto cameraBufferInfo = m_uniformBuffers[i].camera.descriptor(0);
-        const auto cameraWrite = mvp_matrix::descriptorWrite(m_descriptorSets[i], &cameraBufferInfo);
-
         const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
-        const auto lightWrite = light_data::descriptorWrite(m_descriptorSets[i], &lightBufferInfo);
 
-        const VkDescriptorImageInfo textureInfos[] = {
-            m_model.descriptor(pbr_material::albedo),
-            m_model.descriptor(pbr_material::normal),
-            m_model.descriptor(pbr_material::rougness),
-            m_model.descriptor(pbr_material::metallic),
-            m_model.descriptor(pbr_material::ambient)
-        };
-
-        const auto getWrite = [&, this](uint32_t binding, const VkDescriptorImageInfo *pInfo)
-        {
-            auto set = vkInits::writeDescriptorSet(binding);
-            set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            set.descriptorCount = 1;
-            set.dstSet = m_descriptorSets[i];
-            set.pImageInfo = pInfo;
-            return set;
-        };
-
+        auto& setRef = m_descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            cameraWrite, lightWrite,
-            getWrite(2, &textureInfos[0]),
-            getWrite(3, &textureInfos[1]),
-            getWrite(4, &textureInfos[2]),
-            getWrite(5, &textureInfos[3]),
-            getWrite(6, &textureInfos[4])
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraBufferInfo),
+            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightBufferInfo),
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->ao.descriptor)
         };
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -533,8 +498,8 @@ void model_viewer::buildPipeline()
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(MeshAttributes));
-    vertexInputInfo.pVertexAttributeDescriptions = MeshAttributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(mesh3D::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = mesh3D::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewport = vkInits::viewportInfo(m_device->extent);
@@ -557,7 +522,7 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        transform3D::pushConstant()
+        model3D::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
