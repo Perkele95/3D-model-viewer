@@ -34,6 +34,8 @@ void mesh3D::load(const vulkan_device *device,
 
     vertexTransfer.destroy(device->device);
     indexTransfer.destroy(device->device);
+
+    m_indexCount = indices.count;
 }
 
 void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
@@ -116,7 +118,7 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
 
     load(device, cmdPool, vertices, indices);
 }
-
+// TODO(arle): UV coordinates
 void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
 {
     constexpr auto normalFront = vec3(0.0f, 0.0f, -1.0f);

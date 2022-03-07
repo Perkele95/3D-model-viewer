@@ -9,7 +9,7 @@ filter {"platforms:Win64"}
 project "model_viewer"
     kind "WindowedApp"
     language "C++"
-    cppdialect "C++20"
+    cppdialect "c++20"
     targetdir "bin/%{cfg.buildcfg}"
 
     includedirs{
@@ -29,13 +29,16 @@ project "model_viewer"
 
     files {
         "source/**.hpp",
-        "source/**.cpp"
+        "source/**.cpp",
+        "source/**.ixx"
     }
 
     filter "configurations:Debug"
         defines {"DEBUG"}
         symbols "On"
         optimize "Off"
+        intrinsics "On"
+        debugdir "bin/Debug"
 
     filter "configurations:Release"
         symbols "Off"
