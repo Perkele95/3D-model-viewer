@@ -31,7 +31,7 @@ struct queue_data
 class vulkan_device
 {
 public:
-    vulkan_device(plt::device d, bool validation, bool vSync);
+    vulkan_device(pltf::logical_device device, bool validation, bool vSync);
     ~vulkan_device();
 
     void refresh();

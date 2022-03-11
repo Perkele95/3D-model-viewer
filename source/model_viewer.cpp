@@ -6,13 +6,13 @@ static const bool C_VALIDATION = true;
 static const bool C_VALIDATION = false;
 #endif
 
-model_viewer::model_viewer(plt::device d)
+model_viewer::model_viewer(pltf::logical_device device)
 : m_permanentStorage(MegaBytes(64)), m_currentFrame(0)
 {
     m_device = m_permanentStorage.push<vulkan_device>(1);
     m_overlay = m_permanentStorage.push<text_overlay>(1);
 
-    new (m_device) vulkan_device(d, C_VALIDATION, false);
+    new (m_device) vulkan_device(device, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
     new (&m_mainCamera) camera();
@@ -85,37 +85,12 @@ model_viewer::~model_viewer()
     m_device->~vulkan_device();
 }
 
-void model_viewer::testProc(plt::device d, float dt)
-{
-    if(plt::IsKeyDown(plt::key_code::w))
-        m_mainCamera.rotate(camera::direction::up, dt);
-    else if(plt::IsKeyDown(plt::key_code::s))
-        m_mainCamera.rotate(camera::direction::down, dt);
-
-    if(plt::IsKeyDown(plt::key_code::a))
-        m_mainCamera.rotate(camera::direction::left, dt);
-    else if(plt::IsKeyDown(plt::key_code::d))
-        m_mainCamera.rotate(camera::direction::right, dt);
-
-    if(plt::IsKeyDown(plt::key_code::up))
-        m_mainCamera.move(camera::direction::forward, dt);
-    else if(plt::IsKeyDown(plt::key_code::down))
-        m_mainCamera.move(camera::direction::backward, dt);
-
-    if(plt::IsKeyDown(plt::key_code::left))
-        m_mainCamera.move(camera::direction::left, dt);
-    else if(plt::IsKeyDown(plt::key_code::right))
-        m_mainCamera.move(camera::direction::right, dt);
-   
-    updateCamera();
-}
-
-void model_viewer::run(plt::device d, float dt)
+void model_viewer::swapBuffers(pltf::logical_device device)
 {
     if(m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
-    testProc(d, dt);
+    updateCamera(pltf::GetTimestep(device));
 
     vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -168,11 +143,30 @@ void model_viewer::run(plt::device d, float dt)
     result = vkQueuePresentKHR(m_device->present.queue, &presentInfo);
 
     const auto vulkanErrorResize = result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR;
-    const auto windowErrorResize = plt::GetFlag(d, plt::core_flag::window_resized);
-    if(vulkanErrorResize || windowErrorResize)
+    if(vulkanErrorResize || pltf::HasResized())
         onWindowResize();
 
     m_currentFrame = (m_currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
+}
+
+void model_viewer::onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
+{
+    if(mod & pltf::MODIFIER_ALT){
+        if(key == pltf::key_code::F4)
+            pltf::WindowClose();
+
+        if(key == pltf::key_code::F){
+            if(pltf::IsFullscreen())
+                pltf::WindowSetMinimised(device);
+            else
+                pltf::WindowSetFullscreen(device);
+        }
+    }
+}
+
+void model_viewer::onMouseButtonEvent(pltf::logical_device device, pltf::mouse_button button)
+{
+    return;
 }
 
 void model_viewer::onWindowResize()
@@ -254,8 +248,8 @@ void model_viewer::buildResources()
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
 
-    new (&m_shaders[0]) shader_object("shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    new (&m_shaders[1]) shader_object("shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    new (&m_shaders[0]) shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    new (&m_shaders[1]) shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     for (size_t i = 0; i < arraysize(m_shaders); i++)
         m_shaders[i].load(m_device->device);
@@ -266,12 +260,6 @@ void model_viewer::buildResources()
     updateCmdBuffers();
 }
 
-struct image_data
-{
-    VkExtent2D extent;
-    const void* src;
-};
-
 void model_viewer::loadModel()
 {
     auto mesh = m_permanentStorage.push<mesh3D>(1);
@@ -281,11 +269,11 @@ void model_viewer::loadModel()
 
     new (material) pbr_material();
 
-    material->albedo.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/albedo.png");
-    material->normal.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/normal.png");
-    material->roughness.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/roughness.png");
-    material->metallic.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/metallic.png");
-    material->ao.loadFromFile(m_device, m_cmdPool, "assets/materials/patterned-bw-vinyl-bl/ao.png");
+    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
+    material->normal.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
+    material->roughness.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
+    material->metallic.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");
+    material->ao.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png");
 
     new (&m_model) model3D(m_device, mesh, material);
 
@@ -441,7 +429,7 @@ void model_viewer::buildDescriptors(const pbr_material *pMaterial)
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)
     };
-    
+
     const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * m_imageCount);
     vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
 
@@ -550,8 +538,28 @@ void model_viewer::buildPipeline()
                               &pipelineInfo, nullptr, &m_pipeline);
 }
 
-void model_viewer::updateCamera()
+void model_viewer::updateCamera(float dt)
 {
+    if(pltf::IsKeyDown(pltf::key_code::W))
+        m_mainCamera.rotate(camera::direction::up, dt);
+    else if(pltf::IsKeyDown(pltf::key_code::S))
+        m_mainCamera.rotate(camera::direction::down, dt);
+
+    if(pltf::IsKeyDown(pltf::key_code::A))
+        m_mainCamera.rotate(camera::direction::left, dt);
+    else if(pltf::IsKeyDown(pltf::key_code::D))
+        m_mainCamera.rotate(camera::direction::right, dt);
+
+    if(pltf::IsKeyDown(pltf::key_code::Up))
+        m_mainCamera.move(camera::direction::forward, dt);
+    else if(pltf::IsKeyDown(pltf::key_code::Down))
+        m_mainCamera.move(camera::direction::backward, dt);
+
+    if(pltf::IsKeyDown(pltf::key_code::Left))
+        m_mainCamera.move(camera::direction::left, dt);
+    else if(pltf::IsKeyDown(pltf::key_code::Right))
+        m_mainCamera.move(camera::direction::right, dt);
+
     m_mainCamera.update();
     const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
     auto mvp = m_mainCamera.calculateMvp(aspectRatio);

@@ -2,136 +2,254 @@
 
 #include <stdint.h>
 
-#include "../mv_utils/vec.hpp"
+const auto SCREEN_SIZE_X = 1920;
+const auto SCREEN_SIZE_Y = 1080;
+const auto VIEWPORT_SIZE_X = 1280;
+const auto VIEWPORT_SIZE_Y = 720;
 
-// Vulkan specific forward declarations
-// For surface creation
+namespace pltf
+{
+	struct logical_device_T;
+	using logical_device = logical_device_T*;
+	using timestep_type = float;
+}
+
+// User defined custom entrypoint
+// Pltf uses WinMain on win32 instead of int main
+
+int EntryPoint(pltf::logical_device device);
+
+namespace pltf
+{
+    enum class key_code : uint16_t
+	{
+		Invalid = 0,
+
+		// From glfw3.h
+		Space = 32,
+		Apostrophe = 39, /* ' */
+		Comma = 44, /* , */
+		Minus = 45, /* - */
+		Period = 46, /* . */
+		Slash = 47, /* / */
+
+		D0 = 48, /* 0 */
+		D1 = 49, /* 1 */
+		D2 = 50, /* 2 */
+		D3 = 51, /* 3 */
+		D4 = 52, /* 4 */
+		D5 = 53, /* 5 */
+		D6 = 54, /* 6 */
+		D7 = 55, /* 7 */
+		D8 = 56, /* 8 */
+		D9 = 57, /* 9 */
+
+		Semicolon = 59, /* ; */
+		Equal = 61, /* = */
+
+		A = 65,
+		B = 66,
+		C = 67,
+		D = 68,
+		E = 69,
+		F = 70,
+		G = 71,
+		H = 72,
+		I = 73,
+		J = 74,
+		K = 75,
+		L = 76,
+		M = 77,
+		N = 78,
+		O = 79,
+		P = 80,
+		Q = 81,
+		R = 82,
+		S = 83,
+		T = 84,
+		U = 85,
+		V = 86,
+		W = 87,
+		X = 88,
+		Y = 89,
+		Z = 90,
+
+		LeftBracket = 91,  /* [ */
+		Backslash = 92,  /* \ */
+		RightBracket = 93,  /* ] */
+		GraveAccent = 96,  /* ` */
+
+		World1 = 161, /* non-US #1 */
+		World2 = 162, /* non-US #2 */
+
+		/* Function keys */
+		Escape = 256,
+		Enter = 257,
+		Tab = 258,
+		Backspace = 259,
+		Insert = 260,
+		Delete = 261,
+		Right = 262,
+		Left = 263,
+		Down = 264,
+		Up = 265,
+		PageUp = 266,
+		PageDown = 267,
+		Home = 268,
+		End = 269,
+		CapsLock = 280,
+		ScrollLock = 281,
+		NumLock = 282,
+		PrintScreen = 283,
+		Pause = 284,
+		F1 = 290,
+		F2 = 291,
+		F3 = 292,
+		F4 = 293,
+		F5 = 294,
+		F6 = 295,
+		F7 = 296,
+		F8 = 297,
+		F9 = 298,
+		F10 = 299,
+		F11 = 300,
+		F12 = 301,
+		F13 = 302,
+		F14 = 303,
+		F15 = 304,
+		F16 = 305,
+		F17 = 306,
+		F18 = 307,
+		F19 = 308,
+		F20 = 309,
+		F21 = 310,
+		F22 = 311,
+		F23 = 312,
+		F24 = 313,
+		F25 = 314,
+
+		/* Keypad */
+		KP0 = 320,
+		KP1 = 321,
+		KP2 = 322,
+		KP3 = 323,
+		KP4 = 324,
+		KP5 = 325,
+		KP6 = 326,
+		KP7 = 327,
+		KP8 = 328,
+		KP9 = 329,
+		KPDecimal = 330,
+		KPDivide = 331,
+		KPMultiply = 332,
+		KPSubtract = 333,
+		KPAdd = 334,
+		KPEnter = 335,
+		KPEqual = 336,
+
+		LeftShift = 340,
+		LeftControl = 341,
+		LeftAlt = 342,
+		LeftSuper = 343,
+		RightShift = 344,
+		RightControl = 345,
+		RightAlt = 346,
+		RightSuper = 347,
+		Menu = 348
+	};
+
+	enum class mouse_button
+	{
+		lmb,
+		rmb,
+		mmb
+	};
+
+	enum MODIFIER_BITS
+	{
+		MODIFIER_ALT = 		1,
+		MODIFIER_REPEAT = 	1 << 1,
+		MODIFIER_EXTENTED = 1 << 2
+	};
+
+	using modifier = uint32_t;
+
+	using key_event_callback = void(*)(logical_device, key_code, modifier);
+	using mouse_move_callback = void(*)(logical_device);// TODO(arle): UNFINISHED
+	using mouse_button_callback = void(*)(logical_device, mouse_button);
+
+    // Main
+
+	bool WindowCreate(logical_device device, const char *title);
+	void WindowSetFullscreen(logical_device device);
+	void WindowSetMinimised(logical_device device);
+	void WindowClose();
+
+	void DeviceSetHandle(logical_device device, void *handle);
+	void *DeviceGetHandle(logical_device device);
+
+    // Flag query
+
+    bool IsRunning();
+    bool IsFullscreen();
+    bool HasResized();
+
+	// Timestep
+
+	timestep_type GetTimestep(logical_device device);
+}
 
 struct VkInstance_T;
 struct VkSurfaceKHR_T;
 using VkInstance = VkInstance_T*;
 using VkSurfaceKHR = VkSurfaceKHR_T*;
 
-namespace plt
+namespace pltf
 {
-    enum class core_flag
-    {
-        running = (1 << 0),
-        window_resized = (1 << 1),
-        window_fullscreen = (1 << 2),
-    };
+	// Vulkan surface
 
-    struct device_T;
-    using device = device_T*;
+	void SurfaceCreate(logical_device device, VkInstance instance, VkSurfaceKHR *pSurface);
 
-    extern const size_t DEVICE_SIZE;
+	// Events
 
-    constexpr auto SCREEN_SIZE = vec2(1920i32, 1080i32);
-    constexpr auto VIEWPORT_SIZE = vec2(1280i32, 720i32);
+	void EventsPoll(logical_device device);
+	void EventsSetKeyDownProc(logical_device device, key_event_callback proc);
+	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc);
+	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc);
 
-    // Window
+	// Input state
 
-    bool SpawnWindow(device d, const char *title);
-    void ToggleFullScreen(device d);
-    void Terminate(device d);
-
-    // Timestep/clock
-
-    float GetTimestep(device d);
-
-    // Vulkan surface
-
-    void CreateSurface(device d, VkInstance instance, VkSurfaceKHR *pSurface);
-
-    // Files
-
-    namespace filesystem
-    {
-        using path = const char*;
-        using handle = void*;
-
-        struct file
-        {
-            handle handle;
-            size_t size;
-        };
-
-        file read(path filePath);
-        bool write(path filePath, file &file);
-        bool close(file &file);
-        bool exists(path filePath);
-    }
-
-    // Input
-
-    using event_type = uint32_t;
-
-    void PollEvents(device d);
-    bool GetFlag(device d, core_flag flag);
-    void SetFlag(device d, core_flag flag);
-
-    enum class key_code : uint8_t
-    {
-        lmb = 0x01,
-        rmb = 0x02,
-        shift = 0x10,
-        ctrl = 0x11,
-        alt = 0x12,
-        num0 = 0x30,
-        num1 = 0x31,
-        num2 = 0x32,
-        num3 = 0x33,
-        num4 = 0x34,
-        num5 = 0x35,
-        num6 = 0x36,
-        num7 = 0x37,
-        num8 = 0x38,
-        num9 = 0x39,
-        a = 0x41,
-        d = 0x44,
-        s = 0x53,
-        w = 0x57,
-        left = 0x25,
-        up = 0x26,
-        right = 0x27,
-        down = 0x28,
-    };
-
-    bool IsKeyDown(key_code key);
-
-    enum class key_event
-    {
-        w = 1,
-        a = 1 << 1,
-        s = 1 << 2,
-        d = 1 << 3,
-        q = 1 << 4,
-        e = 1 << 5,
-        f = 1 << 6,
-        up = 1 << 7,
-        down = 1 << 8,
-        left = 1 << 9,
-        right = 1 << 10,
-        space = 1 << 11,
-        escape = 1 << 12,
-        control = 1 << 13,
-        shift = 1 << 14,
-        f4 = 1 << 15,
-    };
-
-    bool KeyEvent(device d, key_event e);
-
-    enum class mouse_event
-    {
-        move = 1,
-        lmb = 1 << 1,
-        rmb = 1 << 2,
-        mmb = 1 << 3,
-    };
-
-    bool MouseEvent(device d, mouse_event e);
+	bool IsKeyDown(key_code key);
+	void InputMousePosition(); //TODO(arle)
 }
 
-// Entrypoint with pre-initialised logical device
-// Defined by target application
-void EntryPoint(plt::device d);
+namespace io
+{
+    struct file;
+
+	struct file_map
+	{
+		void *data;
+		size_t size;
+	};
+
+	enum class cmd
+	{
+		read,
+		write,
+		rw_open,
+		rw_create
+	};
+
+	template<cmd command>
+	file *Open(const char *filename);
+
+	bool Close(file *f);
+	bool Read(file *f, size_t size, void *buffer);
+	bool Write(file *f, size_t size, const void *source);
+	size_t GetSize(file *f);
+	bool IsValid(file *f);
+
+	file_map Map(file *f);
+	bool Unmap(file_map &map);
+}

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../base.hpp"
-#include "vulkan\vulkan.h"
+#include <vulkan/vulkan.h>
 
 #define INIT_API constexpr auto [[nodiscard]]
 
@@ -148,12 +148,12 @@ namespace vkInits
         return attachmentDescription;
     }
 
-    INIT_API shaderModuleCreateInfo(const plt::filesystem::file *file)
+    INIT_API shaderModuleCreateInfo(const void *source, size_t size)
     {
         VkShaderModuleCreateInfo shaderModuleInfo{};
         shaderModuleInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        shaderModuleInfo.codeSize = file->size;
-        shaderModuleInfo.pCode = static_cast<const uint32_t*>(file->handle);
+        shaderModuleInfo.codeSize = size;
+        shaderModuleInfo.pCode = static_cast<const uint32_t*>(source);
         return shaderModuleInfo;
     }
 

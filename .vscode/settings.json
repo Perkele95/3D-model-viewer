@@ -28,6 +28,8 @@
         "xlocnum": "cpp",
         "system_error": "cpp",
         "new": "cpp",
-        "vcruntime_new.h": "c"
+        "vcruntime_new.h": "c",
+        "*.ixx": "cpp",
+        "span": "cpp"
     }
 }

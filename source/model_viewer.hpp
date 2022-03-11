@@ -17,14 +17,14 @@ constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
 struct uniform_buffer
 {
-    buffer_t camera;
-    buffer_t lights;
+    buffer_t camera;// TODO(arle): put into camera class
+    buffer_t lights;// TODO(arle): put into lights class
 };
 
 class model_viewer
 {
 public:
-    model_viewer(plt::device d);
+    model_viewer(pltf::logical_device device);
     ~model_viewer();
 
     model_viewer(const model_viewer &src) = delete;
@@ -32,10 +32,11 @@ public:
     model_viewer &operator=(const model_viewer &src) = delete;
     model_viewer &operator=(const model_viewer &&src) = delete;
 
-    void run(plt::device d, float dt);
+    void swapBuffers(pltf::logical_device device);
+    void onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod);
+    void onMouseButtonEvent(pltf::logical_device device, pltf::mouse_button button);
 
 private:
-    void testProc(plt::device d, float dt);
     void onWindowResize();
 
     void buildResources();
@@ -50,7 +51,7 @@ private:
     void buildDescriptors(const pbr_material* pMaterial);
     void buildPipeline();
 
-    void updateCamera();
+    void updateCamera(float dt);
     void updateLights();
     void updateCmdBuffers();
 

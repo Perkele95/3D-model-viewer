@@ -23,6 +23,10 @@
     #define vol_assert(expression)
 #endif
 
+// NOTE(arle): temporary, to be replaced
+#define INTERNAL_DIR "../../"
+#define MATERIALS_DIR "assets/materials/"
+
 constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
 constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL;}
 constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL * 1024ULL;}

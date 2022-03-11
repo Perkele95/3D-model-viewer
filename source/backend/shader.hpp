@@ -7,20 +7,28 @@ class shader_object
 {
 public:
     shader_object() = default;
-    shader_object(plt::filesystem::path path, VkShaderStageFlagBits stageFlag)
+    shader_object(const char *path, VkShaderStageFlagBits stageFlag)
     {
         m_module = VK_NULL_HANDLE;
         m_stage = stageFlag;
         m_path = path;
     }
 
-    VkResult load(VkDevice device)
+    bool load(VkDevice device)
     {
-        auto src = plt::filesystem::read(m_path);
-        const auto loadInfo = vkInits::shaderModuleCreateInfo(&src);
-        const auto result = vkCreateShaderModule(device, &loadInfo, nullptr, &m_module);
-        plt::filesystem::close(src);
-        return result;
+        auto file = io::Open<io::cmd::read>(m_path);
+
+        if(io::IsValid(file) == false)
+            return false;
+
+        auto map = io::Map(file);
+
+        const auto loadInfo = vkInits::shaderModuleCreateInfo(map.data, map.size);
+        vkCreateShaderModule(device, &loadInfo, nullptr, &m_module);
+
+        io::Unmap(map);
+        io::Close(file);
+        return true;
     }
 
     void destroy(VkDevice device)
@@ -37,5 +45,5 @@ public:
 private:
     VkShaderStageFlagBits m_stage;
     VkShaderModule m_module;
-    plt::filesystem::path m_path;
+    const char *m_path;
 };

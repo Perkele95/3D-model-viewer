@@ -1,25 +1,35 @@
 #include "base.hpp"
+#include "platform/platform.hpp"
 #include "model_viewer.hpp"
 
-void EntryPoint(plt::device d)
+void KeyEventDispatch(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
 {
-    plt::SpawnWindow(d, "3D model viewer");
+    auto handle = pltf::DeviceGetHandle(device);
+    auto object = reinterpret_cast<model_viewer*>(handle);
+    object->onKeyEvent(device, key, mod);
+}
 
-    auto app = model_viewer(d);
+void MouseEventDispatch(pltf::logical_device device, pltf::mouse_button button)
+{
+    auto handle = pltf::DeviceGetHandle(device);
+    auto object = reinterpret_cast<model_viewer*>(handle);
+    object->onMouseButtonEvent(device, button);
+}
 
-    float dt = 0.001f;
+int EntryPoint(pltf::logical_device device)
+{
+    pltf::WindowCreate(device, "3D model viewer");
 
-    while(plt::GetFlag(d, plt::core_flag::running)){
-        plt::PollEvents(d);
+    auto app = model_viewer(device);
 
-        if(plt::IsKeyDown(plt::key_code::alt)){
-            if(plt::KeyEvent(d, plt::key_event::f4))
-                plt::Terminate(d);
-            else if(plt::KeyEvent(d, plt::key_event::f))
-                plt::ToggleFullScreen(d);
-        }
+    pltf::DeviceSetHandle(device, &app);
+    pltf::EventsSetKeyDownProc(device, KeyEventDispatch);
+    pltf::EventsSetMouseDownProc(device, MouseEventDispatch);
 
-        app.run(d, dt);
-        dt = plt::GetTimestep(d);
+    while(pltf::IsRunning()){
+        pltf::EventsPoll(device);
+        app.swapBuffers(device);
     }
+
+    return 0;
 }

@@ -6,308 +6,457 @@
 #include <Windows.h>
 #include <vulkan/vulkan_win32.h>
 
-namespace plt
+namespace pltf
 {
-    static uint32_t *s_FlagsPtr = nullptr;
+	struct logical_device_T
+	{
+		HINSTANCE instance;
+		HWND window;
+		WINDOWPLACEMENT windowPlacement;
 
-    struct device_T
-    {
-        device_T(HINSTANCE hInstance)
-            : keyEventsDown(0), mouseEventsDown(0),
-            mouse(vec2(0i32)), mouseDelta(vec2(0i32)),
-            mousePrev(vec2(0i32)), mouseWheel(0)
-        {
-            instance = hInstance;
-            window = NULL;
-            flags = uint32_t(plt::core_flag::running);
-            windowPlacement = {sizeof(WINDOWPLACEMENT)};
+		LARGE_INTEGER counter;
+		LARGE_INTEGER counterFrequency;
+        timestep_type dt;
 
-            s_FlagsPtr = &flags;
+        key_event_callback keyEventCallback;
+        mouse_move_callback mouseMoveCallback;
+        mouse_button_callback mouseButtonCallback;
 
-            LARGE_INTEGER perfCountFrequencyResult{};
-            QueryPerformanceFrequency(&perfCountFrequencyResult);
-            perfCountFrequency = perfCountFrequencyResult.QuadPart;
+		void *callbackHandle;
+	};
 
-            LARGE_INTEGER counter{};
-            QueryPerformanceCounter(&counter);
-            perfCounter = counter.QuadPart;
-        }
+	static bool s_Running = false;
+	static bool s_WindowResized = false;
+	static bool s_WindowFullscreen = false;
 
-        ~device_T()
-        {
-            //
-        }
+	LRESULT CALLBACK MainWindowCallback(HWND window, UINT message,
+										WPARAM wParam, LPARAM lParam)
+	{
+		LRESULT result = 0;
+		switch (message) {
+			case WM_SIZE: s_WindowResized = true; break;
+			case WM_CLOSE:
+			case WM_DESTROY: s_Running = false; break;
+			default: result = DefWindowProc(window, message, wParam, lParam); break;
+		}
+		return result;
+	}
 
-        HINSTANCE instance;
-        HWND window;
-        WINDOWPLACEMENT windowPlacement;
-        int64_t perfCounter;
-        int64_t perfCountFrequency;
-        uint32_t flags;
+	inline void SetDefaultWindowStyle(HWND window)
+	{
+		SetWindowLong(window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
+		SetWindowPos(window, NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+					 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+	}
 
-        // Input
+	bool WindowCreate(logical_device device, const char* title)
+	{
+		WNDCLASSEXA windowClass{};
+		windowClass.cbSize = sizeof(WNDCLASSEXA);
+		windowClass.style = CS_HREDRAW | CS_VREDRAW;
+		windowClass.lpfnWndProc = MainWindowCallback;
+		windowClass.hInstance = device->instance;
+		windowClass.lpszClassName = "wnd_class";
+		const ATOM result = RegisterClassExA(&windowClass);
 
-        event_type keyEventsDown;
-        event_type mouseEventsDown;
-        int32_t mouseWheel;
-        vec2<int32_t> mouse, mousePrev, mouseDelta;
-    };
+		const auto viewportX = SCREEN_SIZE_X / 2 - VIEWPORT_SIZE_X / 2;
+		const auto viewportY = SCREEN_SIZE_Y / 2 - VIEWPORT_SIZE_Y / 2;
 
-    extern const size_t DEVICE_SIZE = sizeof(device_T);
+		if (result != 0) {
+			device->window = CreateWindowExA(0, windowClass.lpszClassName, title,
+											 WS_VISIBLE,
+											 viewportX, viewportY,
+											 VIEWPORT_SIZE_X, VIEWPORT_SIZE_Y,
+											 NULL, NULL, device->instance, NULL);
+			SetDefaultWindowStyle(device->window);
+		}
 
-    // Window
+		return false;
+	}
 
-    LRESULT CALLBACK MainWindowCallback(HWND window, UINT message,
-                                        WPARAM wParam, LPARAM lParam)
-    {
-        LRESULT result = 0;
-        switch(message){
-            case WM_SIZE: *s_FlagsPtr |= uint32_t(core_flag::window_resized); break;
-            case WM_CLOSE:
-            case WM_DESTROY: *s_FlagsPtr &= ~uint32_t(core_flag::running); break;
-            default: result = DefWindowProc(window, message, wParam, lParam); break;
-        }
-        return result;
-    }
+	void WindowSetFullscreen(logical_device device)
+	{
+		auto monitor = MonitorFromWindow(device->window, MONITOR_DEFAULTTOPRIMARY);
+		MONITORINFO mi = { sizeof(mi) };
+		auto monitorInfo = GetMonitorInfoA(monitor, &mi);
 
-    inline void SetDefaultWindowStyle(HWND window)
-    {
-        SetWindowLong(window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
-        SetWindowPos(window, NULL, 0,0,0,0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                                                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-    }
+		if (GetWindowPlacement(device->window, &device->windowPlacement) && monitorInfo) {
+			SetWindowLong(device->window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
+			SetWindowPos(device->window, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
+						 mi.rcMonitor.right - mi.rcMonitor.left,
+						 mi.rcMonitor.bottom - mi.rcMonitor.top,
+						 SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+			s_WindowResized = s_WindowFullscreen == false;
+			s_WindowFullscreen = true;
+		}
+	}
 
-    bool SpawnWindow(device d, const char *title)
-    {
-        WNDCLASSEXA windowClass{};
-        windowClass.cbSize = sizeof(WNDCLASSEXA);
-        windowClass.style = CS_HREDRAW | CS_VREDRAW;
-        windowClass.lpfnWndProc = MainWindowCallback;
-        windowClass.hInstance = d->instance;
-        windowClass.lpszClassName = "wnd_class";
-        const ATOM result = RegisterClassExA(&windowClass);
+	void WindowSetMinimised(logical_device device)
+	{
+		SetDefaultWindowStyle(device->window);
+		SetWindowPlacement(device->window, &device->windowPlacement);
+		s_WindowResized = s_WindowFullscreen == false;
+		s_WindowFullscreen = true;
+	}
 
-        const auto viewport = (SCREEN_SIZE / 2) - (VIEWPORT_SIZE / 2);
+	void WindowClose()
+	{
+		s_Running = false;
+	}
 
-        if(result != 0){
-            d->window = CreateWindowExA(0, windowClass.lpszClassName, title,
-                                              WS_VISIBLE,
-                                              viewport.x, viewport.y,
-                                              VIEWPORT_SIZE.x, VIEWPORT_SIZE.y,
-                                              NULL, NULL, d->instance, NULL);
-            SetDefaultWindowStyle(d->window);
-        }
-        return bool(result);
-    }
+	void DeviceSetHandle(logical_device device, void *handle)
+	{
+		device->callbackHandle = handle;
+	}
 
-    void ToggleFullScreen(device d)
-    {
-        if(d->flags & uint32_t(core_flag::window_fullscreen)){
-            SetDefaultWindowStyle(d->window);
-            SetWindowPlacement(d->window, &d->windowPlacement);
-            d->flags &= ~uint32_t(core_flag::window_fullscreen);
-        }
-        else{
-            auto monitor = MonitorFromWindow(d->window, MONITOR_DEFAULTTOPRIMARY);
-            MONITORINFO mi = {sizeof(mi)};
-            auto monitorInfo = GetMonitorInfoA(monitor, &mi);
-            if(GetWindowPlacement(d->window, &d->windowPlacement) && monitorInfo){
-                SetWindowLong(d->window, GWL_STYLE, WS_VISIBLE & ~WS_OVERLAPPEDWINDOW);
-                SetWindowPos(d->window, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top,
-                             mi.rcMonitor.right - mi.rcMonitor.left,
-                             mi.rcMonitor.bottom - mi.rcMonitor.top,
-                             SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
-                d->flags |= uint32_t(core_flag::window_fullscreen);
-            }
-        }
-        d->flags |= uint32_t(core_flag::window_resized);
-    }
+	void *DeviceGetHandle(logical_device device)
+	{
+		return device->callbackHandle;
+	}
 
-    void Terminate(device d)
-    {
-        d->flags &= ~uint32_t(core_flag::running);
-    }
+    bool IsRunning()
+	{
+		return s_Running;
+	}
 
-    // Timestep/clock
+    bool IsFullscreen()
+	{
+		return s_WindowFullscreen;
+	}
 
-    float GetTimestep(device d)
-    {
-        LARGE_INTEGER counter;
-        QueryPerformanceCounter(&counter);
+    bool HasResized()
+	{
+		return s_WindowResized;
+	}
 
-        float dt = float(counter.QuadPart - d->perfCounter);
-        dt /= float(d->perfCountFrequency);
-        d->perfCounter = counter.QuadPart;
-        return dt;
-    }
+	timestep_type GetTimestep(logical_device device)
+	{
+        return device->dt;
+	}
 
-    // Vulkan surface
-
-    void CreateSurface(device d, VkInstance instance, VkSurfaceKHR *pSurface)
-    {
-        VkWin32SurfaceCreateInfoKHR createInfo{};
+	void SurfaceCreate(logical_device device, VkInstance instance, VkSurfaceKHR *pSurface)
+	{
+		VkWin32SurfaceCreateInfoKHR createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-        createInfo.hinstance = d->instance;
-        createInfo.hwnd = d->window;
+        createInfo.hinstance = device->instance;
+        createInfo.hwnd = device->window;
         vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, pSurface);
-    }
+	}
 
-    // Files
+	inline key_code GetKeyCode(WORD param)
+	{
+		switch (param) {
+			case 'A': return key_code::A;
+			case 'B': return key_code::B;
+			case 'C': return key_code::C;
+			case 'D': return key_code::D;
+			case 'E': return key_code::E;
+			case 'F': return key_code::F;
+			case 'G': return key_code::G;
+			case 'H': return key_code::H;
+			case 'I': return key_code::I;
+			case 'J': return key_code::J;
+			case 'K': return key_code::K;
+			case 'L': return key_code::L;
+			case 'M': return key_code::M;
+			case 'N': return key_code::N;
+			case 'O': return key_code::O;
+			case 'P': return key_code::P;
+			case 'Q': return key_code::Q;
+			case 'R': return key_code::R;
+			case 'S': return key_code::S;
+			case 'T': return key_code::T;
+			case 'U': return key_code::U;
+			case 'V': return key_code::V;
+			case 'W': return key_code::W;
+			case 'X': return key_code::X;
+			case 'Y': return key_code::Y;
+			case 'Z': return key_code::Z;
+			case VK_UP: return key_code::Up;
+			case VK_DOWN: return key_code::Down;
+			case VK_LEFT: return key_code::Left;
+			case VK_RIGHT: return key_code::Right;
+			case VK_SPACE: return key_code::Space;
+			case VK_ESCAPE: return key_code::Escape;
+			case VK_F1: return key_code::F1;
+			case VK_F2: return key_code::F2;
+			case VK_F3: return key_code::F3;
+			case VK_F4: return key_code::F4;
+			case VK_F5: return key_code::F5;
+			case VK_F6: return key_code::F6;
+			case VK_F7: return key_code::F7;
+			case VK_F8: return key_code::F8;
+			case VK_F9: return key_code::F9;
+			case VK_F10: return key_code::F10;
+			case VK_F11: return key_code::F11;
+			case VK_F12: return key_code::F12;
+			case VK_F13: return key_code::F13;
+			case VK_F14: return key_code::F14;
+			default: break;
+		}
+		return key_code::Invalid;
+	}
 
-    namespace filesystem
+	inline modifier GetModifier(LPARAM param)
+	{
+		const auto word = HIWORD(param);
+		const auto altFlag = (word & KF_ALTDOWN) >> 13;
+		const auto repeatFlag = (word & KF_REPEAT) >> 13;
+		const auto extFlag = (word & KF_EXTENDED) >> 6;
+		modifier mod = altFlag | repeatFlag | extFlag;
+		return mod;
+
+		/* A simpler explanation of this procedure:
+
+		if((HIWORD(param) & KF_ALTDOWN))
+			mod |= MODIFIER_ALT;
+
+		if((HIWORD(param) & KF_REPEAT))
+			mod |= MODIFIER_REPEAT;
+
+		if((HIWORD(param) & KF_EXTENDED))
+			mod |= MODIFIER_EXTENTED;
+		*/
+	}
+
+    void EventsPoll(logical_device device)
+	{
+		s_WindowResized = false;
+
+		LARGE_INTEGER counter;
+		QueryPerformanceCounter(&counter);
+
+        device->dt = timestep_type(counter.QuadPart - device->counter.QuadPart);
+        device->dt /= timestep_type(device->counterFrequency.QuadPart);
+		device->counter = counter;
+
+		MSG event;
+		while (PeekMessageA(&event, device->window, 0, 0, PM_REMOVE | PM_QS_INPUT)) {
+			switch (event.message) {
+				case WM_KEYUP:
+				case WM_SYSKEYUP: // call keyup proc
+					break;
+				case WM_KEYDOWN:
+				case WM_SYSKEYDOWN:{
+					auto mod = GetModifier(event.lParam);
+					device->keyEventCallback(device, GetKeyCode(LOWORD(event.wParam)), mod);
+				} break;
+
+				case WM_MOUSEWHEEL: // call mousewheel proc with value
+					break;
+				case WM_MOUSEMOVE: device->mouseMoveCallback(device);
+					break;
+				case WM_LBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::lmb);
+					break;
+				case WM_RBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::rmb);
+					break;
+				case WM_MBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::mmb);
+					break;
+
+				default: {
+					TranslateMessage(&event);
+					DispatchMessage(&event);
+				} break;
+			}
+		}
+	}
+
+	void EventsSetKeyDownProc(logical_device device, key_event_callback proc)
     {
-        file read(path filePath)
-        {
-            HANDLE fileHandle = CreateFileA(filePath, GENERIC_READ, FILE_SHARE_READ,
-                                            0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-
-            file f = {};
-            LARGE_INTEGER fileSize;
-            if((fileHandle != INVALID_HANDLE_VALUE) && GetFileSizeEx(fileHandle, &fileSize)){
-                const auto size = uint32_t(fileSize.QuadPart);
-                f.handle = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-
-                if(f.handle != nullptr){
-                    DWORD bytesRead;
-                    if(ReadFile(fileHandle, f.handle, size, &bytesRead, 0) && size == bytesRead){
-                        f.size = size;
-                    }
-                    else{
-                        close(f);
-                    }
-                }
-                CloseHandle(fileHandle);
-            }
-            return f;
-        }
-
-        bool write(path filePath, file &file)
-        {
-            HANDLE fileHandle = CreateFileA(filePath, GENERIC_WRITE, 0,
-                                0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-            bool result = false;
-            if(fileHandle != INVALID_HANDLE_VALUE){
-                DWORD bytesWritten;
-                auto r = WriteFile(fileHandle, file.handle, DWORD(file.size), &bytesWritten, 0);
-                result = r && (bytesWritten == file.size);
-                CloseHandle(fileHandle);
-            }
-
-            return result;
-        }
-
-        bool close(file &file)
-        {
-            const bool result = VirtualFree(file.handle, 0, MEM_RELEASE);
-            file.handle = nullptr;
-            file.size = 0;
-            return result;
-        }
-
-        bool exists(path filePath)
-        {
-            WIN32_FIND_DATAA findData{};
-            HANDLE hFindFile = FindFirstFileA(filePath, &findData);
-
-            bool result = false;
-            if(hFindFile != INVALID_HANDLE_VALUE){
-                FindClose(hFindFile);
-                result = true;
-            }
-            return result;
-        }
+		if(proc != nullptr)
+        	device->keyEventCallback = proc;
     }
 
-    inline void ProcessKeyPress(device d, WPARAM key)
+	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc)
     {
-        switch(key){
-            case 'W': d->keyEventsDown |= event_type(key_event::w); break;
-            case 'A': d->keyEventsDown |= event_type(key_event::a); break;
-            case 'S': d->keyEventsDown |= event_type(key_event::s); break;
-            case 'D': d->keyEventsDown |= event_type(key_event::d); break;
-            case 'Q': d->keyEventsDown |= event_type(key_event::q); break;
-            case 'E': d->keyEventsDown |= event_type(key_event::e); break;
-            case 'F': d->keyEventsDown |= event_type(key_event::f); break;
-            case VK_UP: d->keyEventsDown |= event_type(key_event::up); break;
-            case VK_DOWN: d->keyEventsDown |= event_type(key_event::down); break;
-            case VK_LEFT: d->keyEventsDown |= event_type(key_event::left); break;
-            case VK_RIGHT: d->keyEventsDown |= event_type(key_event::right); break;
-            case VK_SPACE: d->keyEventsDown |= event_type(key_event::space); break;
-            case VK_ESCAPE: d->keyEventsDown |= event_type(key_event::escape); break;
-            case VK_CONTROL: d->keyEventsDown |= event_type(key_event::control); break;
-            case VK_SHIFT: d->keyEventsDown |= event_type(key_event::shift); break;
-            case VK_F4: d->keyEventsDown |= event_type(key_event::f4); break;
-            default: break;
-        }
+		if(proc != nullptr)
+        	device->mouseMoveCallback = proc;
     }
 
-    void PollEvents(device d)
+	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc)
     {
-        d->keyEventsDown = event_type(0);
-        d->mouseEventsDown = event_type(0);
-        d->mouseWheel = 0;
-        d->flags &= ~uint32_t(core_flag::window_resized);
-
-        MSG event;
-        while(PeekMessage(&event, d->window, 0, 0, PM_REMOVE | PM_QS_INPUT)){
-            switch (event.message){
-                case WM_MOUSEMOVE:{
-                    const auto p = MAKEPOINTS(event.lParam);
-                    d->mouse = vec2(int32_t(p.x), int32_t(p.y));
-                    d->mouseEventsDown |= event_type(mouse_event::move);
-                } break;
-
-                case WM_LBUTTONDOWN: d->mouseEventsDown |= event_type(mouse_event::lmb); break;
-                case WM_RBUTTONDOWN: d->mouseEventsDown |= event_type(mouse_event::rmb); break;
-                case WM_MBUTTONDOWN: d->mouseEventsDown |= event_type(mouse_event::mmb); break;
-
-                case WM_MOUSEWHEEL:{
-                    auto wheelValue = GET_WHEEL_DELTA_WPARAM(event.wParam);
-                    d->mouseWheel = -(wheelValue / 120);
-                } break;
-
-                case WM_KEYDOWN:
-                case WM_SYSKEYDOWN: ProcessKeyPress(d, event.wParam); break;
-
-                default:{
-                    TranslateMessage(&event);
-                    DispatchMessage(&event);
-                } break;
-            }
-        }
+		if(proc != nullptr)
+        	device->mouseButtonCallback = proc;
     }
 
-    bool GetFlag(device d, core_flag flag)
-    {
-        return bool(d->flags & uint32_t(flag));
-    }
+	inline int GetVirtualKey(key_code key)
+	{
+		switch (key) {
+			case key_code::A: return 'A';
+			case key_code::B: return 'B';
+			case key_code::C: return 'C';
+			case key_code::D: return 'D';
+			case key_code::E: return 'E';
+			case key_code::F: return 'F';
+			case key_code::G: return 'G';
+			case key_code::H: return 'H';
+			case key_code::I: return 'I';
+			case key_code::J: return 'J';
+			case key_code::K: return 'K';
+			case key_code::L: return 'L';
+			case key_code::M: return 'M';
+			case key_code::N: return 'N';
+			case key_code::O: return 'O';
+			case key_code::P: return 'P';
+			case key_code::Q: return 'Q';
+			case key_code::R: return 'R';
+			case key_code::S: return 'S';
+			case key_code::T: return 'T';
+			case key_code::U: return 'U';
+			case key_code::V: return 'V';
+			case key_code::W: return 'W';
+			case key_code::X: return 'X';
+			case key_code::Y: return 'Y';
+			case key_code::Z: return 'Z';
+			case key_code::Up: return VK_UP;
+			case key_code::Down: return VK_DOWN;
+			case key_code::Left: return VK_LEFT;
+			case key_code::Right: return VK_RIGHT;
+			case key_code::Space: return VK_SPACE;
+			case key_code::Escape: return VK_ESCAPE;
+			case key_code::F1: return VK_F1;
+			case key_code::F2: return VK_F2;
+			case key_code::F3: return VK_F3;
+			case key_code::F4: return VK_F4;
+			case key_code::F5: return VK_F5;
+			case key_code::F6: return VK_F6;
+			case key_code::F7: return VK_F7;
+			case key_code::F8: return VK_F8;
+			case key_code::F9: return VK_F9;
+			case key_code::F10: return VK_F10;
+			case key_code::F11: return VK_F11;
+			case key_code::F12: return VK_F12;
+			case key_code::F13: return VK_F13;
+			case key_code::F14: return VK_F14;
+			default: break;
+		}
+		return 0;
+	}
 
-    void SetFlag(device d, core_flag flag)
-    {
-        d->flags |= uint32_t(flag);
-    }
-
-    bool IsKeyDown(key_code key)
-    {
-        const auto result = GetKeyState(int(key)) & 0xFF00;
-        return bool(result);
-    }
-
-    bool KeyEvent(device d, key_event e)
-    {
-        return bool(d->keyEventsDown & event_type(e));
-    }
-
-    bool MouseEvent(device d, mouse_event e)
-    {
-        return bool(d->mouseEventsDown & event_type(e));
-    }
+	bool IsKeyDown(key_code key)
+	{
+        const auto vk = GetVirtualKey(key);
+		const auto result = GetKeyState(vk) & 0xFF00;
+		return bool(result);
+	}
 }
 
-INT WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
+void KeyEventStub(pltf::logical_device, pltf::key_code, pltf::modifier){}
+void MouseMoveStub(pltf::logical_device){}
+void MouseButtonStub(pltf::logical_device, pltf::mouse_button){}
+
+int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
                    _In_ PSTR lpCmdLine, _In_ INT nCmdShow)
 {
-    auto device = plt::device_T(hInstance);
-    EntryPoint(&device);
-    return 0;
+	pltf::logical_device_T device;
+	device.instance = hInstance;
+	device.window = NULL;
+	device.windowPlacement = {sizeof(WINDOWPLACEMENT)};
+
+	QueryPerformanceFrequency(&device.counterFrequency);
+	QueryPerformanceCounter(&device.counter);
+
+	device.dt = 0.001f;
+	device.keyEventCallback = KeyEventStub;
+	device.mouseMoveCallback = MouseMoveStub;
+	device.mouseButtonCallback = MouseButtonStub;
+	device.callbackHandle = nullptr;
+
+	pltf::s_Running = true;
+
+    const auto mainResult = EntryPoint(&device);
+    return mainResult;
+}
+
+namespace io
+{
+    struct file
+	{
+		HANDLE data;
+	};
+
+	template<>
+	file *Open<cmd::read>(const char *filename)
+	{
+		auto f = new file;
+		f->data = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		return f;
+	}
+
+	template<>
+	file *Open<cmd::write>(const char *filename)
+	{
+		auto f = new file;
+		f->data = CreateFileA(filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+		return f;
+	}
+
+	template<>
+	file *Open<cmd::rw_open>(const char *filename)
+	{
+		auto f = new file;
+		f->data = CreateFileA(filename, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+		return f;
+	}
+
+	template<>
+	file *Open<cmd::rw_create>(const char *filename)
+	{
+		auto f = new file;
+		f->data = CreateFileA(filename, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+		return f;
+	}
+
+	bool Close(file *f)
+	{
+		const bool result = CloseHandle(f->data);
+		delete f;
+		return result;
+	}
+
+	bool Read(file *f, size_t size, void *buffer)
+	{
+		DWORD bytesRead = 0;
+		return ReadFile(f->data, buffer, DWORD(size), &bytesRead, nullptr);
+	}
+
+	bool Write(file *f, size_t size, const void *source)
+	{
+		DWORD bytesWritten = 0;
+		return WriteFile(f->data, source, DWORD(size), &bytesWritten, nullptr);
+	}
+
+	size_t GetSize(file *f)
+	{
+		LARGE_INTEGER fileSize;
+		GetFileSizeEx(f->data, &fileSize);
+		return fileSize.QuadPart;
+	}
+
+	bool IsValid(file *f)
+	{
+		return (f->data != INVALID_HANDLE_VALUE);
+	}
+
+	file_map Map(file *f)
+	{
+		file_map map = {};
+		map.size = GetSize(f);
+		map.data = VirtualAlloc(nullptr, map.size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+
+		if(map.data != nullptr)
+			Read(f, map.size, map.data);
+		else
+			map.size = 0;
+
+		return map;
+	}
+
+	bool Unmap(file_map &map)
+	{
+		const auto result = VirtualFree(map.data, 0, MEM_RELEASE);
+		map.data = nullptr;
+		map.size = 0;
+		return result;
+	}
 }

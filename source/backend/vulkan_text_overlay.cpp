@@ -33,8 +33,8 @@ text_overlay::text_overlay(const text_overlay_create_info *pInfo)
     m_cmdPool = pInfo->cmdPool;
     m_depthFormat = pInfo->depthFormat;
 
-    m_shaders[0] = shader_object("shaders/gui_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    m_shaders[1] = shader_object("shaders/gui_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_shaders[0] = shader_object(INTERNAL_DIR "shaders/gui_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    m_shaders[1] = shader_object(INTERNAL_DIR "shaders/gui_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
     for (size_t i = 0; i < arraysize(m_shaders); i++)
         m_shaders[i].load(m_device->device);
