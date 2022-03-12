@@ -96,7 +96,7 @@ namespace pltf
 		SetDefaultWindowStyle(device->window);
 		SetWindowPlacement(device->window, &device->windowPlacement);
 		s_WindowResized = s_WindowFullscreen == false;
-		s_WindowFullscreen = true;
+		s_WindowFullscreen = false;
 	}
 
 	void WindowClose()

@@ -30,6 +30,17 @@
         "new": "cpp",
         "vcruntime_new.h": "c",
         "*.ixx": "cpp",
-        "span": "cpp"
-    }
+        "span": "cpp",
+        "atomic": "cpp",
+        "exception": "cpp",
+        "istream": "cpp",
+        "iterator": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "streambuf": "cpp",
+        "tuple": "cpp",
+        "unordered_map": "cpp",
+        "utility": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }

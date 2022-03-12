@@ -1,12 +1,10 @@
 #pragma once
 
 #include "../mv_utils/mat4.hpp"
-#include "vulkan_initialisers.hpp"
+#include "buffer.hpp"
 
 struct alignas(16) mvp_matrix
 {
-    static VkBufferUsageFlags usageFlags() { return VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT; }
-
     mat4x4 view;
     mat4x4 proj;
     vec4<float> position;
@@ -35,71 +33,26 @@ public:
         down
     };
 
-    camera()
-    {
-        this->fov = DEFAULT_FOV;
-        m_zNear = DEFAULT_ZNEAR;
-        m_zFar = DEFAULT_ZFAR;
-        m_position = vec3(0.0f, 0.0f, -5.0f);
-        this->sensitivity = 2.0f;
-        m_yaw = DEFAULT_YAW;
-        m_pitch = 0.0f;
-        update();
-    }
+    camera() = default;
+    camera(const vulkan_device *device, view<buffer_t> buffers);
 
-    void rotate(direction dir, float dt)
-    {
-        const auto speed = this->sensitivity * dt;
-        switch (dir){
-            case direction::up: m_pitch += speed; break;
-            case direction::down: m_pitch -= speed; break;
-            case direction::left: m_yaw -= speed; break;
-            case direction::right: m_yaw += speed; break;
-            default: break;
-        };
-    }
+    VkDescriptorBufferInfo descriptor(size_t imageIndex){return m_buffers[imageIndex].descriptor(0);}
+    void update(VkDevice device, float aspectRatio, size_t imageIndex);
+    void destroy(VkDevice device);
 
-    void move(direction dir, float dt)
-    {
-        switch (dir){
-            case direction::forward: m_position += m_front * dt; break;
-            case direction::backward: m_position -= m_front * dt; break;
-            case direction::left: m_position -= m_right * dt; break;
-            case direction::right: m_position += m_right * dt; break;
-            default: break;
-        };
-    }
-
-    void update()
-    {
-        m_pitch = clamp(m_pitch, -PITCH_CLAMP, PITCH_CLAMP);
-        m_yaw = clamp(m_yaw, -YAW_MOD, YAW_MOD);
-
-        const auto yawCosine = std::cos(m_yaw);
-        const auto yawSine = std::sin(m_yaw);
-        const auto pitchCosine = std::cos(m_pitch);
-        const auto pitchSine = std::sin(m_pitch);
-
-        m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
-        m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
-        m_up = (m_right.crossProduct(m_front)).normalise();
-    }
-
-    mvp_matrix calculateMvp(float aspectRatio)
-    {
-        auto mvp = mvp_matrix();
-        mvp.view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
-        mvp.proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
-        mvp.position = vec4(m_position, 1.0f);
-        return mvp;
-    }
+    // TODO(arle): static dispatch
+    void rotate(direction dir, float dt);
+    void move(direction dir, float dt);
 
     float fov, sensitivity;
 
 private:
+    void updateVectors();
+
+    view<buffer_t> m_buffers;
+
     float m_yaw, m_pitch;
     float m_zNear, m_zFar;
-
     vec3<float> m_position;
     vec3<float> m_right;
     vec3<float> m_front;

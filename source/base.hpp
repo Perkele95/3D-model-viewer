@@ -4,7 +4,6 @@
 #include "mv_utils/dyn_array.hpp"
 #include "mv_utils/linear_storage.hpp"
 #include "mv_utils/mat4.hpp"
-#include "mv_utils/result.hpp"
 #include "platform/platform.hpp"
 
 #if defined(DEBUG)

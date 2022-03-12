@@ -17,7 +17,6 @@ constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
 struct uniform_buffer
 {
-    buffer_t camera;// TODO(arle): put into camera class
     buffer_t lights;// TODO(arle): put into lights class
 };
 
@@ -51,9 +50,9 @@ private:
     void buildDescriptors(const pbr_material* pMaterial);
     void buildPipeline();
 
-    void updateCamera(float dt);
+    void gameUpdate(float dt);
     void updateLights();
-    void updateCmdBuffers();
+    void updateCmdBuffers(size_t imageIndex);
 
     linear_storage m_permanentStorage;
 

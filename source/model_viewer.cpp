@@ -15,7 +15,6 @@ model_viewer::model_viewer(pltf::logical_device device)
     new (m_device) vulkan_device(device, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
-    new (&m_mainCamera) camera();
 
     buildResources();
 
@@ -57,10 +56,10 @@ model_viewer::~model_viewer()
     vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(m_device->device, m_descriptorSetLayout, nullptr);
 
-    for(size_t i = 0; i < m_imageCount; i++){
-        m_uniformBuffers[i].camera.destroy(m_device->device);
+    m_mainCamera.destroy(m_device->device);
+
+    for(size_t i = 0; i < m_imageCount; i++)
         m_uniformBuffers[i].lights.destroy(m_device->device);
-    }
 
     m_model.destroy();
 
@@ -90,7 +89,7 @@ void model_viewer::swapBuffers(pltf::logical_device device)
     if(m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
-    updateCamera(pltf::GetTimestep(device));
+    gameUpdate(pltf::GetTimestep(device));
 
     vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
@@ -104,8 +103,10 @@ void model_viewer::swapBuffers(pltf::logical_device device)
         default: break;
     }
 
+    const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
+    m_mainCamera.update(m_device->device, aspectRatio, imageIndex);
     vkQueueWaitIdle(m_device->graphics.queue);//TODO(arle): replace with fence
-    updateCmdBuffers();
+    updateCmdBuffers(imageIndex);
 
     if(m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(m_device->device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
@@ -241,6 +242,8 @@ void model_viewer::buildResources()
     buildRenderPass();
     buildFramebuffers();
     buildSyncObjects();
+
+    new (&m_mainCamera) camera(m_device, m_permanentStorage.pushView<buffer_t>(m_imageCount));
     buildUniformBuffers();
 
     loadModel();
@@ -257,7 +260,6 @@ void model_viewer::buildResources()
     buildPipeline();
 
     updateLights();
-    updateCmdBuffers();
 }
 
 void model_viewer::loadModel()
@@ -414,9 +416,6 @@ void model_viewer::buildSyncObjects()
 void model_viewer::buildUniformBuffers()
 {
     for (size_t i = 0; i < m_imageCount; i++){
-        auto cameraBufferInfo = vkInits::bufferCreateInfo(sizeof(mvp_matrix), mvp_matrix::usageFlags());
-        m_uniformBuffers[i].camera.create(m_device, &cameraBufferInfo, MEM_FLAG_HOST_VISIBLE);
-
         auto lightsBufferInfo = vkInits::bufferCreateInfo(sizeof(light_data), light_data::usageFlags());
         m_uniformBuffers[i].lights.create(m_device, &lightsBufferInfo, MEM_FLAG_HOST_VISIBLE);
     }
@@ -456,7 +455,7 @@ void model_viewer::buildDescriptors(const pbr_material *pMaterial)
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
     for (size_t i = 0; i < m_imageCount; i++) {
-        const auto cameraBufferInfo = m_uniformBuffers[i].camera.descriptor(0);
+        const auto cameraBufferInfo = m_mainCamera.descriptor(i);
         const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
 
         auto& setRef = m_descriptorSets[i];
@@ -538,7 +537,7 @@ void model_viewer::buildPipeline()
                               &pipelineInfo, nullptr, &m_pipeline);
 }
 
-void model_viewer::updateCamera(float dt)
+void model_viewer::gameUpdate(float dt)
 {
     if(pltf::IsKeyDown(pltf::key_code::W))
         m_mainCamera.rotate(camera::direction::up, dt);
@@ -559,14 +558,6 @@ void model_viewer::updateCamera(float dt)
         m_mainCamera.move(camera::direction::left, dt);
     else if(pltf::IsKeyDown(pltf::key_code::Right))
         m_mainCamera.move(camera::direction::right, dt);
-
-    m_mainCamera.update();
-    const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    auto mvp = m_mainCamera.calculateMvp(aspectRatio);
-
-    for (size_t i = 0; i < m_imageCount; i++){
-        m_uniformBuffers[i].camera.fill(m_device->device, &mvp);
-    }
 }
 
 void model_viewer::updateLights()
@@ -595,7 +586,7 @@ void model_viewer::updateLights()
         m_uniformBuffers[i].lights.fill(m_device->device, &lights);
 }
 
-void model_viewer::updateCmdBuffers()
+void model_viewer::updateCmdBuffers(size_t imageIndex)
 {
     VkClearValue colourValue;
     colourValue.color = {};
@@ -609,7 +600,28 @@ void model_viewer::updateCmdBuffers()
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = clearValues;
     renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));
+#if 1
+    const auto cmdBuffer = m_commandBuffers[imageIndex];
+    vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
 
+    renderBeginInfo.framebuffer = m_framebuffers[imageIndex];
+    vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+
+    vkCmdBindDescriptorSets(cmdBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_pipelineLayout,
+                            0,
+                            1,
+                            &m_descriptorSets[imageIndex],
+                            0,
+                            nullptr);
+
+    m_model.draw(cmdBuffer, m_pipelineLayout);
+
+    vkCmdEndRenderPass(cmdBuffer);
+    vkEndCommandBuffer(cmdBuffer);
+#else
     for (size_t i = 0; i < m_imageCount; i++){
         const auto cmdBuffer = m_commandBuffers[i];
         vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
@@ -632,4 +644,5 @@ void model_viewer::updateCmdBuffers()
         vkCmdEndRenderPass(cmdBuffer);
         vkEndCommandBuffer(cmdBuffer);
     }
+#endif
 }
