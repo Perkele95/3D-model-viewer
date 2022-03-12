@@ -35,10 +35,10 @@ public:
 
     camera() = default;
     camera(const vulkan_device *device, view<buffer_t> buffers);
+    void destroy(VkDevice device);
 
     VkDescriptorBufferInfo descriptor(size_t imageIndex){return m_buffers[imageIndex].descriptor(0);}
     void update(VkDevice device, float aspectRatio, size_t imageIndex);
-    void destroy(VkDevice device);
 
     // TODO(arle): static dispatch
     void rotate(direction dir, float dt);

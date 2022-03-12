@@ -15,11 +15,6 @@
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
-struct uniform_buffer
-{
-    buffer_t lights;// TODO(arle): put into lights class
-};
-
 class model_viewer
 {
 public:
@@ -46,7 +41,6 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
-    void buildUniformBuffers();
     void buildDescriptors(const pbr_material* pMaterial);
     void buildPipeline();
 
@@ -82,7 +76,7 @@ private:
     shader_object m_shaders[2];
 
     camera m_mainCamera;
-    uniform_buffer *m_uniformBuffers;
+    lights m_lights;
 
     VkDescriptorPool m_descriptorPool;
     VkDescriptorSetLayout m_descriptorSetLayout;

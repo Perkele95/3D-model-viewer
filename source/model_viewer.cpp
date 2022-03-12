@@ -57,9 +57,7 @@ model_viewer::~model_viewer()
     vkDestroyDescriptorSetLayout(m_device->device, m_descriptorSetLayout, nullptr);
 
     m_mainCamera.destroy(m_device->device);
-
-    for(size_t i = 0; i < m_imageCount; i++)
-        m_uniformBuffers[i].lights.destroy(m_device->device);
+    m_lights.destroy(m_device->device);
 
     m_model.destroy();
 
@@ -232,7 +230,6 @@ void model_viewer::buildResources()
     m_imagesInFlight = m_permanentStorage.push<VkFence>(m_imageCount);
     m_commandBuffers = m_permanentStorage.push<VkCommandBuffer>(m_imageCount);
     m_descriptorSets = m_permanentStorage.push<VkDescriptorSet>(m_imageCount);
-    m_uniformBuffers = m_permanentStorage.push<uniform_buffer>(m_imageCount);
 
     vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
 
@@ -244,7 +241,7 @@ void model_viewer::buildResources()
     buildSyncObjects();
 
     new (&m_mainCamera) camera(m_device, m_permanentStorage.pushView<buffer_t>(m_imageCount));
-    buildUniformBuffers();
+    new (&m_lights) lights(m_device, m_permanentStorage.pushView<buffer_t>(m_imageCount));
 
     loadModel();
 
@@ -258,8 +255,6 @@ void model_viewer::buildResources()
         m_shaders[i].load(m_device->device);
 
     buildPipeline();
-
-    updateLights();
 }
 
 void model_viewer::loadModel()
@@ -413,14 +408,6 @@ void model_viewer::buildSyncObjects()
     }
 }
 
-void model_viewer::buildUniformBuffers()
-{
-    for (size_t i = 0; i < m_imageCount; i++){
-        auto lightsBufferInfo = vkInits::bufferCreateInfo(sizeof(light_data), light_data::usageFlags());
-        m_uniformBuffers[i].lights.create(m_device, &lightsBufferInfo, MEM_FLAG_HOST_VISIBLE);
-    }
-}
-
 void model_viewer::buildDescriptors(const pbr_material *pMaterial)
 {
     const VkDescriptorPoolSize poolSizes[] = {
@@ -456,7 +443,7 @@ void model_viewer::buildDescriptors(const pbr_material *pMaterial)
 
     for (size_t i = 0; i < m_imageCount; i++) {
         const auto cameraBufferInfo = m_mainCamera.descriptor(i);
-        const auto lightBufferInfo = m_uniformBuffers[i].lights.descriptor(0);
+        const auto lightBufferInfo = m_lights.descriptor(i);
 
         auto& setRef = m_descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
@@ -559,7 +546,7 @@ void model_viewer::gameUpdate(float dt)
     else if(pltf::IsKeyDown(pltf::key_code::Right))
         m_mainCamera.move(camera::direction::right, dt);
 }
-
+#if 0
 void model_viewer::updateLights()
 {
     auto lights = light_data();
@@ -585,7 +572,7 @@ void model_viewer::updateLights()
     for (size_t i = 0; i < m_imageCount; i++)
         m_uniformBuffers[i].lights.fill(m_device->device, &lights);
 }
-
+#endif
 void model_viewer::updateCmdBuffers(size_t imageIndex)
 {
     VkClearValue colourValue;

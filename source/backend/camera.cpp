@@ -18,6 +18,12 @@ camera::camera(const vulkan_device *device, view<buffer_t> buffers)
         m_buffers[i].create(device, &info, MEM_FLAG_HOST_VISIBLE);
 }
 
+void camera::destroy(VkDevice device)
+{
+    for (size_t i = 0; i < m_buffers.count; i++)
+        m_buffers[i].destroy(device);
+}
+
 void camera::update(VkDevice device, float aspectRatio, size_t imageIndex)
 {
     updateVectors();
@@ -28,12 +34,6 @@ void camera::update(VkDevice device, float aspectRatio, size_t imageIndex)
     mvp.position = vec4(m_position, 1.0f);
 
     m_buffers[imageIndex].fill(device, &mvp);
-}
-
-void camera::destroy(VkDevice device)
-{
-    for (size_t i = 0; i < m_buffers.count; i++)
-        m_buffers[i].destroy(device);
 }
 
 void camera::rotate(direction dir, float dt)
