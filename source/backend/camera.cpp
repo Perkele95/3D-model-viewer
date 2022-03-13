@@ -62,7 +62,8 @@ void camera::move(direction dir, float dt)
 void camera::updateVectors()
 {
     m_pitch = clamp(m_pitch, -PITCH_CLAMP, PITCH_CLAMP);
-    m_yaw = clamp(m_yaw, -YAW_MOD, YAW_MOD);
+    m_yaw = m_yaw < -YAW_MOD ? m_yaw + YAW_MOD : m_yaw;
+    m_yaw = m_yaw > YAW_MOD ? m_yaw - YAW_MOD : m_yaw;
 
     const auto yawCosine = std::cos(m_yaw);
     const auto yawSine = std::sin(m_yaw);

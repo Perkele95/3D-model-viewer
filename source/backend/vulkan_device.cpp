@@ -56,6 +56,7 @@ void vulkan_device::refresh()
         this->extent.height = clamp(this->extent.height, this->capabilities.minImageExtent.height,
                                     this->capabilities.maxImageExtent.height);
     }
+    this->aspectRatio = float(this->extent.width) / float(this->extent.height);
 }
 
 VkFormat vulkan_device::getDepthFormat() const

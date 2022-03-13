@@ -5,22 +5,17 @@ lights::lights(const vulkan_device *device, view<buffer_t> buffers)
     constexpr float LIGHT_STR = 300.0f;
 
     auto data = light_data();
-    data.positions[0] = vec4(-10.0f, 10.0f, -10.0f, 0.0f);
-    data.colours[0] = GetColour(0xea00d9ff) * LIGHT_STR;
+    data.positions[0] = vec4(0.0f, 0.0f, -5.0f, 1.0f);
+    data.colours[0] = GetColour(255, 247, 207) * LIGHT_STR;
 
-    data.positions[1] = vec4(10.0f, 10.0f, -10.0f, 0.0f);
-    data.colours[1] = GetColour(0x0abdc6ff) * LIGHT_STR;
+    data.positions[1] = vec4(-5.0f, 0.0f, 0.0f, 1.0f);
+    data.colours[1] = GetColour(125, 214, 250) * float(0);
 
-    data.positions[2] = vec4(-10.0f, -10.0f, -10.0f, 0.0f);
-    data.colours[2] = GetColour(0x133e7cff) * LIGHT_STR;
+    data.positions[2] = vec4(0.0f, 6.0f, 0.0f, 1.0f);
+    data.colours[2] = GetColour(255, 54, 114) * float(0);
 
-    data.positions[3] = vec4(10.0f, -10.0f, -10.0f, 0.0f);
-    data.colours[3] = GetColour(0x711c91ff) * LIGHT_STR;
-
-    data.colours[0].w = 1.0f;
-    data.colours[1].w = 1.0f;
-    data.colours[2].w = 1.0f;
-    data.colours[3].w = 1.0f;
+    data.positions[3] = vec4(-5.0f, 5.0f, 5.0f, 0.0f);
+    data.colours[3] = GetColour(0x711c91ff) * float(0);
 
     m_buffers = buffers;
 

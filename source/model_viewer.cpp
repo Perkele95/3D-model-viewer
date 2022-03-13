@@ -101,8 +101,7 @@ void model_viewer::swapBuffers(pltf::logical_device device)
         default: break;
     }
 
-    const float aspectRatio = float(m_device->extent.width) / float(m_device->extent.height);
-    m_mainCamera.update(m_device->device, aspectRatio, imageIndex);
+    m_mainCamera.update(m_device->device, m_device->aspectRatio, imageIndex);
     vkQueueWaitIdle(m_device->graphics.queue);//TODO(arle): replace with fence
     updateCmdBuffers(imageIndex);
 
@@ -266,7 +265,7 @@ void model_viewer::loadModel()
 
     new (material) pbr_material();
 
-    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
+    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/uv-map.jpg");
     material->normal.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
     material->roughness.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
     material->metallic.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");
@@ -546,33 +545,7 @@ void model_viewer::gameUpdate(float dt)
     else if(pltf::IsKeyDown(pltf::key_code::Right))
         m_mainCamera.move(camera::direction::right, dt);
 }
-#if 0
-void model_viewer::updateLights()
-{
-    auto lights = light_data();
-    lights.positions[0] = vec4(-10.0f, 10.0f, -10.0f, 0.0f);
-    lights.colours[0] = GetColour(0xea00d9ff);
 
-    lights.positions[1] = vec4(10.0f, 10.0f, -10.0f, 0.0f);
-    lights.colours[1] = GetColour(0x0abdc6ff);
-
-    lights.positions[2] = vec4(-10.0f, -10.0f, -10.0f, 0.0f);
-    lights.colours[2] = GetColour(0x133e7cff);
-
-    lights.positions[3] = vec4(10.0f, -10.0f, -10.0f, 0.0f);
-    lights.colours[3] = GetColour(0x711c91ff);
-
-    constexpr float lightStrength = 200.0f;
-    for (size_t i = 0; i < arraysize(lights.colours); i++){
-        lights.colours[i].x *= lightStrength;
-        lights.colours[i].y *= lightStrength;
-        lights.colours[i].z *= lightStrength;
-    }
-
-    for (size_t i = 0; i < m_imageCount; i++)
-        m_uniformBuffers[i].lights.fill(m_device->device, &lights);
-}
-#endif
 void model_viewer::updateCmdBuffers(size_t imageIndex)
 {
     VkClearValue colourValue;

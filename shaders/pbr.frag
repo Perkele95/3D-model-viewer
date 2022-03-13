@@ -93,7 +93,7 @@ vec3 BRDF(pbr_material material, vec3 V, vec3 lightPosition, vec3 lightColour, v
 
 vec3 calculateNormal()
 {
-    const vec3 normal = texture(normalMap, inUV).rgb * 2.0 - 1.0;
+    const vec3 tangentNormal = texture(normalMap, inUV).rgb * 2.0 - 1.0;
 
     const vec3 Q1 = dFdx(inPosition);
     const vec3 Q2 = dFdy(inPosition);
@@ -104,13 +104,15 @@ vec3 calculateNormal()
     const vec3 T = normalize(Q1 * st2.t - Q2 * st1.t);
     const vec3 B = -normalize(cross(N, T));
 
-    return normalize(mat3(T, B, N) * normal);
+    mat3 TBN = mat3(T, B, N);
+    return normalize(TBN * tangentNormal);
 }
 
 void main()
 {
     pbr_material material;
-    material.albedo = texture(albedoMap, inUV).rgb;
+    material.albedo = pow(texture(albedoMap, inUV).rgb, vec3(2.2));
+    //material.normal = normalize(inNormal);
     material.normal = calculateNormal();
     material.roughness = texture(roughnessMap, inUV).r;
     material.metallic = texture(metallicMap, inUV).r;

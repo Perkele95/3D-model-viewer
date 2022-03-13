@@ -53,17 +53,18 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
 
     // Vertex fill
     for (size_t i = 0; i < N_STACKS - 1; i++){
-        const auto phi = PI32 * float(i + 1) / float(N_STACKS);
         for (size_t j = 0; j < N_SLICES; j++){
-            const auto theta = 2.0f * PI32 * float(j) / float(N_SLICES);
+            const auto xSegment = float(j) / float(N_SLICES);
+            const auto ySegment = float(i + 1) / float(N_STACKS);
+            const auto theta = 2 * PI32 * xSegment;
+            const auto phi = PI32 * ySegment;
             vertex->position.x = std::sin(phi) * std::cos(theta);
             vertex->position.y = std::cos(phi);
             vertex->position.z = std::sin(phi) * std::sin(theta);
             vertex->normal = vertex->position;
-
-            vertex->uv.x = (asinf(vertex->normal.x) / PI32) + 0.5f;
-            vertex->uv.y = (asinf(vertex->normal.y) / PI32) + 0.5f;
-
+            //vertex->uv = vec2(xSegment, ySegment);
+            vertex->uv.x = (std::asin(-vertex->normal.x) / PI32) + 0.5f;
+            vertex->uv.y = (std::asin(-vertex->normal.y) / PI32) + 0.5f;
             vertex++;
         }
     }
@@ -140,36 +141,43 @@ void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
         vec3(-size, size, size),
     };
 
+    constexpr vec2<float> uvs[] = {
+        vec2(0.0f, 0.0f),
+        vec2(1.0f, 0.0f),
+        vec2(1.0f, 1.0f),
+        vec2(0.0f, 1.0f)
+    };
+
     auto vertices = dyn_array<mesh_vertex>(24);
-    vertices[0] = {points[0], normalFront};
-    vertices[1] = {points[3], normalFront};
-    vertices[2] = {points[2], normalFront};
-    vertices[3] = {points[1], normalFront};
+    vertices[0] = {points[0], normalFront, uvs[3]};
+    vertices[1] = {points[3], normalFront, uvs[0]};
+    vertices[2] = {points[2], normalFront, uvs[1]};
+    vertices[3] = {points[1], normalFront, uvs[2]};
 
-    vertices[4] = {points[4], normalBack};
-    vertices[5] = {points[5], normalBack};
-    vertices[6] = {points[6], normalBack};
-    vertices[7] = {points[7], normalBack};
+    vertices[4] = {points[4], normalBack, uvs[0]};
+    vertices[5] = {points[5], normalBack, uvs[1]};
+    vertices[6] = {points[6], normalBack, uvs[2]};
+    vertices[7] = {points[7], normalBack, uvs[3]};
 
-    vertices[8] = {points[3], normalTop};
-    vertices[9] = {points[7], normalTop};
-    vertices[10] = {points[6], normalTop};
-    vertices[11] = {points[2], normalTop};
+    vertices[8] = {points[3], normalTop, uvs[0]};
+    vertices[9] = {points[7], normalTop, uvs[1]};
+    vertices[10] = {points[6], normalTop, uvs[2]};
+    vertices[11] = {points[2], normalTop, uvs[3]};
 
-    vertices[12] = {points[4], normalBottom};
-    vertices[13] = {points[0], normalBottom};
-    vertices[14] = {points[1], normalBottom};
-    vertices[15] = {points[5], normalBottom};
+    vertices[12] = {points[4], normalBottom, uvs[0]};
+    vertices[13] = {points[0], normalBottom, uvs[1]};
+    vertices[14] = {points[1], normalBottom, uvs[2]};
+    vertices[15] = {points[5], normalBottom, uvs[3]};
 
-    vertices[16] = {points[4], normalRight};
-    vertices[17] = {points[7], normalRight};
-    vertices[18] = {points[3], normalRight};
-    vertices[19] = {points[0], normalRight};
+    vertices[16] = {points[4], normalRight, uvs[0]};
+    vertices[17] = {points[7], normalRight, uvs[1]};
+    vertices[18] = {points[3], normalRight, uvs[2]};
+    vertices[19] = {points[0], normalRight, uvs[3]};
 
-    vertices[20] = {points[1], normalLeft};
-    vertices[21] = {points[2], normalLeft};
-    vertices[22] = {points[6], normalLeft};
-    vertices[23] = {points[5], normalLeft};
+    vertices[20] = {points[1], normalLeft, uvs[0]};
+    vertices[21] = {points[2], normalLeft, uvs[1]};
+    vertices[22] = {points[6], normalLeft, uvs[2]};
+    vertices[23] = {points[5], normalLeft, uvs[3]};
 
     auto indices = dyn_array<mesh_index>(36);
     for (uint32_t i = 0; i < 6; i++){

@@ -48,39 +48,39 @@ private:
     void updateLights();
     void updateCmdBuffers(size_t imageIndex);
 
-    linear_storage m_permanentStorage;
+    linear_storage          m_permanentStorage;
 
-    vulkan_device *m_device;
-    text_overlay *m_overlay;
+    vulkan_device*          m_device;
+    text_overlay*           m_overlay;
 
-    size_t m_imageCount, m_currentFrame;
-    VkCommandPool m_cmdPool;
-    VkRenderPass m_renderPass;
-    VkSwapchainKHR m_swapchain;
-    VkImage *m_swapchainImages;
-    VkImageView *m_swapchainViews;
-    VkFramebuffer *m_framebuffers;
+    size_t                  m_imageCount, m_currentFrame;
+    VkCommandPool           m_cmdPool;
+    VkRenderPass            m_renderPass;
+    VkSwapchainKHR          m_swapchain;
+    VkImage*                m_swapchainImages;
+    VkImageView*            m_swapchainViews;
+    VkFramebuffer*          m_framebuffers;
 
-    image_buffer m_msaa;
-    image_buffer m_depth;
-    VkFormat m_depthFormat;
+    image_buffer            m_msaa;
+    image_buffer            m_depth;
+    VkFormat                m_depthFormat;
 
-    VkSemaphore m_imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
-    VkSemaphore m_renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
-    VkFence m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
-    VkFence *m_imagesInFlight;
+    VkSemaphore             m_imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
+    VkSemaphore             m_renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
+    VkFence                 m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
+    VkFence*                m_imagesInFlight;
 
-    VkCommandBuffer *m_commandBuffers;
-    VkPipeline m_pipeline;
-    VkPipelineLayout m_pipelineLayout;
-    shader_object m_shaders[2];
+    VkCommandBuffer*        m_commandBuffers;
+    VkPipeline              m_pipeline;
+    VkPipelineLayout        m_pipelineLayout;
+    shader_object           m_shaders[2];
 
-    camera m_mainCamera;
-    lights m_lights;
+    camera                  m_mainCamera;
+    lights                  m_lights;
 
-    VkDescriptorPool m_descriptorPool;
-    VkDescriptorSetLayout m_descriptorSetLayout;
-    VkDescriptorSet *m_descriptorSets;
+    VkDescriptorPool        m_descriptorPool;
+    VkDescriptorSetLayout   m_descriptorSetLayout;
+    VkDescriptorSet*        m_descriptorSets;
 
-    model3D m_model;
+    model3D                 m_model;
 };

@@ -46,15 +46,16 @@ public:
 
     // ~Tools
 
-    VkPhysicalDevice gpu;
-    VkDevice device;
-    queue_data graphics, present;
-    VkSurfaceFormatKHR surfaceFormat;
-    VkPresentModeKHR presentMode;
-    VkSurfaceCapabilitiesKHR capabilities;
-    VkExtent2D extent;
-    VkSampleCountFlagBits sampleCount;
-    uint32_t minImageCount;
+    VkPhysicalDevice            gpu;
+    VkDevice                    device;
+    queue_data                  graphics, present;
+    VkSurfaceFormatKHR          surfaceFormat;
+    VkPresentModeKHR            presentMode;
+    VkSurfaceCapabilitiesKHR    capabilities;
+    VkExtent2D                  extent;
+    VkSampleCountFlagBits       sampleCount;
+    uint32_t                    minImageCount;
+    float                       aspectRatio;
 
 private:
     void pickPhysicalDevice();
@@ -64,6 +65,6 @@ private:
 
     void getSampleCount();
 
-    VkInstance m_instance;
-    VkSurfaceKHR m_surface;
+    VkInstance                  m_instance;
+    VkSurfaceKHR                m_surface;
 };
