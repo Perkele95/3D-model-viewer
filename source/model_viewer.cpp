@@ -265,7 +265,7 @@ void model_viewer::loadModel()
 
     new (material) pbr_material();
 
-    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/uv-map.jpg");
+    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
     material->normal.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
     material->roughness.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
     material->metallic.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");

@@ -30,7 +30,6 @@ public:
               view<mesh_index> indices);
 
     void loadSphere(const vulkan_device* device, VkCommandPool cmdPool);
-    void loadSphere2(const vulkan_device* device, VkCommandPool cmdPool);
     void loadCube(const vulkan_device* device, VkCommandPool cmdPool);
 
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout);

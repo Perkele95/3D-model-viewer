@@ -40,8 +40,8 @@ void mesh3D::load(const vulkan_device *device,
 
 void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
 {
-    constexpr auto N_STACKS = clamp<uint32_t>(32, 2, 128);
-    constexpr auto N_SLICES = clamp<uint32_t>(32, 2, 128);
+    constexpr auto N_STACKS = clamp<uint32_t>(64, 2, 128);
+    constexpr auto N_SLICES = clamp<uint32_t>(64, 2, 128);
 
     auto vertices = dyn_array<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
     auto vertex = vertices.data();
@@ -62,9 +62,12 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
             vertex->position.y = std::cos(phi);
             vertex->position.z = std::sin(phi) * std::sin(theta);
             vertex->normal = vertex->position;
-            //vertex->uv = vec2(xSegment, ySegment);
+#if 1
             vertex->uv.x = (std::asin(-vertex->normal.x) / PI32) + 0.5f;
             vertex->uv.y = (std::asin(-vertex->normal.y) / PI32) + 0.5f;
+#else
+            vertex->uv = vec2(xSegment, ySegment);
+#endif
             vertex++;
         }
     }

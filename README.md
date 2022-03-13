@@ -1,4 +1,7 @@
 # 3D-model-viewer
-3D model viewer written in c++
 
+Flat colour pbr:
 ![image](pbr_demo.png)
+
+Textured pbr:
+![image](pbr_textured.png)
