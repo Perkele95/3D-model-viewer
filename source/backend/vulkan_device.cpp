@@ -167,7 +167,7 @@ void vulkan_device::pickPhysicalDevice()
 {
     uint32_t physDeviceCount = 0;
     vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
-    auto physDevices = dyn_array<VkPhysicalDevice>(physDeviceCount);
+    auto physDevices = data_buffer<VkPhysicalDevice>(physDeviceCount);
     vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices.data());
 
     const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
@@ -184,9 +184,9 @@ void vulkan_device::pickPhysicalDevice()
     for(size_t i = 0; i < physDeviceCount; i++){
         uint32_t extensionCount = 0;
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, nullptr);
-        auto availableExtensions = dyn_array<VkExtensionProperties>(extensionCount);
+        auto availableExtensions = data_buffer<VkExtensionProperties>(extensionCount);
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions.data());
-        const bool extensionsSupported = findExtensionProperty(availableExtensions);
+        const bool extensionsSupported = findExtensionProperty(availableExtensions.getView());
 
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physDevices[i], m_surface, &this->capabilities);
 
@@ -197,7 +197,7 @@ void vulkan_device::pickPhysicalDevice()
 
         uint32_t propCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, nullptr);
-        auto queueFamilyProps = dyn_array<VkQueueFamilyProperties>(propCount);
+        auto queueFamilyProps = data_buffer<VkQueueFamilyProperties>(propCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps.data());
 
         this->graphics.family = 0;
@@ -267,7 +267,7 @@ void vulkan_device::pickSurfaceFormat()
 {
     uint32_t count = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, nullptr);
-    auto surfaceFormats = dyn_array<VkSurfaceFormatKHR>(count);
+    auto surfaceFormats = data_buffer<VkSurfaceFormatKHR>(count);
     vkGetPhysicalDeviceSurfaceFormatsKHR(this->gpu, m_surface, &count, surfaceFormats.data());
 
     this->surfaceFormat = surfaceFormats[0];
@@ -285,7 +285,7 @@ void vulkan_device::pickPresentMode(VkPresentModeKHR preferredMode)
 {
     uint32_t count = 0;
     vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, nullptr);
-    auto presentModes = dyn_array<VkPresentModeKHR>(count);
+    auto presentModes = data_buffer<VkPresentModeKHR>(count);
     vkGetPhysicalDeviceSurfacePresentModesKHR(this->gpu, m_surface, &count, presentModes.data());
 
     this->presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;

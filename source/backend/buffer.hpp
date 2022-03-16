@@ -3,8 +3,6 @@
 #include "vulkan_initialisers.hpp"
 #include "vulkan_device.hpp"
 
-class buffer_t;
-
 class image_buffer
 {
 public:
@@ -14,7 +12,6 @@ public:
 
     void destroy(VkDevice device);
     VkDescriptorImageInfo descriptor(VkSampler sampler);
-    VkResult copyFromBuffer(const vulkan_device *device, VkCommandPool cmdPool, buffer_t *pSrc);
 
     VkImageView view(){return m_view;}
 
@@ -24,8 +21,6 @@ private:
     VkDeviceMemory  m_memory;
     VkExtent2D      m_extent;
     VkFormat        m_format;
-
-    friend buffer_t;
 };
 
 class buffer_t

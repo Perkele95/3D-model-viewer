@@ -132,12 +132,11 @@ void main()
     const vec3 ambient = vec3(0.02) * material.albedo * material.ao;
     vec3 colour = ambient + Lo;
 
-    // HDR tonemapping
+    // Reinhard HDR tonemapping
     colour = colour / (colour + vec3(1.0));
 
     // Gamma correct
-    //colour = pow(colour, vec3(0.4545));
-    colour = pow(colour, vec3(0.4));
+    colour = pow(colour, vec3(0.4545));
 
     outColour = vec4(colour, 1.0);
 }

@@ -339,6 +339,16 @@ namespace pltf
 		const auto result = GetKeyState(vk) & 0xFF00;
 		return bool(result);
 	}
+
+	void *MapMemory(size_t size)
+	{
+		return VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+	}
+
+	bool UnmapMemory(void *mapped)
+	{
+		return bool(VirtualFree(mapped, 0, MEM_RELEASE));
+	}
 }
 
 void KeyEventStub(pltf::logical_device, pltf::key_code, pltf::modifier){}

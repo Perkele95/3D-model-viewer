@@ -43,7 +43,7 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
     constexpr auto N_STACKS = clamp<uint32_t>(64, 2, 128);
     constexpr auto N_SLICES = clamp<uint32_t>(64, 2, 128);
 
-    auto vertices = dyn_array<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
+    auto vertices = data_buffer<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
     auto vertex = vertices.data();
 
     // Top vertex
@@ -81,10 +81,10 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
     // 6 idx per quad * (only quad stacks) * num slices
     constexpr auto idxCountQuads = 6 * (N_STACKS - 2) * N_SLICES;
 
-    auto indices = dyn_array<mesh_index>(idxCountTriangles + idxCountQuads);
+    auto indices = data_buffer<mesh_index>(idxCountTriangles + idxCountQuads);
     auto index = indices.data();
 
-    const auto indexLast = uint32_t(vertices.count() - 1);
+    const auto indexLast = uint32_t(vertices.capacity() - 1);
 
     // Top and bottom triangles
     for (uint32_t i = 0; i < N_SLICES; i++){
@@ -120,7 +120,7 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
         }
     }
 
-    load(device, cmdPool, vertices, indices);
+    load(device, cmdPool, vertices.getView(), indices.getView());
 }
 // TODO(arle): UV coordinates
 void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
@@ -151,7 +151,7 @@ void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
         vec2(0.0f, 1.0f)
     };
 
-    auto vertices = dyn_array<mesh_vertex>(24);
+    auto vertices = data_buffer<mesh_vertex>(24);
     vertices[0] = {points[0], normalFront, uvs[3]};
     vertices[1] = {points[3], normalFront, uvs[0]};
     vertices[2] = {points[2], normalFront, uvs[1]};
@@ -182,7 +182,7 @@ void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
     vertices[22] = {points[6], normalLeft, uvs[2]};
     vertices[23] = {points[5], normalLeft, uvs[3]};
 
-    auto indices = dyn_array<mesh_index>(36);
+    auto indices = data_buffer<mesh_index>(36);
     for (uint32_t i = 0; i < 6; i++){
         const auto index = 6 * i;
         const auto offset = 4 * i;
@@ -194,7 +194,7 @@ void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
         indices[index + 5] = offset;
     }
 
-    load(device, cmdPool, vertices, indices);
+    load(device, cmdPool, vertices.getView(), indices.getView());
 }
 
 void mesh3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)

@@ -221,6 +221,9 @@ namespace pltf
 
 	bool IsKeyDown(key_code key);
 	void InputMousePosition(); //TODO(arle)
+
+	void *MapMemory(size_t size);
+	bool UnmapMemory(void *mapped);
 }
 
 namespace io

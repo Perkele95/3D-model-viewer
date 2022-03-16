@@ -309,10 +309,10 @@ void text_overlay::prepareFontTexture()
 
 void text_overlay::prepareDescriptorSets()
 {
-    auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
+    auto layouts = data_buffer<VkDescriptorSetLayout>(m_imageCount);
     layouts.fill(m_setLayout);
 
-    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
     const auto samplerImageDesc = m_fontTexture.descriptor;

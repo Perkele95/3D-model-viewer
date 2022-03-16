@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vulkan_device.hpp"
+#include "../storage.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"
 #include "texture2D.hpp"

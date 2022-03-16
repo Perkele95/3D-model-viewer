@@ -6,11 +6,12 @@ static const bool C_VALIDATION = true;
 static const bool C_VALIDATION = false;
 #endif
 
-model_viewer::model_viewer(pltf::logical_device device)
-: m_permanentStorage(MegaBytes(64)), m_currentFrame(0)
+model_viewer::model_viewer(pltf::logical_device device):
+    linear_storage(MegaBytes(64)),
+    m_currentFrame(0)
 {
-    m_device = m_permanentStorage.push<vulkan_device>(1);
-    m_overlay = m_permanentStorage.push<text_overlay>(1);
+    m_device = push<vulkan_device>(1);
+    m_overlay = push<text_overlay>(1);
 
     new (m_device) vulkan_device(device, C_VALIDATION, false);
 
@@ -19,7 +20,7 @@ model_viewer::model_viewer(pltf::logical_device device)
     buildResources();
 
     text_overlay_create_info overlayInfo;
-    overlayInfo.sharedPermanent = &m_permanentStorage;
+    overlayInfo.sharedPermanent = this;// NOTE(arle): object slicing
     overlayInfo.device = m_device;
     overlayInfo.cmdPool = m_cmdPool;
     overlayInfo.imageCount = m_imageCount;
@@ -223,12 +224,12 @@ void model_viewer::buildResources()
     vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, nullptr);
     m_imageCount = localImageCount;
 
-    m_swapchainImages = m_permanentStorage.push<VkImage>(m_imageCount);
-    m_swapchainViews = m_permanentStorage.push<VkImageView>(m_imageCount);
-    m_framebuffers = m_permanentStorage.push<VkFramebuffer>(m_imageCount);
-    m_imagesInFlight = m_permanentStorage.push<VkFence>(m_imageCount);
-    m_commandBuffers = m_permanentStorage.push<VkCommandBuffer>(m_imageCount);
-    m_descriptorSets = m_permanentStorage.push<VkDescriptorSet>(m_imageCount);
+    m_swapchainImages = push<VkImage>(m_imageCount);
+    m_swapchainViews = push<VkImageView>(m_imageCount);
+    m_framebuffers = push<VkFramebuffer>(m_imageCount);
+    m_imagesInFlight = push<VkFence>(m_imageCount);
+    m_commandBuffers = push<VkCommandBuffer>(m_imageCount);
+    m_descriptorSets = push<VkDescriptorSet>(m_imageCount);
 
     vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
 
@@ -239,8 +240,8 @@ void model_viewer::buildResources()
     buildFramebuffers();
     buildSyncObjects();
 
-    new (&m_mainCamera) camera(m_device, m_permanentStorage.pushView<buffer_t>(m_imageCount));
-    new (&m_lights) lights(m_device, m_permanentStorage.pushView<buffer_t>(m_imageCount));
+    new (&m_mainCamera) camera(m_device, pushView<buffer_t>(m_imageCount));
+    new (&m_lights) lights(m_device, pushView<buffer_t>(m_imageCount));
 
     loadModel();
 
@@ -258,10 +259,10 @@ void model_viewer::buildResources()
 
 void model_viewer::loadModel()
 {
-    auto mesh = m_permanentStorage.push<mesh3D>(1);
+    auto mesh = push<mesh3D>(1);
     mesh->loadSphere(m_device, m_cmdPool);
 
-    auto material = m_permanentStorage.push<pbr_material>(1);
+    auto material = push<pbr_material>(1);
 
     new (material) pbr_material();
 
@@ -434,10 +435,10 @@ void model_viewer::buildDescriptors(const pbr_material *pMaterial)
 
     // Sets
 
-    auto layouts = dyn_array<VkDescriptorSetLayout>(m_imageCount);
+    auto layouts = data_buffer<VkDescriptorSetLayout>(m_imageCount);
     layouts.fill(m_descriptorSetLayout);
 
-    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
     for (size_t i = 0; i < m_imageCount; i++) {

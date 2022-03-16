@@ -2,7 +2,7 @@
 
 #include "base.hpp"
 
-#include "mv_utils/linear_storage.hpp"
+#include "storage.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vulkan_text_overlay.hpp"
 
@@ -15,7 +15,7 @@
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
-class model_viewer
+class model_viewer : public linear_storage
 {
 public:
     model_viewer(pltf::logical_device device);
@@ -47,8 +47,6 @@ private:
     void gameUpdate(float dt);
     void updateLights();
     void updateCmdBuffers(size_t imageIndex);
-
-    linear_storage          m_permanentStorage;
 
     vulkan_device*          m_device;
     text_overlay*           m_overlay;
