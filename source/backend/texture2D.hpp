@@ -41,5 +41,6 @@ public:
 
     void loadFromFile(const vulkan_device* device,
                       VkCommandPool cmdPool,
+                      VkFormat format,
                       const char *filepath);
 };

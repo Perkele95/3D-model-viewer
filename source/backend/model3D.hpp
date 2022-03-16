@@ -10,18 +10,17 @@ class model3D
 {
 public:
     model3D(): m_device(nullptr),
-               m_mesh(nullptr),
-               m_material(nullptr),
+               mesh(nullptr),
+               material(nullptr),
                transform()
     {
     }
 
-    model3D(const vulkan_device* device,
-            mesh3D *mesh,
-            pbr_material *material): m_device(device),
-                                     m_mesh(mesh),
-                                     m_material(material),
-                                     transform(mat4x4::identity())
+    model3D(const vulkan_device* device):
+        m_device(device),
+        mesh(nullptr),
+        material(nullptr),
+        transform(mat4x4::identity())
     {
     }
 
@@ -30,10 +29,10 @@ public:
 
     static VkPushConstantRange pushConstant();
 
-    mat4x4 transform;
+    mat4x4                  transform;
+    mesh3D*                 mesh;
+    pbr_material*           material;
 
 private:
     const vulkan_device*    m_device;
-    mesh3D*                 m_mesh;
-    pbr_material*           m_material;
 };

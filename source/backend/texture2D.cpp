@@ -170,17 +170,18 @@ void texture2D::loadFromMemory(const vulkan_device *device,
     updateDescriptor();
 }
 
-void texture2D::loadFromFile(const vulkan_device* device, VkCommandPool cmdPool, const char* filepath)
+void texture2D::loadFromFile(const vulkan_device* device,
+                             VkCommandPool cmdPool,
+                             VkFormat format,
+                             const char* filepath)
 {
     int x, y, channels;
     auto pixels = stbi_load(filepath, &x, &y, &channels, STBI_rgb_alpha);
 
     const VkExtent2D extent = { uint32_t(x), uint32_t(y) };
 
-    if (pixels != nullptr) {
-        loadFromMemory(device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, extent, pixels);
-    }
-    else {
+    if (pixels != nullptr)
+        loadFromMemory(device, cmdPool, format, extent, pixels);
+    else
         loadFromMemory(device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, { 1, 1 }, TEX2D_DEFAULT);
-    }
 }

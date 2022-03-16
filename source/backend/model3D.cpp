@@ -2,27 +2,27 @@
 
 void model3D::destroy()
 {
-    if (m_mesh != nullptr) {
-        m_mesh->destroy(m_device->device);
-        m_mesh = nullptr;
+    if (mesh != nullptr) {
+        mesh->destroy(m_device->device);
+        mesh = nullptr;
     }
-    if (m_material != nullptr) {
-        m_material->destroy(m_device->device);
-        m_material = nullptr;
+    if (material != nullptr) {
+        material->destroy(m_device->device);
+        material = nullptr;
     }
 }
 
 void model3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
 {
-    const auto pc = pushConstant();
+    const auto [stageFlags, offset, size] = pushConstant();
     vkCmdPushConstants(cmd,
                        layout,
-                       pc.stageFlags,
-                       pc.offset,
-                       pc.size,
+                       stageFlags,
+                       offset,
+                       size,
                        &transform);
 
-    m_mesh->draw(cmd, layout);
+    mesh->draw(cmd, layout);
 }
 
 VkPushConstantRange model3D::pushConstant()

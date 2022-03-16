@@ -170,7 +170,11 @@ void model_viewer::onMouseButtonEvent(pltf::logical_device device, pltf::mouse_b
 
 void model_viewer::onWindowResize()
 {
-    vkDeviceWaitIdle(m_device->device);// TODO(arle): replace with faster sync
+#if defined(USE_DEVICE_WAIT_SYNC)
+    vkDeviceWaitIdle(m_device->device);
+#else
+    vkQueueWaitIdle(m_device->graphics.queue);
+#endif
 
     m_device->refresh();
 
@@ -259,22 +263,23 @@ void model_viewer::buildResources()
 
 void model_viewer::loadModel()
 {
-    auto mesh = push<mesh3D>(1);
-    mesh->loadSphere(m_device, m_cmdPool);
+    new (&m_model) model3D(m_device);
+    m_model.mesh = push<mesh3D>(1);
+    m_model.material = push<pbr_material>(1);
 
-    auto material = push<pbr_material>(1);
+    new (m_model.mesh) mesh3D();
+    new (m_model.material) pbr_material();
 
-    new (material) pbr_material();
+    m_model.mesh->loadSphere(m_device, m_cmdPool);
 
-    material->albedo.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
-    material->normal.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
-    material->roughness.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
-    material->metallic.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");
-    material->ao.loadFromFile(m_device, m_cmdPool, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png");
+    auto format = VK_FORMAT_R8G8B8A8_SRGB;
+    m_model.material->albedo.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
+    m_model.material->normal.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
+    m_model.material->roughness.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
+    m_model.material->metallic.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");
+    m_model.material->ao.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png");
 
-    new (&m_model) model3D(m_device, mesh, material);
-
-    buildDescriptors(material);
+    buildDescriptors();
 }
 
 void model_viewer::buildSwapchainViews()
@@ -408,7 +413,7 @@ void model_viewer::buildSyncObjects()
     }
 }
 
-void model_viewer::buildDescriptors(const pbr_material *pMaterial)
+void model_viewer::buildDescriptors()
 {
     const VkDescriptorPoolSize poolSizes[] = {
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
@@ -449,11 +454,11 @@ void model_viewer::buildDescriptors(const pbr_material *pMaterial)
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraBufferInfo),
             vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightBufferInfo),
-            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->albedo.descriptor),
-            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->normal.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->roughness.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &pMaterial->ao.descriptor)
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->ao.descriptor)
         };
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);

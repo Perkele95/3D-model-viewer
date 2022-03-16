@@ -41,7 +41,7 @@ private:
     void buildRenderPass();
     void buildFramebuffers();
     void buildSyncObjects();
-    void buildDescriptors(const pbr_material* pMaterial);
+    void buildDescriptors();
     void buildPipeline();
 
     void gameUpdate(float dt);
