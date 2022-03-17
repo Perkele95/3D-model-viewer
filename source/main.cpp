@@ -16,6 +16,13 @@ void MouseEventDispatch(pltf::logical_device device, pltf::mouse_button button)
     object->onMouseButtonEvent(device, button);
 }
 
+void ScrollWheelDispatch(pltf::logical_device device, double x, double y)
+{
+    auto handle = pltf::DeviceGetHandle(device);
+    auto object = reinterpret_cast<model_viewer*>(handle);
+    object->onScrollWheelEvent(device, x, y);
+}
+
 int EntryPoint(pltf::logical_device device)
 {
     pltf::WindowCreate(device, "3D model viewer");
@@ -25,6 +32,7 @@ int EntryPoint(pltf::logical_device device)
     pltf::DeviceSetHandle(device, &app);
     pltf::EventsSetKeyDownProc(device, KeyEventDispatch);
     pltf::EventsSetMouseDownProc(device, MouseEventDispatch);
+    pltf::EventsSetScrollWheelProc(device, ScrollWheelDispatch);
 
     while(pltf::IsRunning()){
         pltf::EventsPoll(device);

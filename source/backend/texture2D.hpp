@@ -17,6 +17,7 @@ protected:
                         VkPipelineStageFlags srcStage,
                         VkPipelineStageFlags dstStage);
 
+    void initValues();
     void updateDescriptor();
 
     VkImage         m_image;
@@ -31,8 +32,6 @@ protected:
 class texture2D : public texture
 {
 public:
-    texture2D();
-
     void loadFromMemory(const vulkan_device *device,
                         VkCommandPool cmdPool,
                         VkFormat format,

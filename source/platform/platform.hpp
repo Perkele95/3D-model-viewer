@@ -177,6 +177,7 @@ namespace pltf
 	using key_event_callback = void(*)(logical_device, key_code, modifier);
 	using mouse_move_callback = void(*)(logical_device);// TODO(arle): UNFINISHED
 	using mouse_button_callback = void(*)(logical_device, mouse_button);
+	using scroll_wheel_callback = void(*)(logical_device, double, double);
 
     // Main
 
@@ -216,6 +217,7 @@ namespace pltf
 	void EventsSetKeyDownProc(logical_device device, key_event_callback proc);
 	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc);
 	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc);
+	void EventsSetScrollWheelProc(logical_device device, scroll_wheel_callback proc);
 
 	// Input state
 

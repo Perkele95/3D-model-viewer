@@ -29,6 +29,7 @@ public:
     void swapBuffers(pltf::logical_device device);
     void onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod);
     void onMouseButtonEvent(pltf::logical_device device, pltf::mouse_button button);
+    void onScrollWheelEvent(pltf::logical_device device, double x, double y);
 
 private:
     void onWindowResize();

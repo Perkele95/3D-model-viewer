@@ -7,8 +7,10 @@ class image_buffer
 {
 public:
     image_buffer() = default;
-    image_buffer(const vulkan_device *device, const VkImageCreateInfo *pCreateInfo,
-                 VkImageAspectFlags aspect);
+
+    void create(const vulkan_device *device,
+                const VkImageCreateInfo *pCreateInfo,
+                VkImageAspectFlags aspect);
 
     void destroy(VkDevice device);
     VkDescriptorImageInfo descriptor(VkSampler sampler);
@@ -22,7 +24,7 @@ private:
     VkExtent2D      m_extent;
     VkFormat        m_format;
 };
-
+// TODO(arle): get a better name for this class
 class buffer_t
 {
 public:

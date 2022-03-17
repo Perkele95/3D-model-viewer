@@ -2,7 +2,7 @@
 
 camera::camera(const vulkan_device *device, view<buffer_t> buffers)
 {
-    this->fov = DEFAULT_FOV;
+    this->fov = FOV_DEFAULT;
     this->sensitivity = 2.0f;
     m_zNear = DEFAULT_ZNEAR;
     m_zFar = DEFAULT_ZFAR;

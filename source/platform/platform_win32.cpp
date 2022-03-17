@@ -21,6 +21,7 @@ namespace pltf
         key_event_callback keyEventCallback;
         mouse_move_callback mouseMoveCallback;
         mouse_button_callback mouseButtonCallback;
+		scroll_wheel_callback scrollWheelCallback;
 
 		void *callbackHandle;
 	};
@@ -242,8 +243,10 @@ namespace pltf
 					device->keyEventCallback(device, GetKeyCode(LOWORD(event.wParam)), mod);
 				} break;
 
-				case WM_MOUSEWHEEL: // call mousewheel proc with value
-					break;
+				case WM_MOUSEWHEEL:{
+					auto wheelDelta = double(GET_WHEEL_DELTA_WPARAM(event.wParam) / WHEEL_DELTA);
+					device->scrollWheelCallback(device, 0.0f, wheelDelta);
+				} break;
 				case WM_MOUSEMOVE: device->mouseMoveCallback(device);
 					break;
 				case WM_LBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::lmb);
@@ -278,6 +281,12 @@ namespace pltf
 		if(proc != nullptr)
         	device->mouseButtonCallback = proc;
     }
+
+	void EventsSetScrollWheelProc(logical_device device, scroll_wheel_callback proc)
+	{
+		if(proc != nullptr)
+        	device->scrollWheelCallback = proc;
+	}
 
 	inline int GetVirtualKey(key_code key)
 	{
@@ -354,6 +363,7 @@ namespace pltf
 void KeyEventStub(pltf::logical_device, pltf::key_code, pltf::modifier){}
 void MouseMoveStub(pltf::logical_device){}
 void MouseButtonStub(pltf::logical_device, pltf::mouse_button){}
+void ScrollWheelStub(pltf::logical_device, double x, double y){}
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
                    _In_ PSTR lpCmdLine, _In_ INT nCmdShow)
@@ -370,6 +380,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	device.keyEventCallback = KeyEventStub;
 	device.mouseMoveCallback = MouseMoveStub;
 	device.mouseButtonCallback = MouseButtonStub;
+	device.scrollWheelCallback = ScrollWheelStub;
 	device.callbackHandle = nullptr;
 
 	pltf::s_Running = true;

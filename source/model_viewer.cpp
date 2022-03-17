@@ -168,6 +168,12 @@ void model_viewer::onMouseButtonEvent(pltf::logical_device device, pltf::mouse_b
     return;
 }
 
+void model_viewer::onScrollWheelEvent(pltf::logical_device device, double x, double y)
+{
+    m_mainCamera.fov -= GetRadians(float(y));
+    m_mainCamera.fov = clamp(m_mainCamera.fov, camera::FOV_LIMITS_LOW, camera::FOV_LIMITS_HIGH);
+}
+
 void model_viewer::onWindowResize()
 {
 #if defined(USE_DEVICE_WAIT_SYNC)
@@ -267,9 +273,6 @@ void model_viewer::loadModel()
     m_model.mesh = push<mesh3D>(1);
     m_model.material = push<pbr_material>(1);
 
-    new (m_model.mesh) mesh3D();
-    new (m_model.material) pbr_material();
-
     m_model.mesh->loadSphere(m_device, m_cmdPool);
 
     auto format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -302,7 +305,7 @@ void model_viewer::buildMsaa()
     msaaInfo.format = m_device->surfaceFormat.format;
     msaaInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     msaaInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    new (&m_msaa) image_buffer(m_device, &msaaInfo, VK_IMAGE_ASPECT_COLOR_BIT);
+    m_msaa.create(m_device, &msaaInfo, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void model_viewer::buildDepth()
@@ -313,7 +316,7 @@ void model_viewer::buildDepth()
     depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     depthInfo.samples = m_device->sampleCount;
     depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    new (&m_depth) image_buffer(m_device, &depthInfo, VK_IMAGE_ASPECT_DEPTH_BIT);
+    m_depth.create(m_device, &depthInfo, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
 void model_viewer::buildRenderPass()

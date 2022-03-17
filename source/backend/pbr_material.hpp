@@ -5,8 +5,6 @@
 class pbr_material
 {
 public:
-    pbr_material(){}
-
     void destroy(VkDevice device)
     {
         albedo.destroy(device);

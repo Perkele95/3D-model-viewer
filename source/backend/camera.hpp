@@ -15,12 +15,16 @@ struct alignas(16) mvp_matrix
 class camera
 {
 public:
-    static constexpr float DEFAULT_FOV = GetRadians(60.0f);
+    static constexpr float FOV_DEFAULT = GetRadians(60.0f);
+    static constexpr float FOV_LIMITS_LOW = GetRadians(15.0f);
+    static constexpr float FOV_LIMITS_HIGH = GetRadians(120.0f);
+
     static constexpr float DEFAULT_ZNEAR = 0.1f;
     static constexpr float DEFAULT_ZFAR = 100.0f;
     static constexpr float DEFAULT_YAW = GetRadians(90.0f);
     static constexpr float PITCH_CLAMP = GetRadians(90.0f) - 0.01f;
     static constexpr float YAW_MOD = GetRadians(360.0f);
+
     static constexpr auto GLOBAL_UP = vec3(0.0f, 1.0f, 0.0f);
 
     enum class direction

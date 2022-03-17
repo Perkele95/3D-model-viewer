@@ -69,18 +69,17 @@ void texture::setImageLayout(VkCommandBuffer cmd,
     m_layout = newLayout;
 }
 
+void texture::initValues()
+{
+    m_mipLevels = 1;
+    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+}
+
 void texture::updateDescriptor()
 {
     descriptor.imageLayout = m_layout;
     descriptor.imageView = m_view;
     descriptor.sampler = m_sampler;
-}
-
-texture2D::texture2D()
-{
-    descriptor = {};
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    m_mipLevels = 1;
 }
 
 constexpr size_t GetSizeFactor(VkFormat format)
@@ -103,6 +102,7 @@ void texture2D::loadFromMemory(const vulkan_device *device,
                                VkExtent2D extent,
                                const void *src)
 {
+    initValues();
     m_extent = extent;
 
     auto imageInfo = vkInits::imageCreateInfo();

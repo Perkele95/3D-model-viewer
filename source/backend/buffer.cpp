@@ -1,7 +1,8 @@
 #include "buffer.hpp"
 
-image_buffer::image_buffer(const vulkan_device *device, const VkImageCreateInfo *pCreateInfo,
-                           VkImageAspectFlags aspect)
+void image_buffer::create(const vulkan_device *device,
+                          const VkImageCreateInfo *pCreateInfo,
+                          VkImageAspectFlags aspect)
 {
     vkCreateImage(device->device, pCreateInfo, nullptr, &m_image);
     m_extent.width = pCreateInfo->extent.width;
