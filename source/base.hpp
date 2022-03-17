@@ -24,10 +24,22 @@ constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024U
 constexpr uint32_t BIT(uint32_t value){return 1 << value;}
 
 template<typename T>
-inline constexpr T clamp(T value, T min, T max)
+constexpr T clamp(T value, T min, T max)
 {
     const T result = value < min ? min : value;
     return result > max ? max : result;
+}
+
+template<typename T>
+constexpr T min(T a, T b)
+{
+    return a < b ? a : b;
+}
+
+template<typename T>
+constexpr T max(T a, T b)
+{
+    return a > b ? a : b;
 }
 
 constexpr float PI32 = 3.141592741f;

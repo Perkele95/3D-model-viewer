@@ -69,12 +69,6 @@ void texture::setImageLayout(VkCommandBuffer cmd,
     m_layout = newLayout;
 }
 
-void texture::initValues()
-{
-    m_mipLevels = 1;
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-}
-
 void texture::updateDescriptor()
 {
     descriptor.imageLayout = m_layout;
@@ -82,7 +76,7 @@ void texture::updateDescriptor()
     descriptor.sampler = m_sampler;
 }
 
-constexpr size_t GetSizeFactor(VkFormat format)
+constexpr VkDeviceSize GetSizeFactor(VkFormat format)
 {
     switch (format) {
         case VK_FORMAT_R8G8B8A8_SRGB:
@@ -102,8 +96,19 @@ void texture2D::loadFromMemory(const vulkan_device *device,
                                VkExtent2D extent,
                                const void *src)
 {
-    initValues();
     m_extent = extent;
+    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_mipLevels = 1;
+
+    // Use staging
+
+    const VkDeviceSize size = GetSizeFactor(format) * m_extent.width * m_extent.height;
+
+    auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    auto transfer = buffer_t();
+    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
+
+    // Create target image resource
 
     auto imageInfo = vkInits::imageCreateInfo();
     imageInfo.extent = {m_extent.width, m_extent.height, 1};
@@ -120,33 +125,6 @@ void texture2D::loadFromMemory(const vulkan_device *device,
     auto allocInfo = device->getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
     vkAllocateMemory(device->device, &allocInfo, nullptr, &m_memory);
     vkBindImageMemory(device->device, m_image, m_memory, 0);
-
-    auto viewInfo = vkInits::imageViewCreateInfo();
-    viewInfo.image = m_image;
-    viewInfo.format = format;
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
-
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    samplerInfo.anisotropyEnable = VK_FALSE;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
-
-    const VkDeviceSize size = GetSizeFactor(format) * m_extent.width * m_extent.height;
-
-    auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = buffer_t();
-    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
 
     auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
 
@@ -167,6 +145,28 @@ void texture2D::loadFromMemory(const vulkan_device *device,
 
     transfer.destroy(device->device);
 
+    auto viewInfo = vkInits::imageViewCreateInfo();
+    viewInfo.image = m_image;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = m_mipLevels;
+    vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
+
     updateDescriptor();
 }
 
@@ -178,10 +178,87 @@ void texture2D::loadFromFile(const vulkan_device* device,
     int x, y, channels;
     auto pixels = stbi_load(filepath, &x, &y, &channels, STBI_rgb_alpha);
 
-    const VkExtent2D extent = { uint32_t(x), uint32_t(y) };
-
-    if (pixels != nullptr)
+    if(pixels){
+        const VkExtent2D extent = {uint32_t(x), uint32_t(y)};
         loadFromMemory(device, cmdPool, format, extent, pixels);
-    else
-        loadFromMemory(device, cmdPool, VK_FORMAT_R8G8B8A8_SRGB, { 1, 1 }, TEX2D_DEFAULT);
+        stbi_image_free(pixels);
+    }
+    else{
+        loadFallbackTexture(device, cmdPool);
+    }
+}
+
+void texture2D::loadFallbackTexture(const vulkan_device *device,
+                                    VkCommandPool cmdPool)
+{
+    auto src = TEX2D_DEFAULT;
+    auto format = VK_FORMAT_R8G8B8A8_SRGB;
+    m_extent = {1, 1};
+    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    m_mipLevels = 1;
+
+    auto transferInfo = vkInits::bufferCreateInfo(sizeof(TEX2D_DEFAULT), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    auto transfer = buffer_t();
+    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
+
+    // Create target image resource
+
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.extent = {m_extent.width, m_extent.height, 1};
+    imageInfo.format = format;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.mipLevels = m_mipLevels;
+    vkCreateImage(device->device, &imageInfo, nullptr, &m_image);
+
+    VkMemoryRequirements memReqs{};
+    vkGetImageMemoryRequirements(device->device, m_image, &memReqs);
+
+    auto allocInfo = device->getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+    vkAllocateMemory(device->device, &allocInfo, nullptr, &m_memory);
+    vkBindImageMemory(device->device, m_image, m_memory, 0);
+
+    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
+
+    setImageLayout(command,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    const auto copyRegion = vkInits::bufferImageCopy(m_extent);
+    vkCmdCopyBufferToImage(command, transfer.data, m_image, m_layout, 1, &copyRegion);
+
+    setImageLayout(command,
+                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+    device->flushCommandBuffer(command, device->graphics.queue, cmdPool);
+
+    transfer.destroy(device->device);
+
+    auto viewInfo = vkInits::imageViewCreateInfo();
+    viewInfo.image = m_image;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = m_mipLevels;
+    vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_TRANSPARENT_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
+
+    updateDescriptor();
 }

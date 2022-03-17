@@ -17,7 +17,6 @@ protected:
                         VkPipelineStageFlags srcStage,
                         VkPipelineStageFlags dstStage);
 
-    void initValues();
     void updateDescriptor();
 
     VkImage         m_image;
@@ -42,4 +41,8 @@ public:
                       VkCommandPool cmdPool,
                       VkFormat format,
                       const char *filepath);
+
+private:
+    void loadFallbackTexture(const vulkan_device* device,
+                             VkCommandPool cmdPool);
 };

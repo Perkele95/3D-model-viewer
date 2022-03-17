@@ -49,6 +49,7 @@ private:
     void updateLights();
     void updateCmdBuffers(size_t imageIndex);
 
+    debug_message_callback  m_messageCallback;
     vulkan_device*          m_device;
     text_overlay*           m_overlay;
 

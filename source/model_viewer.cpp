@@ -16,10 +16,11 @@ model_viewer::model_viewer(pltf::logical_device device):
     linear_storage(MegaBytes(64)),
     m_currentFrame(0)
 {
+    m_messageCallback = DebugMessageCallback;
     m_device = push<vulkan_device>(1);
     m_overlay = push<text_overlay>(1);
 
-    new (m_device) vulkan_device(device, DebugMessageCallback, C_VALIDATION, false);
+    new (m_device) vulkan_device(device, m_messageCallback, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
 

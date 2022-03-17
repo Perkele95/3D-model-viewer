@@ -33,7 +33,7 @@ class vulkan_device
 public:
     // TODO(arle): replace with method & add settings field
     vulkan_device(pltf::logical_device device,
-                  debug_message_callback debugMessageCallback,
+                  debug_message_callback messageCallback,
                   bool validation, bool vSync);
     ~vulkan_device();
 
@@ -49,7 +49,6 @@ public:
 
     // ~Tools
 
-    debug_message_callback      debugCallback;
     VkPhysicalDevice            gpu;
     VkDevice                    device;
     queue_data                  graphics, present;
@@ -69,6 +68,7 @@ private:
 
     void getSampleCount();
 
+    debug_message_callback      m_messageCallback;
     VkInstance                  m_instance;
     VkSurfaceKHR                m_surface;
 };
