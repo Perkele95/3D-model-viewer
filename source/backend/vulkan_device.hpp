@@ -31,7 +31,10 @@ struct queue_data
 class vulkan_device
 {
 public:
-    vulkan_device(pltf::logical_device device, bool validation, bool vSync);
+    // TODO(arle): replace with method & add settings field
+    vulkan_device(pltf::logical_device device,
+                  debug_message_callback debugMessageCallback,
+                  bool validation, bool vSync);
     ~vulkan_device();
 
     void refresh();
@@ -46,6 +49,7 @@ public:
 
     // ~Tools
 
+    debug_message_callback      debugCallback;
     VkPhysicalDevice            gpu;
     VkDevice                    device;
     queue_data                  graphics, present;

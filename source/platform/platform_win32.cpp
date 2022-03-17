@@ -135,6 +135,16 @@ namespace pltf
         return device->dt;
 	}
 
+	void DebugBreak()
+	{
+		::DebugBreak();
+	}
+
+	void DebugString(const char* string)
+	{
+		OutputDebugStringA(string);
+	}
+
 	void SurfaceCreate(logical_device device, VkInstance instance, VkSurfaceKHR *pSurface)
 	{
 		VkWin32SurfaceCreateInfoKHR createInfo{};

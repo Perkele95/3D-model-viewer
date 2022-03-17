@@ -4,7 +4,7 @@
 #include "../storage.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"
-#include "texture2D.hpp"
+#include "texture.hpp"
 
 struct alignas(4) quad_vertex
 {

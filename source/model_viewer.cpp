@@ -6,6 +6,12 @@ static const bool C_VALIDATION = true;
 static const bool C_VALIDATION = false;
 #endif
 
+void DebugMessageCallback(debug_level level, const char *string)
+{
+    pltf::DebugString(string);
+    pltf::DebugBreak();
+}
+
 model_viewer::model_viewer(pltf::logical_device device):
     linear_storage(MegaBytes(64)),
     m_currentFrame(0)
@@ -13,7 +19,7 @@ model_viewer::model_viewer(pltf::logical_device device):
     m_device = push<vulkan_device>(1);
     m_overlay = push<text_overlay>(1);
 
-    new (m_device) vulkan_device(device, C_VALIDATION, false);
+    new (m_device) vulkan_device(device, DebugMessageCallback, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
 

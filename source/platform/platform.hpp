@@ -198,6 +198,11 @@ namespace pltf
 	// Timestep
 
 	timestep_type GetTimestep(logical_device device);
+
+	//  Debug
+
+	void DebugBreak();
+	void DebugString(const char* string);
 }
 
 struct VkInstance_T;

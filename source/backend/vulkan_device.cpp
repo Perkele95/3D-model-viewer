@@ -5,8 +5,12 @@ constexpr const char *ValidationLayers[] = {"VK_LAYER_KHRONOS_validation"};
 constexpr const char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr const char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
-vulkan_device::vulkan_device(pltf::logical_device device, bool validation, bool vSync)
+vulkan_device::vulkan_device(pltf::logical_device device,
+                             debug_message_callback debugMessageCallback,
+                             bool validation, bool vSync)
 {
+    debugCallback = debugMessageCallback;
+
     auto appInfo = vkInits::applicationInfo("3D model viewer");
     auto instanceInfo = vkInits::instanceCreateInfo();
     instanceInfo.pApplicationInfo = &appInfo;
@@ -225,7 +229,8 @@ void vulkan_device::pickPhysicalDevice()
             break;
         }
     }
-    vol_assert(this->gpu != VK_NULL_HANDLE)
+    if(gpu == VK_NULL_HANDLE)
+        debugCallback(debug_level::error, "No suitable GPU found");
 }
 
 void vulkan_device::prepareLogicalDevice(bool validation)

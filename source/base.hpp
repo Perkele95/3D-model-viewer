@@ -5,20 +5,14 @@
 #include "platform/platform.hpp"
 
 #if defined(DEBUG)
-    #if defined(_WIN32)
-        #define WIN32_LEAN_AND_MEAN
-        #define NOMINMAX
-        #include <windows.h>
-        #define vol_assert(expression) if(!(expression)){DebugBreak();}
-    #elif defined(__linux__)
-		#include <signal.h>
-		#define vol_assert(expression) if(!(expression)){raise(SIGTRAP);}
-    #else
-        #define vol_assert(expression)
-    #endif
+    #define mv_dbg_assert(expression, errorString)\
+    if(!(expression)){pltf::DebugString(errorString); pltf::DebugBreak();}
 #else
-    #define vol_assert(expression)
+    #define mv_dbg_assert(expression, errorString)
 #endif
+
+enum class debug_level {info, warning, error, trace};
+using debug_message_callback = void(*)(debug_level, const char*);
 
 // NOTE(arle): temporary, to be replaced
 #define INTERNAL_DIR "../../"

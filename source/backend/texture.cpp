@@ -1,4 +1,4 @@
-#include "texture2D.hpp"
+#include "texture.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../vendor/stb/stb_image.h"
