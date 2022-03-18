@@ -57,3 +57,10 @@ constexpr vec4<float> GetColour(uint32_t hex)
                 float((hex & 0x0000FF00) >> 8) / 255.0f,
                 float((hex & 0x000000FF) >> 0) / 255.0f);
 }
+
+enum class CoreResult
+{
+    Success,
+    Format_Not_Supported,
+    Source_Missing
+};

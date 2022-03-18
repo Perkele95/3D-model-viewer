@@ -1,7 +1,6 @@
 #pragma once
 
 #include "base.hpp"
-
 #include "storage.hpp"
 #include "backend/vulkan_device.hpp"
 #include "backend/vulkan_text_overlay.hpp"
@@ -52,7 +51,6 @@ private:
     debug_message_callback  m_messageCallback;
     vulkan_device*          m_device;
     text_overlay*           m_overlay;
-
     size_t                  m_imageCount, m_currentFrame;
     VkCommandPool           m_cmdPool;
     VkRenderPass            m_renderPass;
@@ -60,27 +58,21 @@ private:
     VkImage*                m_swapchainImages;
     VkImageView*            m_swapchainViews;
     VkFramebuffer*          m_framebuffers;
-
     image_buffer            m_msaa;
     image_buffer            m_depth;
     VkFormat                m_depthFormat;
-
     VkSemaphore             m_imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
     VkSemaphore             m_renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
     VkFence                 m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
     VkFence*                m_imagesInFlight;
-
     VkCommandBuffer*        m_commandBuffers;
     VkPipeline              m_pipeline;
     VkPipelineLayout        m_pipelineLayout;
     shader_object           m_shaders[2];
-
     camera                  m_mainCamera;
     lights                  m_lights;
-
     VkDescriptorPool        m_descriptorPool;
     VkDescriptorSetLayout   m_descriptorSetLayout;
     VkDescriptorSet*        m_descriptorSets;
-
     model3D                 m_model;
 };

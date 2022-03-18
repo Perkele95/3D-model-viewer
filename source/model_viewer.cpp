@@ -12,9 +12,8 @@ void DebugMessageCallback(debug_level level, const char *string)
     pltf::DebugBreak();
 }
 
-model_viewer::model_viewer(pltf::logical_device device):
-    linear_storage(MegaBytes(64)),
-    m_currentFrame(0)
+model_viewer::model_viewer(pltf::logical_device device) : linear_storage(MegaBytes(64)),
+                                                          m_currentFrame(0)
 {
     m_messageCallback = DebugMessageCallback;
     m_device = push<vulkan_device>(1);
@@ -27,7 +26,7 @@ model_viewer::model_viewer(pltf::logical_device device):
     buildResources();
 
     text_overlay_create_info overlayInfo;
-    overlayInfo.sharedPermanent = this;// NOTE(arle): object slicing
+    overlayInfo.sharedPermanent = this; // NOTE(arle): object slicing
     overlayInfo.device = m_device;
     overlayInfo.cmdPool = m_cmdPool;
     overlayInfo.imageCount = m_imageCount;
@@ -81,7 +80,8 @@ model_viewer::~model_viewer()
 
     vkDestroySwapchainKHR(m_device->device, m_swapchain, nullptr);
 
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++){
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
         vkDestroyFence(m_device->device, m_inFlightFences[i], nullptr);
         vkDestroySemaphore(m_device->device, m_renderFinishedSPs[i], nullptr);
         vkDestroySemaphore(m_device->device, m_imageAvailableSPs[i], nullptr);
@@ -92,7 +92,7 @@ model_viewer::~model_viewer()
 
 void model_viewer::swapBuffers(pltf::logical_device device)
 {
-    if(m_device->extent.width == 0 || m_device->extent.height == 0)
+    if (m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
     gameUpdate(pltf::GetTimestep(device));
@@ -103,17 +103,21 @@ void model_viewer::swapBuffers(pltf::logical_device device)
     VkResult result = vkAcquireNextImageKHR(m_device->device, m_swapchain, UINT64_MAX,
                                             m_imageAvailableSPs[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
 
-    switch(result){
-        case VK_ERROR_OUT_OF_DATE_KHR: onWindowResize(); break;
-        case VK_SUBOPTIMAL_KHR: //DebugLog("Suboptimal swapchain"); break;
-        default: break;
+    switch (result)
+    {
+    case VK_ERROR_OUT_OF_DATE_KHR:
+        onWindowResize();
+        break;
+    case VK_SUBOPTIMAL_KHR: // DebugLog("Suboptimal swapchain"); break;
+    default:
+        break;
     }
 
     m_mainCamera.update(m_device->device, m_device->aspectRatio, imageIndex);
-    vkQueueWaitIdle(m_device->graphics.queue);//TODO(arle): replace with fence
+    vkQueueWaitIdle(m_device->graphics.queue); // TODO(arle): replace with fence
     updateCmdBuffers(imageIndex);
 
-    if(m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
+    if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
         vkWaitForFences(m_device->device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
 
     m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
@@ -126,8 +130,7 @@ void model_viewer::swapBuffers(pltf::logical_device device)
 
     VkCommandBuffer submitCmds[] = {
         m_commandBuffers[imageIndex],
-        m_overlay->cmdBuffers[imageIndex]
-    };
+        m_overlay->cmdBuffers[imageIndex]};
 
     auto submitInfo = vkInits::submitInfo(submitCmds, arraysize(submitCmds));
     submitInfo.waitSemaphoreCount = 1;
@@ -149,7 +152,7 @@ void model_viewer::swapBuffers(pltf::logical_device device)
     result = vkQueuePresentKHR(m_device->present.queue, &presentInfo);
 
     const auto vulkanErrorResize = result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR;
-    if(vulkanErrorResize || pltf::HasResized())
+    if (vulkanErrorResize || pltf::HasResized())
         onWindowResize();
 
     m_currentFrame = (m_currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
@@ -157,12 +160,14 @@ void model_viewer::swapBuffers(pltf::logical_device device)
 
 void model_viewer::onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
 {
-    if(mod & pltf::MODIFIER_ALT){
-        if(key == pltf::key_code::F4)
+    if (mod & pltf::MODIFIER_ALT)
+    {
+        if (key == pltf::key_code::F4)
             pltf::WindowClose();
 
-        if(key == pltf::key_code::F){
-            if(pltf::IsFullscreen())
+        if (key == pltf::key_code::F)
+        {
+            if (pltf::IsFullscreen())
                 pltf::WindowSetMinimised(device);
             else
                 pltf::WindowSetFullscreen(device);
@@ -191,7 +196,7 @@ void model_viewer::onWindowResize()
 
     m_device->refresh();
 
-    if(m_device->extent.width == 0 || m_device->extent.height == 0)
+    if (m_device->extent.width == 0 || m_device->extent.height == 0)
         return;
 
     for (size_t i = 0; i < m_imageCount; i++)
@@ -199,7 +204,7 @@ void model_viewer::onWindowResize()
 
     m_msaa.destroy(m_device->device);
     m_depth.destroy(m_device->device);
-    vkResetCommandPool(m_device->device, m_cmdPool, 0);// VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+    vkResetCommandPool(m_device->device, m_cmdPool, 0); // VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
@@ -261,6 +266,7 @@ void model_viewer::buildResources()
     new (&m_lights) lights(m_device, pushView<buffer_t>(m_imageCount));
 
     loadModel();
+    buildDescriptors();
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
@@ -282,19 +288,43 @@ void model_viewer::loadModel()
 
     m_model.mesh->loadSphere(m_device, m_cmdPool);
 
-    auto format = VK_FORMAT_R8G8B8A8_SRGB;
-    m_model.material->albedo.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png");
-    m_model.material->normal.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png");
-    m_model.material->roughness.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png");
-    m_model.material->metallic.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png");
-    m_model.material->ao.loadFromFile(m_device, m_cmdPool, format, INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png");
+    const char *paths[] = {
+        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png",
+        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png",
+        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png",
+        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png",
+        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png"
+    };
 
-    buildDescriptors();
+    texture2D* textures[] = {
+        &m_model.material->albedo,
+        &m_model.material->normal,
+        &m_model.material->roughness,
+        &m_model.material->metallic,
+        &m_model.material->ao
+    };
+
+    for (size_t i = 0; i < arraysize(paths); i++)
+    {
+        const auto format = VK_FORMAT_R8G8B8A8_SRGB;
+        const auto result = textures[i]->loadFromFile(m_device, m_cmdPool, format, paths[i]);
+        switch (result)
+        {
+        case CoreResult::Format_Not_Supported:
+            m_messageCallback(debug_level::error, "Format not supported\n");
+            break;
+        case CoreResult::Source_Missing:
+            m_messageCallback(debug_level::error, "Could not locate file\n");
+            break;
+        default: break;
+        }
+    }
 }
 
 void model_viewer::buildSwapchainViews()
 {
-    for(size_t i = 0; i < m_imageCount; i++){
+    for (size_t i = 0; i < m_imageCount; i++)
+    {
         auto imageViewInfo = vkInits::imageViewCreateInfo();
         imageViewInfo.format = m_device->surfaceFormat.format;
         imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -363,21 +393,21 @@ void model_viewer::buildRenderPass()
     subpass.pResolveAttachments = &colourResolveRef;
 
     VkSubpassDependency dependencies[2];
-	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
     VkRenderPassCreateInfo renderPassInfo = {};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -393,12 +423,12 @@ void model_viewer::buildRenderPass()
 
 void model_viewer::buildFramebuffers()
 {
-    for(size_t i = 0; i < m_imageCount; i++){
+    for (size_t i = 0; i < m_imageCount; i++)
+    {
         const VkImageView frameBufferAttachments[] = {
             m_msaa.view(),
             m_depth.view(),
-            m_swapchainViews[i]
-        };
+            m_swapchainViews[i]};
 
         auto framebufferInfo = vkInits::framebufferCreateInfo();
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -416,7 +446,8 @@ void model_viewer::buildSyncObjects()
     auto semaphoreInfo = vkInits::semaphoreCreateInfo();
     auto fenceInfo = vkInits::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++){
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
         vkCreateSemaphore(m_device->device, &semaphoreInfo, nullptr, &m_imageAvailableSPs[i]);
         vkCreateSemaphore(m_device->device, &semaphoreInfo, nullptr, &m_renderFinishedSPs[i]);
         vkCreateFence(m_device->device, &fenceInfo, nullptr, &m_inFlightFences[i]);
@@ -428,8 +459,7 @@ void model_viewer::buildDescriptors()
     const VkDescriptorPoolSize poolSizes[] = {
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)
-    };
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)};
 
     const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * m_imageCount);
     vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
@@ -442,8 +472,7 @@ void model_viewer::buildDescriptors()
         vkInits::descriptorSetLayoutBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-    };
+        vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)};
 
     const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
     vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
@@ -456,11 +485,12 @@ void model_viewer::buildDescriptors()
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
-    for (size_t i = 0; i < m_imageCount; i++) {
+    for (size_t i = 0; i < m_imageCount; i++)
+    {
         const auto cameraBufferInfo = m_mainCamera.descriptor(i);
         const auto lightBufferInfo = m_lights.descriptor(i);
 
-        auto& setRef = m_descriptorSets[i];
+        auto &setRef = m_descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraBufferInfo),
             vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightBufferInfo),
@@ -468,8 +498,7 @@ void model_viewer::buildDescriptors()
             vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->normal.descriptor),
             vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->roughness.descriptor),
             vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->ao.descriptor)
-        };
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->ao.descriptor)};
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }
@@ -478,8 +507,7 @@ void model_viewer::buildDescriptors()
 void model_viewer::buildPipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()
-    };
+        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()};
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh_vertex));
 
@@ -511,8 +539,7 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        model3D::pushConstant()
-    };
+        model3D::pushConstant()};
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -541,24 +568,24 @@ void model_viewer::buildPipeline()
 
 void model_viewer::gameUpdate(float dt)
 {
-    if(pltf::IsKeyDown(pltf::key_code::W))
+    if (pltf::IsKeyDown(pltf::key_code::W))
         m_mainCamera.rotate(camera::direction::up, dt);
-    else if(pltf::IsKeyDown(pltf::key_code::S))
+    else if (pltf::IsKeyDown(pltf::key_code::S))
         m_mainCamera.rotate(camera::direction::down, dt);
 
-    if(pltf::IsKeyDown(pltf::key_code::A))
+    if (pltf::IsKeyDown(pltf::key_code::A))
         m_mainCamera.rotate(camera::direction::left, dt);
-    else if(pltf::IsKeyDown(pltf::key_code::D))
+    else if (pltf::IsKeyDown(pltf::key_code::D))
         m_mainCamera.rotate(camera::direction::right, dt);
 
-    if(pltf::IsKeyDown(pltf::key_code::Up))
+    if (pltf::IsKeyDown(pltf::key_code::Up))
         m_mainCamera.move(camera::direction::forward, dt);
-    else if(pltf::IsKeyDown(pltf::key_code::Down))
+    else if (pltf::IsKeyDown(pltf::key_code::Down))
         m_mainCamera.move(camera::direction::backward, dt);
 
-    if(pltf::IsKeyDown(pltf::key_code::Left))
+    if (pltf::IsKeyDown(pltf::key_code::Left))
         m_mainCamera.move(camera::direction::left, dt);
-    else if(pltf::IsKeyDown(pltf::key_code::Right))
+    else if (pltf::IsKeyDown(pltf::key_code::Right))
         m_mainCamera.move(camera::direction::right, dt);
 }
 
@@ -598,7 +625,8 @@ void model_viewer::updateCmdBuffers(size_t imageIndex)
     vkCmdEndRenderPass(cmdBuffer);
     vkEndCommandBuffer(cmdBuffer);
 #else
-    for (size_t i = 0; i < m_imageCount; i++){
+    for (size_t i = 0; i < m_imageCount; i++)
+    {
         const auto cmdBuffer = m_commandBuffers[i];
         vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
 

@@ -12,6 +12,15 @@ public:
 
     VkDescriptorImageInfo descriptor;
 protected:
+    void insertMemoryBarrier(VkCommandBuffer cmd,
+                             VkImageLayout oldLayout,
+                             VkImageLayout newLayout,
+                             VkAccessFlags srcAccessMask,
+                             VkAccessFlags dstAccessMask,
+                             VkPipelineStageFlags srcStageMask,
+                             VkPipelineStageFlags dstStageMask,
+                             VkImageSubresourceRange subresourceRange);
+
     void setImageLayout(VkCommandBuffer cmd,
                         VkImageLayout newLayout,
                         VkPipelineStageFlags srcStage,
@@ -31,16 +40,17 @@ protected:
 class texture2D : public texture
 {
 public:
-    void loadFromMemory(const vulkan_device *device,
-                        VkCommandPool cmdPool,
-                        VkFormat format,
-                        VkExtent2D extent,
-                        const void *src);
+    // Includes untime mipmap generation, some formats do not support this
+    CoreResult loadFromMemory(const vulkan_device *device,
+                              VkCommandPool cmdPool,
+                              VkFormat format,
+                              VkExtent2D extent,
+                              const void *src);
 
-    void loadFromFile(const vulkan_device* device,
-                      VkCommandPool cmdPool,
-                      VkFormat format,
-                      const char *filepath);
+    CoreResult loadFromFile(const vulkan_device* device,
+                            VkCommandPool cmdPool,
+                            VkFormat format,
+                            const char *filepath);
 
 private:
     void loadFallbackTexture(const vulkan_device* device,
