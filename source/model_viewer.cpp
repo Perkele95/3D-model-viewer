@@ -6,7 +6,7 @@ static const bool C_VALIDATION = true;
 static const bool C_VALIDATION = false;
 #endif
 
-void DebugMessageCallback(debug_level level, const char *string)
+void CoreMessageCallback(log_level level, const char *string)
 {
     pltf::DebugString(string);
     pltf::DebugBreak();
@@ -15,15 +15,52 @@ void DebugMessageCallback(debug_level level, const char *string)
 model_viewer::model_viewer(pltf::logical_device device) : linear_storage(MegaBytes(64)),
                                                           m_currentFrame(0)
 {
-    m_messageCallback = DebugMessageCallback;
+    m_coreMessage = CoreMessageCallback;
     m_device = push<vulkan_device>(1);
     m_overlay = push<text_overlay>(1);
 
-    new (m_device) vulkan_device(device, m_messageCallback, C_VALIDATION, false);
+    new (m_device) vulkan_device(device, m_coreMessage, C_VALIDATION, false);
 
     m_depthFormat = m_device->getDepthFormat();
 
-    buildResources();
+    auto poolInfo = vkInits::commandPoolCreateInfo(m_device->graphics.family);
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    vkCreateCommandPool(m_device->device, &poolInfo, nullptr, &m_cmdPool);
+
+    m_device->buildSwapchain(VK_NULL_HANDLE, &m_swapchain);
+
+    uint32_t localImageCount = 0;
+    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, nullptr);
+    m_imageCount = localImageCount;
+
+    m_swapchainImages = push<VkImage>(m_imageCount);
+    m_swapchainViews = push<VkImageView>(m_imageCount);
+    m_framebuffers = push<VkFramebuffer>(m_imageCount);
+    m_imagesInFlight = push<VkFence>(m_imageCount);
+    m_commandBuffers = push<VkCommandBuffer>(m_imageCount);
+    m_pbr.descriptorSets = push<VkDescriptorSet>(m_imageCount);
+    m_cubeMap.descriptorSets = push<VkDescriptorSet>(m_imageCount);
+
+    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
+
+    buildSwapchainViews();
+    buildMsaa();
+    buildDepth();
+    buildRenderPass();
+    buildFramebuffers();
+    buildSyncObjects();
+
+    m_mainCamera.init(m_device, pushView<buffer_t>(m_imageCount));
+    m_lights.init(m_device, pushView<buffer_t>(m_imageCount));
+
+    loadModels();
+    buildDescriptors();
+
+    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
+    vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
+
+    buildShaders();
+    buildPipelines();
 
     text_overlay_create_info overlayInfo;
     overlayInfo.sharedPermanent = this; // NOTE(arle): object slicing
@@ -54,19 +91,12 @@ model_viewer::~model_viewer()
 
     vkDestroyCommandPool(m_device->device, m_cmdPool, nullptr);
 
-    vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
-    vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
-
-    for (size_t i = 0; i < arraysize(m_shaders); i++)
-        m_shaders[i].destroy(m_device->device);
+    m_pbr.destroy(m_device->device);
 
     vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
-    vkDestroyDescriptorSetLayout(m_device->device, m_descriptorSetLayout, nullptr);
 
     m_mainCamera.destroy(m_device->device);
     m_lights.destroy(m_device->device);
-
-    m_model.destroy();
 
     for (size_t i = 0; i < m_imageCount; i++)
         vkDestroyFramebuffer(m_device->device, m_framebuffers[i], nullptr);
@@ -206,8 +236,7 @@ void model_viewer::onWindowResize()
     m_depth.destroy(m_device->device);
     vkResetCommandPool(m_device->device, m_cmdPool, 0); // VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 
-    vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
-    vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
+    m_pbr.onResize(m_device->device);
 
     vkDestroyRenderPass(m_device->device, m_renderPass, nullptr);
 
@@ -225,7 +254,7 @@ void model_viewer::onWindowResize()
 
     buildSwapchainViews();
     buildRenderPass();
-    buildPipeline();
+    buildPipelines();
     buildDepth();
     buildMsaa();
     buildFramebuffers();
@@ -234,59 +263,13 @@ void model_viewer::onWindowResize()
     m_overlay->updateCmdBuffers(m_framebuffers);
 }
 
-void model_viewer::buildResources()
+void model_viewer::loadModels()
 {
-    auto poolInfo = vkInits::commandPoolCreateInfo(m_device->graphics.family);
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    vkCreateCommandPool(m_device->device, &poolInfo, nullptr, &m_cmdPool);
+    new (&m_pbr.model) model3D(m_device);
+    m_pbr.model.mesh = push<mesh3D>(1);
+    m_pbr.model.material = push<pbr_material>(1);
 
-    m_device->buildSwapchain(VK_NULL_HANDLE, &m_swapchain);
-
-    uint32_t localImageCount = 0;
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, nullptr);
-    m_imageCount = localImageCount;
-
-    m_swapchainImages = push<VkImage>(m_imageCount);
-    m_swapchainViews = push<VkImageView>(m_imageCount);
-    m_framebuffers = push<VkFramebuffer>(m_imageCount);
-    m_imagesInFlight = push<VkFence>(m_imageCount);
-    m_commandBuffers = push<VkCommandBuffer>(m_imageCount);
-    m_descriptorSets = push<VkDescriptorSet>(m_imageCount);
-
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
-
-    buildSwapchainViews();
-    buildMsaa();
-    buildDepth();
-    buildRenderPass();
-    buildFramebuffers();
-    buildSyncObjects();
-
-    new (&m_mainCamera) camera(m_device, pushView<buffer_t>(m_imageCount));
-    new (&m_lights) lights(m_device, pushView<buffer_t>(m_imageCount));
-
-    loadModel();
-    buildDescriptors();
-
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
-    vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
-
-    new (&m_shaders[0]) shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    new (&m_shaders[1]) shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-
-    for (size_t i = 0; i < arraysize(m_shaders); i++)
-        m_shaders[i].load(m_device->device);
-
-    buildPipeline();
-}
-
-void model_viewer::loadModel()
-{
-    new (&m_model) model3D(m_device);
-    m_model.mesh = push<mesh3D>(1);
-    m_model.material = push<pbr_material>(1);
-
-    m_model.mesh->loadSphere(m_device, m_cmdPool);
+    m_pbr.model.mesh->loadSphere(m_device, m_cmdPool);
 
     const char *paths[] = {
         INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png",
@@ -295,30 +278,29 @@ void model_viewer::loadModel()
         INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png",
         INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png"
     };
+    const auto format = VK_FORMAT_R8G8B8A8_SRGB;
 
-    texture2D* textures[] = {
-        &m_model.material->albedo,
-        &m_model.material->normal,
-        &m_model.material->roughness,
-        &m_model.material->metallic,
-        &m_model.material->ao
-    };
+    auto &sceneMaterial = *m_pbr.model.material;
 
-    for (size_t i = 0; i < arraysize(paths); i++)
+    const auto checkResult = [this](CoreResult result)
     {
-        const auto format = VK_FORMAT_R8G8B8A8_SRGB;
-        const auto result = textures[i]->loadFromFile(m_device, m_cmdPool, format, paths[i]);
         switch (result)
         {
         case CoreResult::Format_Not_Supported:
-            m_messageCallback(debug_level::error, "Format not supported\n");
+            m_coreMessage(log_level::error, "Format not supported\n");
             break;
         case CoreResult::Source_Missing:
-            m_messageCallback(debug_level::error, "Could not locate file\n");
+            m_coreMessage(log_level::error, "Could not locate file\n");
             break;
         default: break;
         }
-    }
+    };
+
+    checkResult(sceneMaterial.albedo.loadFromFile(m_device, m_cmdPool, format, paths[0]));
+    checkResult(sceneMaterial.normal.loadFromFile(m_device, m_cmdPool, format, paths[1]));
+    checkResult(sceneMaterial.roughness.loadFromFile(m_device, m_cmdPool, format, paths[2]));
+    checkResult(sceneMaterial.metallic.loadFromFile(m_device, m_cmdPool, format, paths[3]));
+    checkResult(sceneMaterial.ao.loadFromFile(m_device, m_cmdPool, format, paths[4]));
 }
 
 void model_viewer::buildSwapchainViews()
@@ -428,7 +410,8 @@ void model_viewer::buildFramebuffers()
         const VkImageView frameBufferAttachments[] = {
             m_msaa.view(),
             m_depth.view(),
-            m_swapchainViews[i]};
+            m_swapchainViews[i]
+        };
 
         auto framebufferInfo = vkInits::framebufferCreateInfo();
         framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
@@ -459,7 +442,8 @@ void model_viewer::buildDescriptors()
     const VkDescriptorPoolSize poolSizes[] = {
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)};
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)
+    };
 
     const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * m_imageCount);
     vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
@@ -472,42 +456,61 @@ void model_viewer::buildDescriptors()
         vkInits::descriptorSetLayoutBinding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)};
+        vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
 
     const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
-    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_descriptorSetLayout);
+    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_pbr.setLayout);
 
     // Sets
 
     auto layouts = data_buffer<VkDescriptorSetLayout>(m_imageCount);
-    layouts.fill(m_descriptorSetLayout);
+    layouts.fill(m_pbr.setLayout);
 
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
-    vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
+    vkAllocateDescriptorSets(m_device->device, &allocInfo, m_pbr.descriptorSets);
 
     for (size_t i = 0; i < m_imageCount; i++)
     {
         const auto cameraBufferInfo = m_mainCamera.descriptor(i);
         const auto lightBufferInfo = m_lights.descriptor(i);
 
-        auto &setRef = m_descriptorSets[i];
+        auto &setRef = m_pbr.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraBufferInfo),
             vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightBufferInfo),
-            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->albedo.descriptor),
-            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->normal.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->roughness.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_model.material->ao.descriptor)};
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->ao.descriptor)
+        };
 
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }
 }
 
-void model_viewer::buildPipeline()
+void model_viewer::buildShaders()
+{
+    m_pbr.vertexShader = shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    m_pbr.fragmentShader = shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+#if 0
+    m_cubeMap.vertexShader = shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+    m_cubeMap.fragmentShader = shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+#endif
+    m_pbr.vertexShader.load(m_device->device);
+    m_pbr.fragmentShader.load(m_device->device);
+#if 0
+    m_cubeMap.vertexShader.load(m_device->device);
+    m_cubeMap.fragmentShader.load(m_device->device);
+#endif
+}
+
+void model_viewer::buildPipelines()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()};
+        m_pbr.vertexShader.shaderStage(), m_pbr.fragmentShader.shaderStage()
+    };
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh_vertex));
 
@@ -539,15 +542,16 @@ void model_viewer::buildPipeline()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        model3D::pushConstant()};
+        model3D::pushConstant()
+    };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    pipelineLayoutInfo.pSetLayouts = &m_pbr.setLayout;
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = uint32_t(arraysize(pushConstants));
-    vkCreatePipelineLayout(m_device->device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout);
+    vkCreatePipelineLayout(m_device->device, &pipelineLayoutInfo, nullptr, &m_pbr.pipelineLayout);
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -560,10 +564,10 @@ void model_viewer::buildPipeline()
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colourBlend;
-    pipelineInfo.layout = m_pipelineLayout;
+    pipelineInfo.layout = m_pbr.pipelineLayout;
     pipelineInfo.renderPass = m_renderPass;
     vkCreateGraphicsPipelines(m_device->device, VK_NULL_HANDLE, 1,
-                              &pipelineInfo, nullptr, &m_pipeline);
+                              &pipelineInfo, nullptr, &m_pbr.pipeline);
 }
 
 void model_viewer::gameUpdate(float dt)
@@ -603,50 +607,16 @@ void model_viewer::updateCmdBuffers(size_t imageIndex)
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = clearValues;
     renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));
-#if 1
+
     const auto cmdBuffer = m_commandBuffers[imageIndex];
     vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
 
     renderBeginInfo.framebuffer = m_framebuffers[imageIndex];
     vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 
-    vkCmdBindDescriptorSets(cmdBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_pipelineLayout,
-                            0,
-                            1,
-                            &m_descriptorSets[imageIndex],
-                            0,
-                            nullptr);
-
-    m_model.draw(cmdBuffer, m_pipelineLayout);
+    m_pbr.bind(cmdBuffer, imageIndex);
+    m_pbr.model.draw(cmdBuffer, m_pbr.pipelineLayout);
 
     vkCmdEndRenderPass(cmdBuffer);
     vkEndCommandBuffer(cmdBuffer);
-#else
-    for (size_t i = 0; i < m_imageCount; i++)
-    {
-        const auto cmdBuffer = m_commandBuffers[i];
-        vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
-
-        renderBeginInfo.framebuffer = m_framebuffers[i];
-        vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-
-        vkCmdBindDescriptorSets(cmdBuffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                m_pipelineLayout,
-                                0,
-                                1,
-                                &m_descriptorSets[i],
-                                0,
-                                nullptr);
-
-        m_model.draw(cmdBuffer, m_pipelineLayout);
-
-        vkCmdEndRenderPass(cmdBuffer);
-        vkEndCommandBuffer(cmdBuffer);
-    }
-#endif
 }

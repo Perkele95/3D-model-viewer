@@ -1,6 +1,6 @@
 #include "camera.hpp"
 
-camera::camera(const vulkan_device *device, view<buffer_t> buffers)
+void camera::init(const vulkan_device *device, view<buffer_t> buffers)
 {
     this->fov = FOV_DEFAULT;
     this->sensitivity = 2.0f;

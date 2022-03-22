@@ -14,6 +14,46 @@
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
+struct PipelineData
+{
+    void destroy(VkDevice device)
+    {
+        vkDestroyPipeline(device, pipeline, nullptr);
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+        vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
+        vertexShader.destroy(device);
+        fragmentShader.destroy(device);
+        model.destroy();
+    }
+
+    void onResize(VkDevice device)
+    {
+        vkDestroyPipeline(device, pipeline, nullptr);
+        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+    }
+
+    void bind(VkCommandBuffer cmd, size_t imageIndex)
+    {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        vkCmdBindDescriptorSets(cmd,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                pipelineLayout,
+                                0,
+                                1,
+                                &descriptorSets[imageIndex],
+                                0,
+                                nullptr);
+    }
+
+    VkPipeline              pipeline;
+    VkPipelineLayout        pipelineLayout;
+    VkDescriptorSetLayout   setLayout;
+    VkDescriptorSet*        descriptorSets;
+    shader_object           vertexShader;
+    shader_object           fragmentShader;
+    model3D                 model;
+};
+
 class model_viewer : public linear_storage
 {
 public:
@@ -33,8 +73,7 @@ public:
 private:
     void onWindowResize();
 
-    void buildResources();
-    void loadModel();
+    void loadModels();
     void buildSwapchainViews();
     void buildMsaa();
     void buildDepth();
@@ -42,13 +81,14 @@ private:
     void buildFramebuffers();
     void buildSyncObjects();
     void buildDescriptors();
-    void buildPipeline();
+    void buildShaders();
+    void buildPipelines();
 
     void gameUpdate(float dt);
     void updateLights();
     void updateCmdBuffers(size_t imageIndex);
 
-    debug_message_callback  m_messageCallback;
+    log_message_callback    m_coreMessage;
     vulkan_device*          m_device;
     text_overlay*           m_overlay;
     size_t                  m_imageCount, m_currentFrame;
@@ -66,13 +106,9 @@ private:
     VkFence                 m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
     VkFence*                m_imagesInFlight;
     VkCommandBuffer*        m_commandBuffers;
-    VkPipeline              m_pipeline;
-    VkPipelineLayout        m_pipelineLayout;
-    shader_object           m_shaders[2];
     camera                  m_mainCamera;
     lights                  m_lights;
     VkDescriptorPool        m_descriptorPool;
-    VkDescriptorSetLayout   m_descriptorSetLayout;
-    VkDescriptorSet*        m_descriptorSets;
-    model3D                 m_model;
+    PipelineData            m_pbr;
+    PipelineData            m_cubeMap;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "mv_utils/utilities.hpp"
 #include "mv_utils/array_types.hpp"
 #include "mv_utils/mat4.hpp"
 #include "platform/platform.hpp"
@@ -11,8 +12,8 @@
     #define mv_dbg_assert(expression, errorString)
 #endif
 
-enum class debug_level {info, warning, error, trace};
-using debug_message_callback = void(*)(debug_level, const char*);
+enum class log_level {info, warning, error, trace};
+using log_message_callback = void(*)(log_level, const char*);
 
 // NOTE(arle): temporary, to be replaced
 #define INTERNAL_DIR "../../"
@@ -22,28 +23,6 @@ constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
 constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL;}
 constexpr size_t GigaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL * 1024ULL;}
 constexpr uint32_t BIT(uint32_t value){return 1 << value;}
-
-template<typename T>
-constexpr T clamp(T value, T min, T max)
-{
-    const T result = value < min ? min : value;
-    return result > max ? max : result;
-}
-
-template<typename T>
-constexpr T min(T a, T b)
-{
-    return a < b ? a : b;
-}
-
-template<typename T>
-constexpr T max(T a, T b)
-{
-    return a > b ? a : b;
-}
-
-constexpr float PI32 = 3.141592741f;
-constexpr float GetRadians(float angle) {return angle / 180.0f * PI32;}
 
 constexpr vec4<float> GetColour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
 {

@@ -1,6 +1,6 @@
 #include "lights.hpp"
 
-lights::lights(const vulkan_device *device, view<buffer_t> buffers)
+void lights::init(const vulkan_device *device, view<buffer_t> buffers)
 {
     constexpr float LIGHT_STR = 300.0f;
 

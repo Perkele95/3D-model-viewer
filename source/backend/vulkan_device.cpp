@@ -6,10 +6,10 @@ constexpr const char *DeviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 constexpr const char *RequiredExtensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface"};
 
 vulkan_device::vulkan_device(pltf::logical_device device,
-                             debug_message_callback messageCallback,
+                             log_message_callback messageCallback,
                              bool validation, bool vSync)
 {
-    m_messageCallback = messageCallback;
+    m_coreMessage = messageCallback;
 
     auto appInfo = vkInits::applicationInfo("3D model viewer");
     auto instanceInfo = vkInits::instanceCreateInfo();
@@ -230,7 +230,7 @@ void vulkan_device::pickPhysicalDevice()
         }
     }
     if(gpu == VK_NULL_HANDLE)
-        m_messageCallback(debug_level::error, "No suitable GPU found");
+        m_coreMessage(log_level::error, "No suitable GPU found");
 }
 
 void vulkan_device::prepareLogicalDevice(bool validation)
