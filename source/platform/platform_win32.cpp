@@ -18,6 +18,7 @@ namespace pltf
 		LARGE_INTEGER counterFrequency;
         timestep_type dt;
 
+		window_size_callback windowSizeCallback;
         key_event_callback keyEventCallback;
         mouse_move_callback mouseMoveCallback;
         mouse_button_callback mouseButtonCallback;
@@ -274,6 +275,12 @@ namespace pltf
 		}
 	}
 
+	void EventsSetWindowSizeProc(logical_device device, window_size_callback proc)
+	{
+		if(proc != nullptr)
+			device->windowSizeCallback = proc;
+	}
+
 	void EventsSetKeyDownProc(logical_device device, key_event_callback proc)
     {
 		if(proc != nullptr)
@@ -370,6 +377,7 @@ namespace pltf
 	}
 }
 
+void WindowSizeStub(pltf::logical_device device, int32_t x, int32_t y){}
 void KeyEventStub(pltf::logical_device, pltf::key_code, pltf::modifier){}
 void MouseMoveStub(pltf::logical_device){}
 void MouseButtonStub(pltf::logical_device, pltf::mouse_button){}
@@ -387,6 +395,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 	QueryPerformanceCounter(&device.counter);
 
 	device.dt = 0.001f;
+	device.windowSizeCallback = WindowSizeStub;
 	device.keyEventCallback = KeyEventStub;
 	device.mouseMoveCallback = MouseMoveStub;
 	device.mouseButtonCallback = MouseButtonStub;

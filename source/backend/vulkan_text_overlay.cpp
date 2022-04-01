@@ -22,49 +22,27 @@ constexpr static VkVertexInputAttributeDescription s_OverlayAttributes[] = {
 
 static stb_fontchar s_Fontdata[STB_SOMEFONT_NUM_CHARS];
 
-text_overlay::text_overlay(const text_overlay_create_info *pInfo)
+void VulkanTextOverlay::init(const VulkanDevice* device, linear_storage *storage)
 {
-    m_imageCount = pInfo->imageCount;
-    m_descriptorSets = pInfo->sharedPermanent->push<VkDescriptorSet>(m_imageCount);
-    this->cmdBuffers = pInfo->sharedPermanent->push<VkCommandBuffer>(m_imageCount);
     m_quadCount = 0;
     m_zOrder = Z_ORDER_GUI_DEFAULT;
-    m_device = pInfo->device;
-    m_cmdPool = pInfo->cmdPool;
-    m_depthFormat = pInfo->depthFormat;
+    m_device = device;
 
-    m_shaders[0] = shader_object(INTERNAL_DIR "shaders/gui_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    m_shaders[1] = shader_object(INTERNAL_DIR "shaders/gui_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+    m_vertexShader.load(m_device->device, INTERNAL_DIR "shaders/gui_vert.spv");
+    m_fragmentShader.load(m_device->device, INTERNAL_DIR "shaders/gui_frag.spv");
 
-    for (size_t i = 0; i < arraysize(m_shaders); i++)
-        m_shaders[i].load(m_device->device);
-
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
-    vkAllocateCommandBuffers(m_device->device, &cmdInfo, this->cmdBuffers);
+    m_commandPool = device->commandPool;
+    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_commandPool, MAX_IMAGES_IN_FLIGHT);
+    vkAllocateCommandBuffers(m_device->device, &cmdInfo, commandBuffers);
 
     prepareFontTexture();
-
-    const VkDescriptorPoolSize poolSizes[] = {
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_imageCount)
-    };
-
-    const auto poolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, m_imageCount);
-    auto result = vkCreateDescriptorPool(m_device->device, &poolInfo, nullptr, &m_descriptorPool);
-
-    const VkDescriptorSetLayoutBinding bindings[] = {
-        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
-    };
-
-    const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
-    result = vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_setLayout);
-
-    prepareDescriptorSets();
+    prepareDescriptors();
     prepareRenderpass();
     preparePipeline();
     prepareRenderBuffers();
 }
 
-text_overlay::~text_overlay()
+void VulkanTextOverlay::destroy()
 {
     vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(m_device->device, m_setLayout, nullptr);
@@ -77,23 +55,21 @@ text_overlay::~text_overlay()
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
 
-    for (size_t i = 0; i < arraysize(m_shaders); i++)
-        m_shaders[i].destroy(m_device->device);
+    m_vertexShader.destroy(m_device->device);
+    m_fragmentShader.destroy(m_device->device);
 }
 
-void text_overlay::onWindowResize(VkCommandPool commandPool)
+void VulkanTextOverlay::onWindowResize()
 {
-    m_cmdPool = commandPool;
+    m_commandPool = m_device->commandPool;
 
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
-    vkResetDescriptorPool(m_device->device, m_descriptorPool, VkFlags(0));
 
-    prepareDescriptorSets();
     preparePipeline();
 }
 
-void text_overlay::begin()
+void VulkanTextOverlay::begin()
 {
     vkMapMemory(m_device->device, m_vertexBuffer.memory, 0,
                 GUI_VERTEX_BUFFER_SIZE, 0, (void**)&m_mappedVertices);
@@ -104,17 +80,18 @@ void text_overlay::begin()
     m_zOrder = Z_ORDER_GUI_DEFAULT;
 }
 
-void text_overlay::draw(view<const char> stringView, vec2<float> position)
+void VulkanTextOverlay::draw(view<const char> stringView, vec2<float> position)
 {
     const uint32_t firstChar = STB_SOMEFONT_FIRST_CHAR;
-    const float width = this->textSize / float(m_device->extent.width);
-    const float height = this->textSize / float(m_device->extent.height);
+    const float width = this->textSize / float(extent.width);
+    const float height = this->textSize / float(extent.height);
 
     float x = 0.0f, y = 0.0f;//NOTE(arle): inspect asm on these switches
-    switch (this->textType){
+    switch (this->textType)
+    {
         case text_coord_type::absolute: {
-            x = (float(position.x) / float(m_device->extent.width) * 2.0f) - 1.0f;
-            y = (float(position.y) / float(m_device->extent.height) * 2.0f) - 1.0f;
+            x = (float(position.x) / float(extent.width) * 2.0f) - 1.0f;
+            y = (float(position.y) / float(extent.height) * 2.0f) - 1.0f;
         } break;
         case text_coord_type::relative: {
             x = (float(position.x) / 50.0f) - 1.0f;
@@ -126,13 +103,15 @@ void text_overlay::draw(view<const char> stringView, vec2<float> position)
     for (size_t i = 0; i < stringView.count - 1; i++)
         textWidth += s_Fontdata[uint32_t(stringView[i]) - firstChar].advance * width;
 
-    switch(this->textAlignment){
+    switch(this->textAlignment)
+    {
         case text_align::right: x -= textWidth; break;
         case text_align::centre: x -= textWidth / 2.0f; break;
         default: break;
     };
 
-    for (size_t i = 0; i < stringView.count - 1; i++){
+    for (size_t i = 0; i < stringView.count - 1; i++)
+    {
         auto charData = &s_Fontdata[uint32_t(stringView[i]) - firstChar];
 
         m_mappedVertices->position.x = x + charData->x0f * width;
@@ -178,7 +157,7 @@ void text_overlay::draw(view<const char> stringView, vec2<float> position)
     }
 }
 
-void text_overlay::end()
+void VulkanTextOverlay::end()
 {
     vkUnmapMemory(m_device->device, m_vertexBuffer.memory);
     vkUnmapMemory(m_device->device, m_indexBuffer.memory);
@@ -186,7 +165,7 @@ void text_overlay::end()
     m_mappedIndices = nullptr;
 }
 
-void text_overlay::updateCmdBuffers(const VkFramebuffer *pFramebuffers)
+void VulkanTextOverlay::recordFrame(size_t currentFrame, uint32_t imageIndex)
 {
     if(m_quadCount == 0)
         return;
@@ -196,49 +175,47 @@ void text_overlay::updateCmdBuffers(const VkFramebuffer *pFramebuffers)
     clearValues[1].depthStencil = {1.0f, 0};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-    auto renderBeginInfo = vkInits::renderPassBeginInfo(m_renderPass, m_device->extent);
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(m_renderPass, extent);
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = clearValues;
     renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));
 
-    for (size_t i = 0; i < m_imageCount; i++){
-        const auto cmdBuffer = this->cmdBuffers[i];
-        vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
+    const auto cmdBuffer = commandBuffers[currentFrame];
+    vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
 
-        renderBeginInfo.framebuffer = pFramebuffers[i];
-        vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    renderBeginInfo.framebuffer = frameBuffers[imageIndex];
+    vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-        vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
-                                0, 1, &m_descriptorSets[i], 0, nullptr);
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+    vkCmdBindDescriptorSets(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout,
+                            0, 1, &m_descriptorSets[currentFrame], 0, nullptr);
 
-        const VkDeviceSize vertexOffset = 0;
-        vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &m_vertexBuffer.data, &vertexOffset);
+    const VkDeviceSize vertexOffset = 0;
+    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &m_vertexBuffer.data, &vertexOffset);
 
-        const VkDeviceSize indexOffset = 0;
-        vkCmdBindIndexBuffer(cmdBuffer, m_indexBuffer.data, indexOffset, VK_INDEX_TYPE_UINT32);
+    const VkDeviceSize indexOffset = 0;
+    vkCmdBindIndexBuffer(cmdBuffer, m_indexBuffer.data, indexOffset, VK_INDEX_TYPE_UINT32);
 
-        const auto indexCount = uint32_t(m_quadCount * QUAD_INDEX_COUNT);
-        vkCmdDrawIndexed(cmdBuffer, indexCount, 1, 0, 0, 0);
+    const auto indexCount = uint32_t(m_quadCount * QUAD_INDEX_COUNT);
+    vkCmdDrawIndexed(cmdBuffer, indexCount, 1, 0, 0, 0);
 
-        vkCmdEndRenderPass(cmdBuffer);
-        vkEndCommandBuffer(cmdBuffer);
-    }
+    vkCmdEndRenderPass(cmdBuffer);
+    vkEndCommandBuffer(cmdBuffer);
 }
 
-void text_overlay::prepareRenderpass()
+void VulkanTextOverlay::prepareRenderpass()
 {
-    auto colourAttachment = vkInits::attachmentDescription(m_device->surfaceFormat.format);
+    auto colourAttachment = vkInits::attachmentDescription(surfaceFormat.format);
     colourAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     colourAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-    colourAttachment.samples = m_device->sampleCount;
+    colourAttachment.samples = sampleCount;
 
-    auto depthAttachment = vkInits::attachmentDescription(m_depthFormat);
+    auto depthAttachment = vkInits::attachmentDescription(depthFormat);
     depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.samples = m_device->sampleCount;
+    depthAttachment.samples = sampleCount;
 
-    auto colourResolve = vkInits::attachmentDescription(m_device->surfaceFormat.format);
+    auto colourResolve = vkInits::attachmentDescription(surfaceFormat.format);
     colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -293,42 +270,58 @@ void text_overlay::prepareRenderpass()
     vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
 }
 
-void text_overlay::prepareFontTexture()
+void VulkanTextOverlay::prepareFontTexture()
 {
     static uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
     STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
-    new (&m_fontTexture) texture2D();
-
     m_fontTexture.loadFromMemory(m_device,
-                                 m_cmdPool,
+                                 graphicsQueue,
                                  VK_FORMAT_R8_UNORM,
                                  {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT},
                                  fontpixels);
 }
 
-void text_overlay::prepareDescriptorSets()
+void VulkanTextOverlay::prepareDescriptors()
 {
-    auto layouts = data_buffer<VkDescriptorSetLayout>(m_imageCount);
-    layouts.fill(m_setLayout);
+    const VkDescriptorPoolSize poolSizes[] = {
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_IMAGES_IN_FLIGHT)
+    };
 
-    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
+    const auto poolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, MAX_IMAGES_IN_FLIGHT);
+    vkCreateDescriptorPool(m_device->device, &poolInfo, nullptr, &m_descriptorPool);
+
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
+
+    const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
+    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_setLayout);
+
+    // Sets
+
+    VkDescriptorSetLayout layouts[MAX_IMAGES_IN_FLIGHT] = {};
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        layouts[i] = m_setLayout;
+
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
     const auto samplerImageDesc = m_fontTexture.descriptor;
-    for(size_t i = 0; i < m_imageCount; i++){
-        const auto samplerImageWrite = vkInits::writeDescriptorSet(0,
-                                                                   VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                                                   m_descriptorSets[i],
-                                                                   &samplerImageDesc);
-        vkUpdateDescriptorSets(m_device->device, 1, &samplerImageWrite, 0, nullptr);
+    for(size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
+        const VkWriteDescriptorSet writes[] = {
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                        m_descriptorSets[i], &m_fontTexture.descriptor)
+        };
+        vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }
 }
 
-void text_overlay::preparePipeline()
+void VulkanTextOverlay::preparePipeline()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        m_shaders[0].shaderStage(), m_shaders[1].shaderStage()
+        m_vertexShader.shaderStage(), m_fragmentShader.shaderStage()
     };
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(quad_vertex));
@@ -341,8 +334,8 @@ void text_overlay::preparePipeline()
     vertexInputInfo.pVertexAttributeDescriptions = s_OverlayAttributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
-    auto viewport = vkInits::viewportInfo(m_device->extent);
-    auto scissor = vkInits::scissorInfo(m_device->extent);
+    auto viewport = vkInits::viewportInfo(extent);
+    auto scissor = vkInits::scissorInfo(extent);
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -352,7 +345,7 @@ void text_overlay::preparePipeline()
     viewportState.pScissors = &scissor;
 
     auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_CLOCKWISE);
-    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(m_device->sampleCount);
+    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(sampleCount);
 
     auto depthStencil = vkInits::depthStencilStateInfo();
     auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
@@ -383,7 +376,7 @@ void text_overlay::preparePipeline()
                               &pipelineInfo, nullptr, &m_pipeline);
 }
 
-void text_overlay::prepareRenderBuffers()
+void VulkanTextOverlay::prepareRenderBuffers()
 {
     auto vertexInfo = vkInits::bufferCreateInfo(GUI_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
     m_vertexBuffer.create(m_device, &vertexInfo, MEM_FLAG_HOST_VISIBLE);

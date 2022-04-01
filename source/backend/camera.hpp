@@ -3,6 +3,18 @@
 #include "../mv_utils/mat4.hpp"
 #include "buffer.hpp"
 
+struct CameraControls
+{
+    bool rotateUp;
+    bool rotateDown;
+    bool rotateLeft;
+    bool rotateRight;
+    bool moveForward;
+    bool moveBackward;
+    bool moveLeft;
+    bool moveRight;
+};
+
 struct alignas(16) mvp_matrix
 {
     mat4x4 view;
@@ -12,7 +24,7 @@ struct alignas(16) mvp_matrix
 
 // NOTE(arle): radians, not degrees
 
-class camera
+class Camera
 {
 public:
     static constexpr float FOV_DEFAULT = GetRadians(60.0f);
@@ -27,39 +39,21 @@ public:
 
     static constexpr auto GLOBAL_UP = vec3(0.0f, 1.0f, 0.0f);
 
-    enum class direction
-    {
-        forward,
-        backward,
-        left,
-        right,
-        up,
-        down
-    };
+    void init();
+    void update(float dt);
+    mvp_matrix calculateMatrix(float aspectRatio);
 
-    camera() = default;
-
-    void init(const vulkan_device *device, view<buffer_t> buffers);
-    void destroy(VkDevice device);
-
-    VkDescriptorBufferInfo descriptor(size_t imageIndex){return m_buffers[imageIndex].descriptor(0);}
-    void update(VkDevice device, float aspectRatio, size_t imageIndex);
-
-    // TODO(arle): static dispatch
-    void rotate(direction dir, float dt);
-    void move(direction dir, float dt);
-
-    float fov, sensitivity;
+    float           fov;
+    float           sensitivity;
+    CameraControls  controls;
 
 private:
     void updateVectors();
 
-    view<buffer_t> m_buffers;
-
-    float m_yaw, m_pitch;
-    float m_zNear, m_zFar;
-    vec3<float> m_position;
-    vec3<float> m_right;
-    vec3<float> m_front;
-    vec3<float> m_up;
+    float           m_yaw, m_pitch;
+    float           m_zNear, m_zFar;
+    vec3<float>     m_position;
+    vec3<float>     m_right;
+    vec3<float>     m_front;
+    vec3<float>     m_up;
 };

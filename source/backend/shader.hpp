@@ -3,17 +3,21 @@
 #include "../base.hpp"
 #include "vulkan_initialisers.hpp"
 
-class shader_object
+class Shader
 {
 public:
-    shader_object() = default;
-    shader_object(const char *path, VkShaderStageFlagBits stageFlag)
+    void destroy(VkDevice device)
     {
-        m_module = VK_NULL_HANDLE;
-        m_stage = stageFlag;
-        m_path = path;
+        vkDestroyShaderModule(device, m_module, nullptr);
     }
 
+    VkPipelineShaderStageCreateInfo shaderStage()
+    {
+        auto pipelineStage = vkInits::shaderStageInfo(m_stage, m_module);
+        return pipelineStage;
+    }
+
+protected:
     bool load(VkDevice device)
     {
         auto file = io::Open<io::cmd::read>(m_path);
@@ -31,19 +35,31 @@ public:
         return true;
     }
 
-    void destroy(VkDevice device)
-    {
-        vkDestroyShaderModule(device, m_module, nullptr);
-    }
+    VkShaderStageFlagBits   m_stage;
+    VkShaderModule          m_module;
+    const char*             m_path;
+};
 
-    VkPipelineShaderStageCreateInfo shaderStage()
+class VertexShader : public Shader
+{
+public:
+    void load(VkDevice device, const char *path)
     {
-        auto pipelineStage = vkInits::shaderStageInfo(m_stage, m_module);
-        return pipelineStage;
+        m_module = VK_NULL_HANDLE;
+        m_stage = VK_SHADER_STAGE_VERTEX_BIT;
+        m_path = path;
+        Shader::load(device);
     }
+};
 
-private:
-    VkShaderStageFlagBits m_stage;
-    VkShaderModule m_module;
-    const char *m_path;
+class FragmentShader : public Shader
+{
+public:
+    void load(VkDevice device, const char *path)
+    {
+        m_module = VK_NULL_HANDLE;
+        m_stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        m_path = path;
+        Shader::load(device);
+    }
 };

@@ -6,17 +6,17 @@ void mesh3D::destroy(VkDevice device)
     m_indices.destroy(device);
 }
 
-void mesh3D::load(const vulkan_device *device,
-                  VkCommandPool cmdPool,
+void mesh3D::load(const VulkanDevice *device,
+                  VkQueue queue,
                   view<mesh_vertex> vertices,
                   view<mesh_index> indices)
 {
     auto vertexInfo = vkInits::bufferCreateInfo(vertices.size(), USAGE_VERTEX_TRANSFER_SRC);
-    auto vertexTransfer = buffer_t();
+    auto vertexTransfer = VulkanBuffer();
     vertexTransfer.create(device, &vertexInfo, MEM_FLAG_HOST_VISIBLE, vertices.data);
 
     auto indexInfo = vkInits::bufferCreateInfo(indices.size(), USAGE_INDEX_TRANSFER_SRC);
-    auto indexTransfer = buffer_t();
+    auto indexTransfer = VulkanBuffer();
     indexTransfer.create(device, &indexInfo, MEM_FLAG_HOST_VISIBLE, indices.data);
 
     vertexInfo.usage = USAGE_VERTEX_TRANSFER_DST;
@@ -25,12 +25,12 @@ void mesh3D::load(const vulkan_device *device,
     indexInfo.usage = USAGE_INDEX_TRANSFER_DST;
     m_indices.create(device, &indexInfo, MEM_FLAG_GPU_LOCAL);
 
-    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
+    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
     vertexTransfer.copy(command, &m_vertices);
     indexTransfer.copy(command, &m_indices);
 
-    device->flushCommandBuffer(command, device->graphics.queue, cmdPool);
+    device->flushCommandBuffer(command, queue);
 
     vertexTransfer.destroy(device->device);
     indexTransfer.destroy(device->device);
@@ -38,7 +38,7 @@ void mesh3D::load(const vulkan_device *device,
     m_indexCount = indices.count;
 }
 
-void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
+void mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
 {
     constexpr auto N_STACKS = clamp<uint32_t>(64, 2, 128);
     constexpr auto N_SLICES = clamp<uint32_t>(64, 2, 128);
@@ -120,10 +120,10 @@ void mesh3D::loadSphere(const vulkan_device* device, VkCommandPool cmdPool)
         }
     }
 
-    load(device, cmdPool, vertices.getView(), indices.getView());
+    load(device, queue, vertices.getView(), indices.getView());
 }
 // TODO(arle): UV coordinates
-void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
+void mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
 {
     constexpr auto normalFront = vec3(0.0f, 0.0f, -1.0f);
     constexpr auto normalBack = vec3(0.0f, 0.0f, 1.0f);
@@ -194,7 +194,7 @@ void mesh3D::loadCube(const vulkan_device* device, VkCommandPool cmdPool)
         indices[index + 5] = offset;
     }
 
-    load(device, cmdPool, vertices.getView(), indices.getView());
+    load(device, queue, vertices.getView(), indices.getView());
 }
 
 void mesh3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)

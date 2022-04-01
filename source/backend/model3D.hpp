@@ -1,38 +1,27 @@
 #pragma once
 
 #include "vulkan_initialisers.hpp"
-#include "vulkan_device.hpp"
+#include "VulkanDevice.hpp"
 #include "buffer.hpp"
+#include "texture.hpp"
 #include "mesh3D.hpp"
-#include "pbr_material.hpp"
 
-class model3D
+class Model3D
 {
 public:
-    model3D(): m_device(nullptr),
-               mesh(nullptr),
-               material(nullptr),
-               transform()
-    {
-    }
-
-    model3D(const vulkan_device* device):
-        m_device(device),
-        mesh(nullptr),
-        material(nullptr),
-        transform(mat4x4::identity())
-    {
-    }
-
-    void destroy();
-    void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
-
     static VkPushConstantRange pushConstant();
 
-    mat4x4                  transform;
-    mesh3D*                 mesh;
-    pbr_material*           material;
+    void destroy(VkDevice device);
+    void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
 
-private:
-    const vulkan_device*    m_device;
+    mat4x4 transform;
+    mesh3D mesh;
+
+    // Material
+
+    Texture2D albedo;
+    Texture2D normal;
+    Texture2D roughness;
+    Texture2D metallic;
+    Texture2D ao;
 };

@@ -3,7 +3,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../vendor/stb/stb_image.h"
 
-void texture::destroy(VkDevice device)
+void Texture::destroy(VkDevice device)
 {
     vkDestroySampler(device, m_sampler, nullptr);
     vkFreeMemory(device, m_memory, nullptr);
@@ -11,7 +11,7 @@ void texture::destroy(VkDevice device)
     vkDestroyImage(device, m_image, nullptr);
 }
 
-void texture::insertMemoryBarrier(VkCommandBuffer cmd,
+void Texture::insertMemoryBarrier(VkCommandBuffer cmd,
                                   VkImageLayout oldLayout,
                                   VkImageLayout newLayout,
                                   VkAccessFlags srcAccessMask,
@@ -28,7 +28,7 @@ void texture::insertMemoryBarrier(VkCommandBuffer cmd,
                          0, 0, nullptr, 0, nullptr, 1, &barrier);
 }
 
-void texture::setImageLayout(VkCommandBuffer cmd,
+void Texture::setImageLayout(VkCommandBuffer cmd,
                              VkImageLayout newLayout,
                              VkPipelineStageFlags srcStage,
                              VkPipelineStageFlags dstStage)
@@ -90,7 +90,7 @@ void texture::setImageLayout(VkCommandBuffer cmd,
     m_layout = newLayout;
 }
 
-void texture::updateDescriptor()
+void Texture::updateDescriptor()
 {
     descriptor.imageLayout = m_layout;
     descriptor.imageView = m_view;
@@ -113,8 +113,8 @@ constexpr VkDeviceSize GetSizeFactor(VkFormat format)
     return 1;
 }
 
-CoreResult texture2D::loadFromMemory(const vulkan_device *device,
-                                     VkCommandPool cmdPool,
+CoreResult Texture2D::loadFromMemory(const VulkanDevice *device,
+                                     VkQueue queue,
                                      VkFormat format,
                                      VkExtent2D extent,
                                      const void *src)
@@ -135,7 +135,7 @@ CoreResult texture2D::loadFromMemory(const vulkan_device *device,
 
     const VkDeviceSize size = GetSizeFactor(format) * m_extent.width * m_extent.height;
     auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = buffer_t();
+    auto transfer = VulkanBuffer();
     transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
 
     // Create target image resource
@@ -158,7 +158,7 @@ CoreResult texture2D::loadFromMemory(const vulkan_device *device,
 
     // Create & prepare base mip level
 
-    auto copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
+    auto copyCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
     VkImageSubresourceRange subResourceRange{};
     subResourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -189,10 +189,10 @@ CoreResult texture2D::loadFromMemory(const vulkan_device *device,
                         VK_PIPELINE_STAGE_TRANSFER_BIT,
                         subResourceRange);
 
-    device->flushCommandBuffer(copyCmd, device->graphics.queue, cmdPool);
+    device->flushCommandBuffer(copyCmd, queue);
     transfer.destroy(device->device);
 
-    auto blitCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
+    auto blitCmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
     for (uint32_t i = 1; i < m_mipLevels; i++)
     {
@@ -257,7 +257,7 @@ CoreResult texture2D::loadFromMemory(const vulkan_device *device,
                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                         subResourceRange);
 
-    device->flushCommandBuffer(blitCmd, device->graphics.queue, cmdPool);
+    device->flushCommandBuffer(blitCmd, queue);
     m_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     auto viewInfo = vkInits::imageViewCreateInfo();
@@ -286,8 +286,8 @@ CoreResult texture2D::loadFromMemory(const vulkan_device *device,
     return CoreResult::Success;
 }
 
-CoreResult texture2D::loadFromFile(const vulkan_device *device,
-                                   VkCommandPool cmdPool,
+CoreResult Texture2D::loadFromFile(const VulkanDevice *device,
+                                   VkQueue queue,
                                    VkFormat format,
                                    const char *filepath)
 {
@@ -297,19 +297,18 @@ CoreResult texture2D::loadFromFile(const vulkan_device *device,
     if (pixels)
     {
         const VkExtent2D extent = {uint32_t(x), uint32_t(y)};
-        const auto result = loadFromMemory(device, cmdPool, format, extent, pixels);
+        const auto result = loadFromMemory(device, queue, format, extent, pixels);
         stbi_image_free(pixels);
         return result;
     }
     else
     {
-        loadFallbackTexture(device, cmdPool);
+        loadFallbackTexture(device, queue);
         return CoreResult::Source_Missing;
     }
 }
 
-void texture2D::loadFallbackTexture(const vulkan_device *device,
-                                    VkCommandPool cmdPool)
+void Texture2D::loadFallbackTexture(const VulkanDevice *device, VkQueue queue)
 {
     auto src = TEX2D_DEFAULT;
     auto format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -318,7 +317,7 @@ void texture2D::loadFallbackTexture(const vulkan_device *device,
     m_mipLevels = 1;
 
     auto transferInfo = vkInits::bufferCreateInfo(sizeof(TEX2D_DEFAULT), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = buffer_t();
+    auto transfer = VulkanBuffer();
     transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
 
     // Create target image resource
@@ -339,7 +338,7 @@ void texture2D::loadFallbackTexture(const vulkan_device *device,
     vkAllocateMemory(device->device, &allocInfo, nullptr, &m_memory);
     vkBindImageMemory(device->device, m_image, m_memory, 0);
 
-    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY, cmdPool);
+    auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
     setImageLayout(command,
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -354,7 +353,7 @@ void texture2D::loadFallbackTexture(const vulkan_device *device,
                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-    device->flushCommandBuffer(command, device->graphics.queue, cmdPool);
+    device->flushCommandBuffer(command, queue);
 
     transfer.destroy(device->device);
 

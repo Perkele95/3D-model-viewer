@@ -1,5 +1,5 @@
 #include "vulkan_initialisers.hpp"
-#include "vulkan_device.hpp"
+#include "VulkanDevice.hpp"
 #include "texture.hpp"
 
 class pbr_material
@@ -14,9 +14,9 @@ public:
         ao.destroy(device);
     }
 
-    texture2D albedo;
-    texture2D normal;
-    texture2D roughness;
-    texture2D metallic;
-    texture2D ao;
+    Texture2D albedo;
+    Texture2D normal;
+    Texture2D roughness;
+    Texture2D metallic;
+    Texture2D ao;
 };

@@ -2,42 +2,41 @@
 #include "platform/platform.hpp"
 #include "model_viewer.hpp"
 
+void WindowSizeDispatch(pltf::logical_device device, int32_t width, int32_t height)
+{
+    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
+    app->onWindowSize(width, height);
+}
+
 void KeyEventDispatch(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
 {
-    auto handle = pltf::DeviceGetHandle(device);
-    auto object = reinterpret_cast<model_viewer*>(handle);
-    object->onKeyEvent(device, key, mod);
+    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
+    app->onKeyEvent(key, mod);
 }
 
 void MouseEventDispatch(pltf::logical_device device, pltf::mouse_button button)
 {
-    auto handle = pltf::DeviceGetHandle(device);
-    auto object = reinterpret_cast<model_viewer*>(handle);
-    object->onMouseButtonEvent(device, button);
+    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
+    app->onMouseButtonEvent(button);
 }
 
 void ScrollWheelDispatch(pltf::logical_device device, double x, double y)
 {
-    auto handle = pltf::DeviceGetHandle(device);
-    auto object = reinterpret_cast<model_viewer*>(handle);
-    object->onScrollWheelEvent(device, x, y);
+    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
+    app->onScrollWheelEvent(x, y);
 }
 
 int EntryPoint(pltf::logical_device device)
 {
-    pltf::WindowCreate(device, "3D model viewer");
-
-    auto app = model_viewer(device);
+    auto app = ModelViewer(device);
 
     pltf::DeviceSetHandle(device, &app);
+    pltf::EventsSetWindowSizeProc(device, WindowSizeDispatch);
     pltf::EventsSetKeyDownProc(device, KeyEventDispatch);
     pltf::EventsSetMouseDownProc(device, MouseEventDispatch);
     pltf::EventsSetScrollWheelProc(device, ScrollWheelDispatch);
 
-    while(pltf::IsRunning()){
-        pltf::EventsPoll(device);
-        app.swapBuffers(device);
-    }
+    app.run();
 
     return 0;
 }

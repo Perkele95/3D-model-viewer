@@ -5,7 +5,7 @@
 
 constexpr uint8_t TEX2D_DEFAULT[] = {255, 255, 255, 255};
 
-class texture
+class Texture
 {
 public:
     void destroy(VkDevice device);
@@ -36,23 +36,22 @@ protected:
 	uint32_t        m_mipLevels;
 	VkImageLayout   m_layout;
 };
-
-class texture2D : public texture
+//TODO(arle): include non-mipmapped load from memory
+class Texture2D : public Texture
 {
 public:
     // Includes untime mipmap generation, some formats do not support this
-    CoreResult loadFromMemory(const vulkan_device *device,
-                              VkCommandPool cmdPool,
+    CoreResult loadFromMemory(const VulkanDevice *device,
+                              VkQueue queue,
                               VkFormat format,
                               VkExtent2D extent,
                               const void *src);
 
-    CoreResult loadFromFile(const vulkan_device* device,
-                            VkCommandPool cmdPool,
+    CoreResult loadFromFile(const VulkanDevice* device,
+                            VkQueue queue,
                             VkFormat format,
                             const char *filepath);
 
 private:
-    void loadFallbackTexture(const vulkan_device* device,
-                             VkCommandPool cmdPool);
+    void loadFallbackTexture(const VulkanDevice* device, VkQueue queue);
 };

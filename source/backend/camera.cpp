@@ -1,6 +1,6 @@
 #include "camera.hpp"
 
-void camera::init(const vulkan_device *device, view<buffer_t> buffers)
+void Camera::init()
 {
     this->fov = FOV_DEFAULT;
     this->sensitivity = 2.0f;
@@ -10,56 +10,44 @@ void camera::init(const vulkan_device *device, view<buffer_t> buffers)
     m_yaw = DEFAULT_YAW;
     m_pitch = 0.0f;
     updateVectors();
-
-    m_buffers = buffers;
-
-    const auto info = vkInits::bufferCreateInfo(sizeof(mvp_matrix), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    for (size_t i = 0; i < m_buffers.count; i++)
-        m_buffers[i].create(device, &info, MEM_FLAG_HOST_VISIBLE);
 }
 
-void camera::destroy(VkDevice device)
+void Camera::update(float dt)
 {
-    for (size_t i = 0; i < m_buffers.count; i++)
-        m_buffers[i].destroy(device);
-}
+    const auto speed = sensitivity * dt;
+    if(controls.rotateUp)
+        m_pitch += speed;
+    else if(controls.rotateDown)
+        m_pitch -= speed;
 
-void camera::update(VkDevice device, float aspectRatio, size_t imageIndex)
-{
+    if(controls.rotateLeft)
+        m_yaw -= speed;
+    else if(controls.rotateRight)
+        m_yaw += speed;
+
+    if(controls.moveForward)
+        m_position += m_front * dt;
+    else if(controls.moveBackward)
+        m_position -= m_front * dt;
+
+    if(controls.moveLeft)
+        m_position -= m_right * dt;
+    else if(controls.moveRight)
+        m_position += m_right * dt;
+
     updateVectors();
+}
 
+mvp_matrix Camera::calculateMatrix(float aspectRatio)
+{
     auto mvp = mvp_matrix();
     mvp.view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
     mvp.proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
     mvp.position = vec4(m_position, 1.0f);
-
-    m_buffers[imageIndex].fill(device, &mvp);
+    return mvp;
 }
 
-void camera::rotate(direction dir, float dt)
-{
-    const auto speed = this->sensitivity * dt;
-    switch (dir){
-        case direction::up: m_pitch += speed; break;
-        case direction::down: m_pitch -= speed; break;
-        case direction::left: m_yaw -= speed; break;
-        case direction::right: m_yaw += speed; break;
-        default: break;
-    };
-}
-
-void camera::move(direction dir, float dt)
-{
-    switch (dir){
-        case direction::forward: m_position += m_front * dt; break;
-        case direction::backward: m_position -= m_front * dt; break;
-        case direction::left: m_position -= m_right * dt; break;
-        case direction::right: m_position += m_right * dt; break;
-        default: break;
-    };
-}
-
-void camera::updateVectors()
+void Camera::updateVectors()
 {
     m_pitch = clamp(m_pitch, -PITCH_CLAMP, PITCH_CLAMP);
     m_yaw = m_yaw < -YAW_MOD ? m_yaw + YAW_MOD : m_yaw;

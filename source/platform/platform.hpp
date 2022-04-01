@@ -174,6 +174,7 @@ namespace pltf
 
 	using modifier = uint32_t;
 
+	using window_size_callback = void(*)(logical_device, int32_t, int32_t);
 	using key_event_callback = void(*)(logical_device, key_code, modifier);
 	using mouse_move_callback = void(*)(logical_device);// TODO(arle): UNFINISHED
 	using mouse_button_callback = void(*)(logical_device, mouse_button);
@@ -219,6 +220,7 @@ namespace pltf
 	// Events
 
 	void EventsPoll(logical_device device);
+	void EventsSetWindowSizeProc(logical_device device, window_size_callback proc);
 	void EventsSetKeyDownProc(logical_device device, key_event_callback proc);
 	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc);
 	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc);

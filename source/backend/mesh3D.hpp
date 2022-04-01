@@ -1,5 +1,5 @@
 #include "vulkan_initialisers.hpp"
-#include "vulkan_device.hpp"
+#include "VulkanDevice.hpp"
 #include "buffer.hpp"
 
 struct mesh_vertex
@@ -24,18 +24,18 @@ public:
 
     void destroy(VkDevice device);
 
-    void load(const vulkan_device *device,
-              VkCommandPool cmdPool,
+    void load(const VulkanDevice *device,
+              VkQueue queue,
               view<mesh_vertex> vertices,
               view<mesh_index> indices);
 
-    void loadSphere(const vulkan_device* device, VkCommandPool cmdPool);
-    void loadCube(const vulkan_device* device, VkCommandPool cmdPool);
+    void loadSphere(const VulkanDevice* device, VkQueue queue);
+    void loadCube(const VulkanDevice* device, VkQueue queue);
 
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
 
 private:
-    buffer_t    m_vertices;
-    buffer_t    m_indices;
+    VulkanBuffer    m_vertices;
+    VulkanBuffer    m_indices;
     size_t      m_indexCount;
 };

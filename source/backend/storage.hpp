@@ -1,7 +1,7 @@
 #pragma once
 
-#include "mv_utils/array_types.hpp"
-#include "platform/platform.hpp"
+#include "../mv_utils/array_types.hpp"
+#include "../platform/platform.hpp"
 
 class linear_storage
 {

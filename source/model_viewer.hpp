@@ -1,8 +1,7 @@
 #pragma once
 
 #include "base.hpp"
-#include "storage.hpp"
-#include "backend/vulkan_device.hpp"
+#include "backend/VulkanInstance.hpp"
 #include "backend/vulkan_text_overlay.hpp"
 
 #include "backend/shader.hpp"
@@ -11,8 +10,6 @@
 #include "backend/model3D.hpp"
 
 #include "mv_utils/mat4.hpp"
-
-constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 
 struct PipelineData
 {
@@ -23,16 +20,16 @@ struct PipelineData
         vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
         vertexShader.destroy(device);
         fragmentShader.destroy(device);
-        model.destroy();
+        model->destroy(device);
+
+        for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        {
+            cameraUniforms[i].destroy(device);
+            lightUniforms[i].destroy(device);
+        }
     }
 
-    void onResize(VkDevice device)
-    {
-        vkDestroyPipeline(device, pipeline, nullptr);
-        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-    }
-
-    void bind(VkCommandBuffer cmd, size_t imageIndex)
+    void bind(VkCommandBuffer cmd, size_t currentFrame)
     {
         vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
         vkCmdBindDescriptorSets(cmd,
@@ -40,75 +37,56 @@ struct PipelineData
                                 pipelineLayout,
                                 0,
                                 1,
-                                &descriptorSets[imageIndex],
+                                &descriptorSets[currentFrame],
                                 0,
                                 nullptr);
     }
 
     VkPipeline              pipeline;
     VkPipelineLayout        pipelineLayout;
+    VertexShader            vertexShader;
+    FragmentShader          fragmentShader;
     VkDescriptorSetLayout   setLayout;
-    VkDescriptorSet*        descriptorSets;
-    shader_object           vertexShader;
-    shader_object           fragmentShader;
-    model3D                 model;
+    VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
+    VulkanBuffer            cameraUniforms[MAX_IMAGES_IN_FLIGHT];
+    VulkanBuffer            lightUniforms[MAX_IMAGES_IN_FLIGHT];
+    Model3D*                model;
 };
 
-class model_viewer : public linear_storage
+class ModelViewer : public VulkanInstance
 {
 public:
-    model_viewer(pltf::logical_device device);
-    ~model_viewer();
+    ModelViewer(pltf::logical_device platform);
+    ~ModelViewer();
 
-    model_viewer(const model_viewer &src) = delete;
-    model_viewer(const model_viewer &&src) = delete;
-    model_viewer &operator=(const model_viewer &src) = delete;
-    model_viewer &operator=(const model_viewer &&src) = delete;
+    ModelViewer(const ModelViewer &src) = delete;
+    ModelViewer(const ModelViewer &&src) = delete;
+    ModelViewer &operator=(const ModelViewer &src) = delete;
+    ModelViewer &operator=(const ModelViewer &&src) = delete;
 
-    void swapBuffers(pltf::logical_device device);
-    void onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod);
-    void onMouseButtonEvent(pltf::logical_device device, pltf::mouse_button button);
-    void onScrollWheelEvent(pltf::logical_device device, double x, double y);
+    void run();
+    void onWindowSize(int32_t width, int32_t height);
+    void onKeyEvent(pltf::key_code key, pltf::modifier mod);
+    void onMouseButtonEvent(pltf::mouse_button button);
+    void onScrollWheelEvent(double x, double y);
 
 private:
-    void onWindowResize();
-
-    void loadModels();
-    void buildSwapchainViews();
-    void buildMsaa();
-    void buildDepth();
-    void buildRenderPass();
-    void buildFramebuffers();
-    void buildSyncObjects();
+    void buildModelData();
+    void buildUniformBuffers();
     void buildDescriptors();
-    void buildShaders();
-    void buildPipelines();
+    void buildPipelines(); // TODO(arle): split into pipeline & layout
+    // pipelinelayout does not need to be recreated upon window resize event
 
-    void gameUpdate(float dt);
+    void updateCamera(float dt);
     void updateLights();
-    void updateCmdBuffers(size_t imageIndex);
+    void recordFrame(VkCommandBuffer cmdBuffer);
 
-    log_message_callback    m_coreMessage;
-    vulkan_device*          m_device;
-    text_overlay*           m_overlay;
-    size_t                  m_imageCount, m_currentFrame;
-    VkCommandPool           m_cmdPool;
-    VkRenderPass            m_renderPass;
-    VkSwapchainKHR          m_swapchain;
-    VkImage*                m_swapchainImages;
-    VkImageView*            m_swapchainViews;
-    VkFramebuffer*          m_framebuffers;
-    image_buffer            m_msaa;
-    image_buffer            m_depth;
-    VkFormat                m_depthFormat;
-    VkSemaphore             m_imageAvailableSPs[MAX_IMAGES_IN_FLIGHT];
-    VkSemaphore             m_renderFinishedSPs[MAX_IMAGES_IN_FLIGHT];
-    VkFence                 m_inFlightFences[MAX_IMAGES_IN_FLIGHT];
-    VkFence*                m_imagesInFlight;
-    VkCommandBuffer*        m_commandBuffers;
-    camera                  m_mainCamera;
-    lights                  m_lights;
+    // Scene & gui commands to be submitted
+
+    VkCommandBuffer         m_commands[2];
+    VulkanTextOverlay*      m_overlay;
+    Camera                  m_mainCamera;
+    SceneLights             m_lights;
     VkDescriptorPool        m_descriptorPool;
     PipelineData            m_pbr;
-    PipelineData            m_cubeMap;
 };

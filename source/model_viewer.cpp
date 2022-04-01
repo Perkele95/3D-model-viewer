@@ -12,63 +12,43 @@ void CoreMessageCallback(log_level level, const char *string)
     pltf::DebugBreak();
 }
 
-model_viewer::model_viewer(pltf::logical_device device) : linear_storage(MegaBytes(64)),
-                                                          m_currentFrame(0)
+ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaBytes(64))
 {
-    m_coreMessage = CoreMessageCallback;
-    m_device = push<vulkan_device>(1);
-    m_overlay = push<text_overlay>(1);
+    settings.title = "Pbr Demo";
+    settings.syncMode = VSyncMode::Off;
+    settings.enValidation = C_VALIDATION;
 
-    new (m_device) vulkan_device(device, m_coreMessage, C_VALIDATION, false);
+    VulkanInstance::platformDevice = platform;
+    VulkanInstance::coreMessage = CoreMessageCallback;
 
-    m_depthFormat = m_device->getDepthFormat();
+    pltf::WindowCreate(platformDevice, settings.title);
 
-    auto poolInfo = vkInits::commandPoolCreateInfo(m_device->graphics.family);
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    vkCreateCommandPool(m_device->device, &poolInfo, nullptr, &m_cmdPool);
+    VulkanInstance::prepare();
 
-    m_device->buildSwapchain(VK_NULL_HANDLE, &m_swapchain);
+    m_mainCamera.init();
+    m_lights.init();
 
-    uint32_t localImageCount = 0;
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, nullptr);
-    m_imageCount = localImageCount;
-
-    m_swapchainImages = push<VkImage>(m_imageCount);
-    m_swapchainViews = push<VkImageView>(m_imageCount);
-    m_framebuffers = push<VkFramebuffer>(m_imageCount);
-    m_imagesInFlight = push<VkFence>(m_imageCount);
-    m_commandBuffers = push<VkCommandBuffer>(m_imageCount);
-    m_pbr.descriptorSets = push<VkDescriptorSet>(m_imageCount);
-    m_cubeMap.descriptorSets = push<VkDescriptorSet>(m_imageCount);
-
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
-
-    buildSwapchainViews();
-    buildMsaa();
-    buildDepth();
-    buildRenderPass();
-    buildFramebuffers();
-    buildSyncObjects();
-
-    m_mainCamera.init(m_device, pushView<buffer_t>(m_imageCount));
-    m_lights.init(m_device, pushView<buffer_t>(m_imageCount));
-
-    loadModels();
+    buildUniformBuffers();
+    buildModelData();
     buildDescriptors();
 
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_cmdPool, m_imageCount);
-    vkAllocateCommandBuffers(m_device->device, &cmdInfo, m_commandBuffers);
+    m_pbr.vertexShader.load(device, INTERNAL_DIR "shaders/pbr_vert.spv");
+    m_pbr.fragmentShader.load(device, INTERNAL_DIR "shaders/pbr_frag.spv");
 
-    buildShaders();
     buildPipelines();
 
-    text_overlay_create_info overlayInfo;
-    overlayInfo.sharedPermanent = this; // NOTE(arle): object slicing
-    overlayInfo.device = m_device;
-    overlayInfo.cmdPool = m_cmdPool;
-    overlayInfo.imageCount = m_imageCount;
-    overlayInfo.depthFormat = m_depthFormat;
-    new (m_overlay) text_overlay(&overlayInfo);
+    // Prepare text overlay
+
+    m_overlay = push<VulkanTextOverlay>(1);
+
+    m_overlay->depthFormat = depthFormat;
+    m_overlay->surfaceFormat = surfaceFormat;
+    m_overlay->sampleCount = sampleCount;
+    m_overlay->imageCount = imageCount;
+    m_overlay->graphicsQueue = graphicsQueue;
+    m_overlay->frameBuffers = framebuffers;
+    m_overlay->extent = extent;
+    m_overlay->init(&device, this); // obj slicing
 
     m_overlay->textTint = vec4(1.0f);
     m_overlay->textAlignment = text_align::centre;
@@ -81,114 +61,65 @@ model_viewer::model_viewer(pltf::logical_device device) : linear_storage(MegaByt
     m_overlay->draw(titleString, vec2(50.0f, 12.0f));
 
     m_overlay->end();
-    m_overlay->updateCmdBuffers(m_framebuffers);
 }
 
-model_viewer::~model_viewer()
+ModelViewer::~ModelViewer()
 {
-    vkDeviceWaitIdle(m_device->device);
-    m_overlay->~text_overlay();
+    vkDeviceWaitIdle(device);
 
-    vkDestroyCommandPool(m_device->device, m_cmdPool, nullptr);
+    m_overlay->destroy();
 
-    m_pbr.destroy(m_device->device);
+    m_pbr.destroy(device);
 
-    vkDestroyDescriptorPool(m_device->device, m_descriptorPool, nullptr);
+    vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
 
-    m_mainCamera.destroy(m_device->device);
-    m_lights.destroy(m_device->device);
+    VulkanInstance::destroy();
+}
 
-    for (size_t i = 0; i < m_imageCount; i++)
-        vkDestroyFramebuffer(m_device->device, m_framebuffers[i], nullptr);
-
-    m_depth.destroy(m_device->device);
-    m_msaa.destroy(m_device->device);
-    vkDestroyRenderPass(m_device->device, m_renderPass, nullptr);
-
-    for (size_t i = 0; i < m_imageCount; i++)
-        vkDestroyImageView(m_device->device, m_swapchainViews[i], nullptr);
-
-    vkDestroySwapchainKHR(m_device->device, m_swapchain, nullptr);
-
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+void ModelViewer::run()
+{
+    while(pltf::IsRunning())
     {
-        vkDestroyFence(m_device->device, m_inFlightFences[i], nullptr);
-        vkDestroySemaphore(m_device->device, m_renderFinishedSPs[i], nullptr);
-        vkDestroySemaphore(m_device->device, m_imageAvailableSPs[i], nullptr);
-    }
+        pltf::EventsPoll(platformDevice);
 
-    m_device->~vulkan_device();
+        if(extent.width == 0 || extent.height == 0)
+            continue;
+
+        VulkanInstance::prepareFrame();
+
+        recordFrame(commandBuffers[currentFrame]);
+        m_overlay->recordFrame(currentFrame, imageIndex);
+
+        m_commands[0] = commandBuffers[currentFrame];
+        m_commands[1] = m_overlay->commandBuffers[currentFrame];
+
+        submitInfo.pCommandBuffers = m_commands;
+        submitInfo.commandBufferCount = uint32_t(arraysize(m_commands));
+
+        VulkanInstance::submitFrame();
+
+        if(resizeRequired)
+            onWindowSize(uint32_t(extent.width), uint32_t(extent.height));
+    }
 }
 
-void model_viewer::swapBuffers(pltf::logical_device device)
+void ModelViewer::onWindowSize(int32_t width, int32_t height)
 {
-    if (m_device->extent.width == 0 || m_device->extent.height == 0)
+    if(width == 0 || height == 0)
         return;
 
-    gameUpdate(pltf::GetTimestep(device));
+    VulkanInstance::onResize();
 
-    vkWaitForFences(m_device->device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    vkDestroyPipeline(device, m_pbr.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, m_pbr.pipelineLayout, nullptr);
 
-    uint32_t imageIndex = 0;
-    VkResult result = vkAcquireNextImageKHR(m_device->device, m_swapchain, UINT64_MAX,
-                                            m_imageAvailableSPs[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
+    // NOTE(arle): pipeline layout does not need to be recreated
+    buildPipelines();
 
-    switch (result)
-    {
-    case VK_ERROR_OUT_OF_DATE_KHR:
-        onWindowResize();
-        break;
-    case VK_SUBOPTIMAL_KHR: // DebugLog("Suboptimal swapchain"); break;
-    default:
-        break;
-    }
-
-    m_mainCamera.update(m_device->device, m_device->aspectRatio, imageIndex);
-    vkQueueWaitIdle(m_device->graphics.queue); // TODO(arle): replace with fence
-    updateCmdBuffers(imageIndex);
-
-    if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
-        vkWaitForFences(m_device->device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
-
-    m_imagesInFlight[imageIndex] = m_inFlightFences[m_currentFrame];
-
-    const VkSemaphore waitSemaphores[] = {m_imageAvailableSPs[m_currentFrame]};
-    const VkSemaphore signalSemaphores[] = {m_renderFinishedSPs[m_currentFrame]};
-    const VkPipelineStageFlags waitStages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-
-    vkResetFences(m_device->device, 1, &m_inFlightFences[m_currentFrame]);
-
-    VkCommandBuffer submitCmds[] = {
-        m_commandBuffers[imageIndex],
-        m_overlay->cmdBuffers[imageIndex]};
-
-    auto submitInfo = vkInits::submitInfo(submitCmds, arraysize(submitCmds));
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = waitSemaphores;
-    submitInfo.pWaitDstStageMask = waitStages;
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = signalSemaphores;
-    vkQueueSubmit(m_device->graphics.queue, 1, &submitInfo,
-                  m_inFlightFences[m_currentFrame]);
-
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = signalSemaphores;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &m_swapchain;
-    presentInfo.pImageIndices = &imageIndex;
-
-    result = vkQueuePresentKHR(m_device->present.queue, &presentInfo);
-
-    const auto vulkanErrorResize = result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR;
-    if (vulkanErrorResize || pltf::HasResized())
-        onWindowResize();
-
-    m_currentFrame = (m_currentFrame + 1) % MAX_IMAGES_IN_FLIGHT;
+    m_overlay->onWindowResize();
 }
 
-void model_viewer::onKeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
+void ModelViewer::onKeyEvent(pltf::key_code key, pltf::modifier mod)
 {
     if (mod & pltf::MODIFIER_ALT)
     {
@@ -198,255 +129,73 @@ void model_viewer::onKeyEvent(pltf::logical_device device, pltf::key_code key, p
         if (key == pltf::key_code::F)
         {
             if (pltf::IsFullscreen())
-                pltf::WindowSetMinimised(device);
+                pltf::WindowSetMinimised(platformDevice);
             else
-                pltf::WindowSetFullscreen(device);
+                pltf::WindowSetFullscreen(platformDevice);
         }
     }
 }
 
-void model_viewer::onMouseButtonEvent(pltf::logical_device device, pltf::mouse_button button)
+void ModelViewer::onMouseButtonEvent(pltf::mouse_button button)
 {
     return;
 }
 
-void model_viewer::onScrollWheelEvent(pltf::logical_device device, double x, double y)
+void ModelViewer::onScrollWheelEvent(double x, double y)
 {
     m_mainCamera.fov -= GetRadians(float(y));
-    m_mainCamera.fov = clamp(m_mainCamera.fov, camera::FOV_LIMITS_LOW, camera::FOV_LIMITS_HIGH);
+    m_mainCamera.fov = clamp(m_mainCamera.fov, Camera::FOV_LIMITS_LOW, Camera::FOV_LIMITS_HIGH);
 }
 
-void model_viewer::onWindowResize()
+void ModelViewer::buildModelData()
 {
-#if defined(USE_DEVICE_WAIT_SYNC)
-    vkDeviceWaitIdle(m_device->device);
-#else
-    vkQueueWaitIdle(m_device->graphics.queue);
-#endif
+    auto model = push<Model3D>(1);
 
-    m_device->refresh();
+    model->mesh.loadSphere(&device, graphicsQueue);
+    model->transform = mat4x4::identity();
 
-    if (m_device->extent.width == 0 || m_device->extent.height == 0)
-        return;
-
-    for (size_t i = 0; i < m_imageCount; i++)
-        vkDestroyFramebuffer(m_device->device, m_framebuffers[i], nullptr);
-
-    m_msaa.destroy(m_device->device);
-    m_depth.destroy(m_device->device);
-    vkResetCommandPool(m_device->device, m_cmdPool, 0); // VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-
-    m_pbr.onResize(m_device->device);
-
-    vkDestroyRenderPass(m_device->device, m_renderPass, nullptr);
-
-    for (size_t i = 0; i < m_imageCount; i++)
-        vkDestroyImageView(m_device->device, m_swapchainViews[i], nullptr);
-
-    auto oldSwapchain = m_swapchain;
-    m_device->buildSwapchain(m_swapchain, &m_swapchain);
-    vkDestroySwapchainKHR(m_device->device, oldSwapchain, nullptr);
-
-    uint32_t localImageCount = 0;
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, nullptr);
-    vkGetSwapchainImagesKHR(m_device->device, m_swapchain, &localImageCount, m_swapchainImages);
-    m_imageCount = localImageCount;
-
-    buildSwapchainViews();
-    buildRenderPass();
-    buildPipelines();
-    buildDepth();
-    buildMsaa();
-    buildFramebuffers();
-
-    m_overlay->onWindowResize(m_cmdPool);
-    m_overlay->updateCmdBuffers(m_framebuffers);
-}
-
-void model_viewer::loadModels()
-{
-    new (&m_pbr.model) model3D(m_device);
-    m_pbr.model.mesh = push<mesh3D>(1);
-    m_pbr.model.material = push<pbr_material>(1);
-
-    m_pbr.model.mesh->loadSphere(m_device, m_cmdPool);
-
-    const char *paths[] = {
-        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/albedo.png",
-        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/normal.png",
-        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/roughness.png",
-        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/metallic.png",
-        INTERNAL_DIR MATERIALS_DIR "patterned-bw-vinyl-bl/ao.png"
-    };
     const auto format = VK_FORMAT_R8G8B8A8_SRGB;
+#define MATERIAL_NAME "patterned-bw-vinyl-bl/"
+    auto albedoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "albedo.png";
+    auto normalPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "normal.png";
+    auto roughnessPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "roughness.png";
+    auto metallicPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "metallic.png";
+    auto aoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "ao.png";
+#undef MATERIAL_NAME
+    model->albedo.loadFromFile(&device, graphicsQueue, format, albedoPath);
+    model->normal.loadFromFile(&device, graphicsQueue, format, normalPath);
+    model->roughness.loadFromFile(&device, graphicsQueue, format, roughnessPath);
+    model->metallic.loadFromFile(&device, graphicsQueue, format, metallicPath);
+    model->ao.loadFromFile(&device, graphicsQueue, format, aoPath);
 
-    auto &sceneMaterial = *m_pbr.model.material;
-
-    const auto checkResult = [this](CoreResult result)
-    {
-        switch (result)
-        {
-        case CoreResult::Format_Not_Supported:
-            m_coreMessage(log_level::error, "Format not supported\n");
-            break;
-        case CoreResult::Source_Missing:
-            m_coreMessage(log_level::error, "Could not locate file\n");
-            break;
-        default: break;
-        }
-    };
-
-    checkResult(sceneMaterial.albedo.loadFromFile(m_device, m_cmdPool, format, paths[0]));
-    checkResult(sceneMaterial.normal.loadFromFile(m_device, m_cmdPool, format, paths[1]));
-    checkResult(sceneMaterial.roughness.loadFromFile(m_device, m_cmdPool, format, paths[2]));
-    checkResult(sceneMaterial.metallic.loadFromFile(m_device, m_cmdPool, format, paths[3]));
-    checkResult(sceneMaterial.ao.loadFromFile(m_device, m_cmdPool, format, paths[4]));
+    m_pbr.model = model;
 }
 
-void model_viewer::buildSwapchainViews()
+void ModelViewer::buildUniformBuffers()
 {
-    for (size_t i = 0; i < m_imageCount; i++)
-    {
-        auto imageViewInfo = vkInits::imageViewCreateInfo();
-        imageViewInfo.format = m_device->surfaceFormat.format;
-        imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageViewInfo.image = m_swapchainImages[i];
-        vkCreateImageView(m_device->device, &imageViewInfo, nullptr, &m_swapchainViews[i]);
-    }
-}
-
-void model_viewer::buildMsaa()
-{
-    auto msaaInfo = vkInits::imageCreateInfo();
-    msaaInfo.samples = m_device->sampleCount;
-    msaaInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    msaaInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
-    msaaInfo.format = m_device->surfaceFormat.format;
-    msaaInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    msaaInfo.usage = VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    m_msaa.create(m_device, &msaaInfo, VK_IMAGE_ASPECT_COLOR_BIT);
-}
-
-void model_viewer::buildDepth()
-{
-    auto depthInfo = vkInits::imageCreateInfo();
-    depthInfo.extent = {m_device->extent.width, m_device->extent.height, 1};
-    depthInfo.format = m_depthFormat;
-    depthInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    depthInfo.samples = m_device->sampleCount;
-    depthInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    m_depth.create(m_device, &depthInfo, VK_IMAGE_ASPECT_DEPTH_BIT);
-}
-
-void model_viewer::buildRenderPass()
-{
-    auto colourAttachment = vkInits::attachmentDescription(m_device->surfaceFormat.format);
-    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colourAttachment.samples = m_device->sampleCount;
-
-    auto depthAttachment = vkInits::attachmentDescription(m_depthFormat);
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.samples = m_device->sampleCount;
-
-    auto colourResolve = vkInits::attachmentDescription(m_device->surfaceFormat.format);
-    colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-
-    const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
-
-    VkAttachmentReference coluorAttachmentRef{};
-    coluorAttachmentRef.attachment = 0;
-    coluorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference colourResolveRef{};
-    colourResolveRef.attachment = 2;
-    colourResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &coluorAttachmentRef;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-    subpass.pResolveAttachments = &colourResolveRef;
-
-    VkSubpassDependency dependencies[2];
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo = {};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = uint32_t(arraysize(attachments));
-    renderPassInfo.pAttachments = attachments;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-    renderPassInfo.pDependencies = dependencies;
-
-    vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
-}
-
-void model_viewer::buildFramebuffers()
-{
-    for (size_t i = 0; i < m_imageCount; i++)
-    {
-        const VkImageView frameBufferAttachments[] = {
-            m_msaa.view(),
-            m_depth.view(),
-            m_swapchainViews[i]
-        };
-
-        auto framebufferInfo = vkInits::framebufferCreateInfo();
-        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebufferInfo.renderPass = m_renderPass;
-        framebufferInfo.attachmentCount = static_cast<uint32_t>(arraysize(frameBufferAttachments));
-        framebufferInfo.pAttachments = frameBufferAttachments;
-        framebufferInfo.width = m_device->extent.width;
-        framebufferInfo.height = m_device->extent.height;
-        vkCreateFramebuffer(m_device->device, &framebufferInfo, nullptr, &m_framebuffers[i]);
-    }
-}
-
-void model_viewer::buildSyncObjects()
-{
-    auto semaphoreInfo = vkInits::semaphoreCreateInfo();
-    auto fenceInfo = vkInits::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+    const auto cameraInfo = vkInits::bufferCreateInfo(sizeof(mvp_matrix), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    const auto lightsInfo = vkInits::bufferCreateInfo(sizeof(LightData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        vkCreateSemaphore(m_device->device, &semaphoreInfo, nullptr, &m_imageAvailableSPs[i]);
-        vkCreateSemaphore(m_device->device, &semaphoreInfo, nullptr, &m_renderFinishedSPs[i]);
-        vkCreateFence(m_device->device, &fenceInfo, nullptr, &m_inFlightFences[i]);
+        m_pbr.cameraUniforms[i].create(&device, &cameraInfo, MEM_FLAG_HOST_VISIBLE);
+        m_pbr.lightUniforms[i].create(&device, &lightsInfo, MEM_FLAG_HOST_VISIBLE);
     }
+
+    updateCamera(0.0f);
+    updateLights();
 }
 
-void model_viewer::buildDescriptors()
+void ModelViewer::buildDescriptors()
 {
     const VkDescriptorPoolSize poolSizes[] = {
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_imageCount),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * m_imageCount)
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * MAX_IMAGES_IN_FLIGHT)
     };
 
-    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * m_imageCount);
-    vkCreateDescriptorPool(m_device->device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
+    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * MAX_IMAGES_IN_FLIGHT);
+    vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
 
     constexpr auto combinedStage = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     const VkDescriptorSetLayoutBinding bindings[] = {
@@ -460,53 +209,38 @@ void model_viewer::buildDescriptors()
     };
 
     const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
-    vkCreateDescriptorSetLayout(m_device->device, &setLayoutInfo, nullptr, &m_pbr.setLayout);
+    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &m_pbr.setLayout);
 
     // Sets
 
-    auto layouts = data_buffer<VkDescriptorSetLayout>(m_imageCount);
-    layouts.fill(m_pbr.setLayout);
+    VkDescriptorSetLayout layouts[MAX_IMAGES_IN_FLIGHT] = {};
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        layouts[i] = m_pbr.setLayout;
 
-    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts.getView());
-    vkAllocateDescriptorSets(m_device->device, &allocInfo, m_pbr.descriptorSets);
+    auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
+    vkAllocateDescriptorSets(device, &allocInfo, m_pbr.descriptorSets);
 
-    for (size_t i = 0; i < m_imageCount; i++)
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        const auto cameraBufferInfo = m_mainCamera.descriptor(i);
-        const auto lightBufferInfo = m_lights.descriptor(i);
+        const auto cameraInfo = m_pbr.cameraUniforms[i].descriptor();
+        const auto lightsInfo = m_pbr.lightUniforms[i].descriptor();
 
         auto &setRef = m_pbr.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraBufferInfo),
-            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightBufferInfo),
-            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->albedo.descriptor),
-            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->normal.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->roughness.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model.material->ao.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraInfo),
+            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightsInfo),
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->ao.descriptor)
         };
 
-        vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
+        vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }
 }
 
-void model_viewer::buildShaders()
-{
-    m_pbr.vertexShader = shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    m_pbr.fragmentShader = shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-#if 0
-    m_cubeMap.vertexShader = shader_object(INTERNAL_DIR "shaders/pbr_vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-    m_cubeMap.fragmentShader = shader_object(INTERNAL_DIR "shaders/pbr_frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-#endif
-    m_pbr.vertexShader.load(m_device->device);
-    m_pbr.fragmentShader.load(m_device->device);
-#if 0
-    m_cubeMap.vertexShader.load(m_device->device);
-    m_cubeMap.fragmentShader.load(m_device->device);
-#endif
-}
-
-void model_viewer::buildPipelines()
+void ModelViewer::buildPipelines()
 {
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
         m_pbr.vertexShader.shaderStage(), m_pbr.fragmentShader.shaderStage()
@@ -522,8 +256,8 @@ void model_viewer::buildPipelines()
     vertexInputInfo.pVertexAttributeDescriptions = mesh3D::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
-    auto viewport = vkInits::viewportInfo(m_device->extent);
-    auto scissor = vkInits::scissorInfo(m_device->extent);
+    auto viewport = vkInits::viewportInfo(extent);
+    auto scissor = vkInits::scissorInfo(extent);
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -533,7 +267,7 @@ void model_viewer::buildPipelines()
     viewportState.pScissors = &scissor;
 
     auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_COUNTER_CLOCKWISE);
-    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(m_device->sampleCount);
+    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(sampleCount);
 
     auto depthStencil = vkInits::depthStencilStateInfo();
     auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
@@ -542,7 +276,7 @@ void model_viewer::buildPipelines()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        model3D::pushConstant()
+        Model3D::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -551,7 +285,7 @@ void model_viewer::buildPipelines()
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = uint32_t(arraysize(pushConstants));
-    vkCreatePipelineLayout(m_device->device, &pipelineLayoutInfo, nullptr, &m_pbr.pipelineLayout);
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_pbr.pipelineLayout);
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -565,35 +299,35 @@ void model_viewer::buildPipelines()
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colourBlend;
     pipelineInfo.layout = m_pbr.pipelineLayout;
-    pipelineInfo.renderPass = m_renderPass;
-    vkCreateGraphicsPipelines(m_device->device, VK_NULL_HANDLE, 1,
-                              &pipelineInfo, nullptr, &m_pbr.pipeline);
+    pipelineInfo.renderPass = renderPass;
+    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pbr.pipeline);
 }
 
-void model_viewer::gameUpdate(float dt)
+void ModelViewer::updateCamera(float dt)
 {
-    if (pltf::IsKeyDown(pltf::key_code::W))
-        m_mainCamera.rotate(camera::direction::up, dt);
-    else if (pltf::IsKeyDown(pltf::key_code::S))
-        m_mainCamera.rotate(camera::direction::down, dt);
+    m_mainCamera.controls.rotateUp = pltf::IsKeyDown(pltf::key_code::W);
+    m_mainCamera.controls.rotateDown = pltf::IsKeyDown(pltf::key_code::S);
+    m_mainCamera.controls.rotateLeft = pltf::IsKeyDown(pltf::key_code::A);
+    m_mainCamera.controls.rotateRight = pltf::IsKeyDown(pltf::key_code::D);
+    m_mainCamera.controls.moveForward = pltf::IsKeyDown(pltf::key_code::Up);
+    m_mainCamera.controls.moveBackward = pltf::IsKeyDown(pltf::key_code::Down);
+    m_mainCamera.controls.moveLeft = pltf::IsKeyDown(pltf::key_code::Left);
+    m_mainCamera.controls.moveRight = pltf::IsKeyDown(pltf::key_code::Right);
+    m_mainCamera.update(dt);
 
-    if (pltf::IsKeyDown(pltf::key_code::A))
-        m_mainCamera.rotate(camera::direction::left, dt);
-    else if (pltf::IsKeyDown(pltf::key_code::D))
-        m_mainCamera.rotate(camera::direction::right, dt);
-
-    if (pltf::IsKeyDown(pltf::key_code::Up))
-        m_mainCamera.move(camera::direction::forward, dt);
-    else if (pltf::IsKeyDown(pltf::key_code::Down))
-        m_mainCamera.move(camera::direction::backward, dt);
-
-    if (pltf::IsKeyDown(pltf::key_code::Left))
-        m_mainCamera.move(camera::direction::left, dt);
-    else if (pltf::IsKeyDown(pltf::key_code::Right))
-        m_mainCamera.move(camera::direction::right, dt);
+    const auto ubo = m_mainCamera.calculateMatrix(aspectRatio);
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        m_pbr.cameraUniforms[i].fill(device, &ubo);
 }
 
-void model_viewer::updateCmdBuffers(size_t imageIndex)
+void ModelViewer::updateLights()
+{
+    const auto ubo = m_lights.getData();
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        m_pbr.lightUniforms[i].fill(device, &ubo);
+}
+
+void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
 {
     VkClearValue colourValue;
     colourValue.color = {};
@@ -603,19 +337,18 @@ void model_viewer::updateCmdBuffers(size_t imageIndex)
     const VkClearValue clearValues[] = {colourValue, depthStencilValue};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
-    auto renderBeginInfo = vkInits::renderPassBeginInfo(m_renderPass, m_device->extent);
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(renderPass, extent);
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = clearValues;
     renderBeginInfo.clearValueCount = uint32_t(arraysize(clearValues));
 
-    const auto cmdBuffer = m_commandBuffers[imageIndex];
     vkBeginCommandBuffer(cmdBuffer, &cmdBeginInfo);
 
-    renderBeginInfo.framebuffer = m_framebuffers[imageIndex];
+    renderBeginInfo.framebuffer = framebuffers[imageIndex];
     vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    m_pbr.bind(cmdBuffer, imageIndex);
-    m_pbr.model.draw(cmdBuffer, m_pbr.pipelineLayout);
+    m_pbr.bind(cmdBuffer, currentFrame);
+    m_pbr.model->draw(cmdBuffer, m_pbr.pipelineLayout);
 
     vkCmdEndRenderPass(cmdBuffer);
     vkEndCommandBuffer(cmdBuffer);

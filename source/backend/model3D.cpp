@@ -1,18 +1,25 @@
 #include "model3D.hpp"
 
-void model3D::destroy()
+VkPushConstantRange Model3D::pushConstant()
 {
-    if (mesh != nullptr) {
-        mesh->destroy(m_device->device);
-        mesh = nullptr;
-    }
-    if (material != nullptr) {
-        material->destroy(m_device->device);
-        material = nullptr;
-    }
+    VkPushConstantRange range{};
+    range.offset = 0;
+    range.size = sizeof(transform);
+    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    return range;
 }
 
-void model3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
+void Model3D::destroy(VkDevice device)
+{
+    mesh.destroy(device);
+    albedo.destroy(device);
+    normal.destroy(device);
+    roughness.destroy(device);
+    metallic.destroy(device);
+    ao.destroy(device);
+}
+
+void Model3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
 {
     const auto [stageFlags, offset, size] = pushConstant();
     vkCmdPushConstants(cmd,
@@ -22,14 +29,5 @@ void model3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
                        size,
                        &transform);
 
-    mesh->draw(cmd, layout);
-}
-
-VkPushConstantRange model3D::pushConstant()
-{
-    VkPushConstantRange range{};
-    range.offset = 0;
-    range.size = sizeof(transform);
-    range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    return range;
+    mesh.draw(cmd, layout);
 }

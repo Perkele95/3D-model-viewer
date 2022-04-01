@@ -1,27 +1,26 @@
 #include "lights.hpp"
 
-void lights::init(const vulkan_device *device, view<buffer_t> buffers)
+void SceneLights::init()
 {
     constexpr float LIGHT_STR = 300.0f;
+    m_positions[0] = vec4(5.0f, 1.0f, -5.0f, 0.0f);
+    m_positions[1] = vec4(5.0f, 1.0f, -5.0f, 0.0f);
+    m_positions[2] = vec4(0.0f);
+    m_positions[3] = vec4(0.0f);
 
-    light_object lights[LIGHTS_COUNT] = {
-        light_object(vec3(5.0f, 1.0f, -5.0f), GetColour(255, 247, 207) * LIGHT_STR),
-        light_object(vec3(-5.0f, -1.0f, 5.0f), GetColour(125, 214, 250) * LIGHT_STR),
-        light_object(vec3(0.0f, 0.0f, 0.0f), GetColour(255, 255, 255) * float(0)),
-        light_object(vec3(0.0f, 0.0f, 0.0f), GetColour(255, 255, 255) * float(0))
-    };
-
-    auto data = light_data(lights);
-
-    m_buffers = buffers;
-
-    const auto info = vkInits::bufferCreateInfo(sizeof(light_data), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    for (size_t i = 0; i < m_buffers.count; i++)
-        m_buffers[i].create(device, &info, MEM_FLAG_HOST_VISIBLE, &data);
+    m_colours[0] = GetColour(255, 247, 207) * LIGHT_STR;
+    m_colours[1] = GetColour(125, 214, 250) * LIGHT_STR;
+    m_colours[2] = vec4(0.0f);
+    m_colours[3] = vec4(0.0f);
 }
 
-void lights::destroy(VkDevice device)
+LightData SceneLights::getData()
 {
-    for (size_t i = 0; i < m_buffers.count; i++)
-        m_buffers[i].destroy(device);
+    auto data = LightData();
+    for (size_t i = 0; i < LIGHTS_COUNT; i++)
+    {
+        data.positions[i] = m_positions[i];
+        data.colours[i] = m_colours[i];
+    }
+    return data;
 }
