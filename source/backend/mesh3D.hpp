@@ -2,32 +2,32 @@
 #include "VulkanDevice.hpp"
 #include "buffer.hpp"
 
-struct mesh_vertex
+struct MeshVertex
 {
     vec3<float> position;
     vec3<float> normal;
     vec2<float> uv;
 };
 
-using mesh_index = uint32_t;
+using MeshIndex = uint32_t;
 
-class mesh3D
+class Mesh3D
 {
 public:
     static constexpr VkVertexInputAttributeDescription Attributes[] = {
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, position)},
-        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(mesh_vertex, normal)},
-        {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(mesh_vertex, uv)}
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MeshVertex, position)},
+        {1, 0, VK_FORMAT_R32G32B32_SFLOAT, offsetof(MeshVertex, normal)},
+        {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(MeshVertex, uv)}
     };
 
-    mesh3D() : m_vertices(), m_indices(), m_indexCount(0){}
+    Mesh3D() : m_vertices(), m_indices(), m_indexCount(0){}
 
     void destroy(VkDevice device);
 
     void load(const VulkanDevice *device,
               VkQueue queue,
-              view<mesh_vertex> vertices,
-              view<mesh_index> indices);
+              view<MeshVertex> vertices,
+              view<MeshIndex> indices);
 
     void loadSphere(const VulkanDevice* device, VkQueue queue);
     void loadCube(const VulkanDevice* device, VkQueue queue);
@@ -37,5 +37,5 @@ public:
 private:
     VulkanBuffer    m_vertices;
     VulkanBuffer    m_indices;
-    size_t      m_indexCount;
+    size_t          m_indexCount;
 };

@@ -85,6 +85,8 @@ void ModelViewer::run()
         if(extent.width == 0 || extent.height == 0)
             continue;
 
+        updateCamera(pltf::GetTimestep(platformDevice));
+
         VulkanInstance::prepareFrame();
 
         recordFrame(commandBuffers[currentFrame]);
@@ -246,14 +248,14 @@ void ModelViewer::buildPipelines()
         m_pbr.vertexShader.shaderStage(), m_pbr.fragmentShader.shaderStage()
     };
 
-    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(mesh_vertex));
+    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(MeshVertex));
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(mesh3D::Attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = mesh3D::Attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(Mesh3D::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = Mesh3D::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewport = vkInits::viewportInfo(extent);

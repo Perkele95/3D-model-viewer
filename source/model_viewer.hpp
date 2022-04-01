@@ -2,7 +2,7 @@
 
 #include "base.hpp"
 #include "backend/VulkanInstance.hpp"
-#include "backend/vulkan_text_overlay.hpp"
+#include "backend/VulkanTextOverlay.hpp"
 
 #include "backend/shader.hpp"
 #include "backend/camera.hpp"

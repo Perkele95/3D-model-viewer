@@ -15,7 +15,7 @@ public:
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
 
     mat4x4 transform;
-    mesh3D mesh;
+    Mesh3D mesh;
 
     // Material
 

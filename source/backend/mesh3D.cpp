@@ -1,15 +1,15 @@
 #include "mesh3D.hpp"
 
-void mesh3D::destroy(VkDevice device)
+void Mesh3D::destroy(VkDevice device)
 {
     m_vertices.destroy(device);
     m_indices.destroy(device);
 }
 
-void mesh3D::load(const VulkanDevice *device,
+void Mesh3D::load(const VulkanDevice *device,
                   VkQueue queue,
-                  view<mesh_vertex> vertices,
-                  view<mesh_index> indices)
+                  view<MeshVertex> vertices,
+                  view<MeshIndex> indices)
 {
     auto vertexInfo = vkInits::bufferCreateInfo(vertices.size(), USAGE_VERTEX_TRANSFER_SRC);
     auto vertexTransfer = VulkanBuffer();
@@ -38,12 +38,12 @@ void mesh3D::load(const VulkanDevice *device,
     m_indexCount = indices.count;
 }
 
-void mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
+void Mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
 {
     constexpr auto N_STACKS = clamp<uint32_t>(64, 2, 128);
     constexpr auto N_SLICES = clamp<uint32_t>(64, 2, 128);
 
-    auto vertices = data_buffer<mesh_vertex>((N_STACKS - 1) * N_SLICES + 2);
+    auto vertices = data_buffer<MeshVertex>((N_STACKS - 1) * N_SLICES + 2);
     auto vertex = vertices.data();
 
     // Top vertex
@@ -81,7 +81,7 @@ void mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
     // 6 idx per quad * (only quad stacks) * num slices
     constexpr auto idxCountQuads = 6 * (N_STACKS - 2) * N_SLICES;
 
-    auto indices = data_buffer<mesh_index>(idxCountTriangles + idxCountQuads);
+    auto indices = data_buffer<MeshIndex>(idxCountTriangles + idxCountQuads);
     auto index = indices.data();
 
     const auto indexLast = uint32_t(vertices.capacity() - 1);
@@ -122,8 +122,8 @@ void mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
 
     load(device, queue, vertices.getView(), indices.getView());
 }
-// TODO(arle): UV coordinates
-void mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
+
+void Mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
 {
     constexpr auto normalFront = vec3(0.0f, 0.0f, -1.0f);
     constexpr auto normalBack = vec3(0.0f, 0.0f, 1.0f);
@@ -151,7 +151,7 @@ void mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
         vec2(0.0f, 1.0f)
     };
 
-    auto vertices = data_buffer<mesh_vertex>(24);
+    auto vertices = data_buffer<MeshVertex>(24);
     vertices[0] = {points[0], normalFront, uvs[3]};
     vertices[1] = {points[3], normalFront, uvs[0]};
     vertices[2] = {points[2], normalFront, uvs[1]};
@@ -182,7 +182,7 @@ void mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
     vertices[22] = {points[6], normalLeft, uvs[2]};
     vertices[23] = {points[5], normalLeft, uvs[3]};
 
-    auto indices = data_buffer<mesh_index>(36);
+    auto indices = data_buffer<MeshIndex>(36);
     for (uint32_t i = 0; i < 6; i++){
         const auto index = 6 * i;
         const auto offset = 4 * i;
@@ -197,7 +197,7 @@ void mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
     load(device, queue, vertices.getView(), indices.getView());
 }
 
-void mesh3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
+void Mesh3D::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
 {
     const VkDeviceSize vertexOffset = 0;
     vkCmdBindVertexBuffers(cmd, 0, 1, &m_vertices.data, &vertexOffset);

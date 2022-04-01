@@ -145,9 +145,6 @@ void VulkanInstance::onResize()
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
         vkResetCommandBuffer(commandBuffers[i], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
 
-    // TODO(arle): no need to recreate renderpass on resize, it doesnt change
-    vkDestroyRenderPass(device, renderPass, nullptr);
-
     auto oldSwapchain = m_swapchain;
     prepareSwapchain(oldSwapchain);
 
@@ -160,7 +157,6 @@ void VulkanInstance::onResize()
     vkGetSwapchainImagesKHR(device, m_swapchain, &imageCountLocal, m_swapchainImages);
 
     prepareSwapchainViews();
-    prepareRenderpass();
     prepareDepth();
     prepareMsaa();
     prepareFramebuffers();

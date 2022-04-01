@@ -4,7 +4,7 @@ void SceneLights::init()
 {
     constexpr float LIGHT_STR = 300.0f;
     m_positions[0] = vec4(5.0f, 1.0f, -5.0f, 0.0f);
-    m_positions[1] = vec4(5.0f, 1.0f, -5.0f, 0.0f);
+    m_positions[1] = vec4(-5.0f, -1.0f, 5.0f, 0.0f);
     m_positions[2] = vec4(0.0f);
     m_positions[3] = vec4(0.0f);
 

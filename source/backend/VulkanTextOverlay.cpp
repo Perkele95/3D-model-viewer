@@ -1,5 +1,5 @@
 #include "../../vendor/stb/stb_font_courier_40_latin1.inl"
-#include "vulkan_text_overlay.hpp"
+#include "VulkanTextOverlay.hpp"
 #include <string.h>
 
 constexpr size_t QUAD_VERTEX_COUNT = 4;
