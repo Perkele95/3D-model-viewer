@@ -47,3 +47,12 @@ constexpr T max(T a, T b)
 {
     return a > b ? a : b;
 }
+
+template<typename T, int N>
+constexpr T accumulate(const T (&array)[N], T value = T(0))
+{
+    for (size_t i = 0; i < N; i++)
+        value += array[i];
+
+    return value;
+}

@@ -29,11 +29,14 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
     m_lights.init();
 
     buildUniformBuffers();
-    buildModelData();
+    buildScene();
+    buildCubeMap();
     buildDescriptors();
 
-    m_pbr.vertexShader.load(device, INTERNAL_DIR "shaders/pbr_vert.spv");
-    m_pbr.fragmentShader.load(device, INTERNAL_DIR "shaders/pbr_frag.spv");
+    scene.vertexShader.load(device, INTERNAL_DIR "shaders/pbr_vert.spv");
+    scene.fragmentShader.load(device, INTERNAL_DIR "shaders/pbr_frag.spv");
+    cubeMap.vertexShader.load(device, INTERNAL_DIR "shaders/cubemap_vert.spv");
+    cubeMap.fragmentShader.load(device, INTERNAL_DIR "shaders/cubemap_frag.spv");
 
     buildPipelines();
 
@@ -69,7 +72,25 @@ ModelViewer::~ModelViewer()
 
     m_overlay->destroy();
 
-    m_pbr.destroy(device);
+    vkDestroyPipeline(device, cubeMap.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, cubeMap.pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, cubeMap.setLayout, nullptr);
+    cubeMap.vertexShader.destroy(device);
+    cubeMap.fragmentShader.destroy(device);
+    cubeMap.model->destroy(device);
+
+    vkDestroyPipeline(device, scene.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, scene.pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, scene.setLayout, nullptr);
+    scene.vertexShader.destroy(device);
+    scene.fragmentShader.destroy(device);
+    scene.model->destroy(device);
+
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
+        scene.cameraBuffers[i].destroy(device);
+        scene.lightBuffers[i].destroy(device);
+    }
 
     vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
 
@@ -112,8 +133,10 @@ void ModelViewer::onWindowSize(int32_t width, int32_t height)
 
     VulkanInstance::onResize();
 
-    vkDestroyPipeline(device, m_pbr.pipeline, nullptr);
-    vkDestroyPipelineLayout(device, m_pbr.pipelineLayout, nullptr);
+    vkDestroyPipeline(device, scene.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, scene.pipelineLayout, nullptr);
+    vkDestroyPipeline(device, cubeMap.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, cubeMap.pipelineLayout, nullptr);
 
     // NOTE(arle): pipeline layout does not need to be recreated
     buildPipelines();
@@ -149,14 +172,13 @@ void ModelViewer::onScrollWheelEvent(double x, double y)
     m_mainCamera.fov = clamp(m_mainCamera.fov, Camera::FOV_LIMITS_LOW, Camera::FOV_LIMITS_HIGH);
 }
 
-void ModelViewer::buildModelData()
+void ModelViewer::buildScene()
 {
-    auto model = push<Model3D>(1);
+    auto model = push<PBRModel>(1);
 
     model->mesh.loadSphere(&device, graphicsQueue);
     model->transform = mat4x4::identity();
 
-    const auto format = VK_FORMAT_R8G8B8A8_SRGB;
 #define MATERIAL_NAME "patterned-bw-vinyl-bl/"
     auto albedoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "albedo.png";
     auto normalPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "normal.png";
@@ -164,13 +186,29 @@ void ModelViewer::buildModelData()
     auto metallicPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "metallic.png";
     auto aoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "ao.png";
 #undef MATERIAL_NAME
-    model->albedo.loadFromFile(&device, graphicsQueue, format, albedoPath);
-    model->normal.loadFromFile(&device, graphicsQueue, format, normalPath);
-    model->roughness.loadFromFile(&device, graphicsQueue, format, roughnessPath);
-    model->metallic.loadFromFile(&device, graphicsQueue, format, metallicPath);
-    model->ao.loadFromFile(&device, graphicsQueue, format, aoPath);
+    model->albedo.loadRGBA(&device, graphicsQueue, albedoPath, true);
+    model->normal.loadRGBA(&device, graphicsQueue, normalPath);
+    model->roughness.loadRGBA(&device, graphicsQueue, roughnessPath);
+    model->metallic.loadRGBA(&device, graphicsQueue, metallicPath);
+    model->ao.loadRGBA(&device, graphicsQueue, aoPath);
 
-    m_pbr.model = model;
+    scene.model = model;
+}
+
+void ModelViewer::buildCubeMap()
+{
+    auto model = push<CubeMapModel>(1);
+    model->load(&device, graphicsQueue);
+
+    model->map.filenames[0] = INTERNAL_DIR "assets/skybox/posx.jpg";
+    model->map.filenames[1] = INTERNAL_DIR "assets/skybox/negx.jpg";
+    model->map.filenames[2] = INTERNAL_DIR "assets/skybox/posy.jpg";
+    model->map.filenames[3] = INTERNAL_DIR "assets/skybox/negy.jpg";
+    model->map.filenames[4] = INTERNAL_DIR "assets/skybox/posz.jpg";
+    model->map.filenames[5] = INTERNAL_DIR "assets/skybox/negz.jpg";
+    model->map.load(&device, graphicsQueue);
+
+    cubeMap.model = model;
 }
 
 void ModelViewer::buildUniformBuffers()
@@ -180,8 +218,8 @@ void ModelViewer::buildUniformBuffers()
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        m_pbr.cameraUniforms[i].create(&device, &cameraInfo, MEM_FLAG_HOST_VISIBLE);
-        m_pbr.lightUniforms[i].create(&device, &lightsInfo, MEM_FLAG_HOST_VISIBLE);
+        scene.cameraBuffers[i].create(&device, &cameraInfo, MEM_FLAG_HOST_VISIBLE);
+        scene.lightBuffers[i].create(&device, &lightsInfo, MEM_FLAG_HOST_VISIBLE);
     }
 
     updateCamera(0.0f);
@@ -193,11 +231,18 @@ void ModelViewer::buildDescriptors()
     const VkDescriptorPoolSize poolSizes[] = {
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * MAX_IMAGES_IN_FLIGHT)
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * MAX_IMAGES_IN_FLIGHT),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_IMAGES_IN_FLIGHT)
     };
 
-    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 7 * MAX_IMAGES_IN_FLIGHT);
+    size_t maxSets = 0;
+    for (size_t i = 0; i < arraysize(poolSizes); i++)
+        maxSets += poolSizes[i].descriptorCount;
+
+    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, maxSets);
     vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &m_descriptorPool);
+
+    // Scene
 
     constexpr auto combinedStage = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     const VkDescriptorSetLayoutBinding bindings[] = {
@@ -210,32 +255,53 @@ void ModelViewer::buildDescriptors()
         vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
     };
 
-    const auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
-    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &m_pbr.setLayout);
-
-    // Sets
+    auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
+    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &scene.setLayout);
 
     VkDescriptorSetLayout layouts[MAX_IMAGES_IN_FLIGHT] = {};
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        layouts[i] = m_pbr.setLayout;
+    arrayfill(layouts, scene.setLayout);
 
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
-    vkAllocateDescriptorSets(device, &allocInfo, m_pbr.descriptorSets);
+    vkAllocateDescriptorSets(device, &allocInfo, scene.descriptorSets);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        const auto cameraInfo = m_pbr.cameraUniforms[i].descriptor();
-        const auto lightsInfo = m_pbr.lightUniforms[i].descriptor();
+        const auto cameraInfo = scene.cameraBuffers[i].descriptor();
+        const auto lightsInfo = scene.lightBuffers[i].descriptor();
 
-        auto &setRef = m_pbr.descriptorSets[i];
+        auto &setRef = scene.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraInfo),
             vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightsInfo),
-            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->albedo.descriptor),
-            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->normal.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->roughness.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &m_pbr.model->ao.descriptor)
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->ao.descriptor)
+        };
+
+        vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
+    }
+
+    // Cubemap
+
+    const VkDescriptorSetLayoutBinding cubemapBindings[] = {
+        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
+
+    setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(cubemapBindings);
+    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &cubeMap.setLayout);
+
+    arrayfill(layouts, cubeMap.setLayout);
+
+    allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
+    vkAllocateDescriptorSets(device, &allocInfo, cubeMap.descriptorSets);
+
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
+        auto &setRef = cubeMap.descriptorSets[i];
+        const VkWriteDescriptorSet writes[] = {
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &cubeMap.model->map.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -244,8 +310,8 @@ void ModelViewer::buildDescriptors()
 
 void ModelViewer::buildPipelines()
 {
-    const VkPipelineShaderStageCreateInfo shaderStages[] = {
-        m_pbr.vertexShader.shaderStage(), m_pbr.fragmentShader.shaderStage()
+    VkPipelineShaderStageCreateInfo shaderStages[] = {
+        scene.vertexShader.shaderStage(), scene.fragmentShader.shaderStage()
     };
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(MeshVertex));
@@ -278,16 +344,16 @@ void ModelViewer::buildPipelines()
     colourBlend.pAttachments = &colorBlendAttachment;
 
     const VkPushConstantRange pushConstants[] = {
-        Model3D::pushConstant()
+        PBRModel::pushConstant()
     };
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.pSetLayouts = &m_pbr.setLayout;
+    pipelineLayoutInfo.pSetLayouts = &scene.setLayout;
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = pushConstants;
     pipelineLayoutInfo.pushConstantRangeCount = uint32_t(arraysize(pushConstants));
-    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &m_pbr.pipelineLayout);
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &scene.pipelineLayout);
 
     VkGraphicsPipelineCreateInfo pipelineInfo{};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -300,9 +366,36 @@ void ModelViewer::buildPipelines()
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colourBlend;
-    pipelineInfo.layout = m_pbr.pipelineLayout;
+    pipelineInfo.layout = scene.pipelineLayout;
     pipelineInfo.renderPass = renderPass;
-    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pbr.pipeline);
+    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &scene.pipeline);
+
+    // Cubemap
+
+    shaderStages[0] = cubeMap.vertexShader.shaderStage();
+    shaderStages[1] = cubeMap.fragmentShader.shaderStage();
+
+    bindingDescription.stride = sizeof(CubeMapVertex);
+
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(CubeMapModel::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = CubeMapModel::Attributes;
+
+    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
+
+    VkPushConstantRange cubemapPushconstant{};
+    cubemapPushconstant.offset = 0;
+    cubemapPushconstant.size = 2 * sizeof(mat4x4);
+    cubemapPushconstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+    pipelineLayoutInfo.pSetLayouts = &cubeMap.setLayout;
+    pipelineLayoutInfo.pPushConstantRanges = &cubemapPushconstant;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &cubeMap.pipelineLayout);
+
+    pipelineInfo.layout = cubeMap.pipelineLayout;
+    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &cubeMap.pipeline);
 }
 
 void ModelViewer::updateCamera(float dt)
@@ -315,24 +408,24 @@ void ModelViewer::updateCamera(float dt)
     m_mainCamera.controls.moveBackward = pltf::IsKeyDown(pltf::key_code::Down);
     m_mainCamera.controls.moveLeft = pltf::IsKeyDown(pltf::key_code::Left);
     m_mainCamera.controls.moveRight = pltf::IsKeyDown(pltf::key_code::Right);
-    m_mainCamera.update(dt);
+    m_mainCamera.update(dt, aspectRatio);
 
-    const auto ubo = m_mainCamera.calculateMatrix(aspectRatio);
+    const auto ubo = m_mainCamera.getModelViewProjection();
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        m_pbr.cameraUniforms[i].fill(device, &ubo);
+        scene.cameraBuffers[i].fill(device, &ubo);
 }
 
 void ModelViewer::updateLights()
 {
     const auto ubo = m_lights.getData();
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        m_pbr.lightUniforms[i].fill(device, &ubo);
+        scene.lightBuffers[i].fill(device, &ubo);
 }
 
 void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
 {
     VkClearValue colourValue;
-    colourValue.color = {};
+    colourValue.color = {0.1f, 0.1f, 0.1f, 1.0f};
     VkClearValue depthStencilValue;
     depthStencilValue.depthStencil = {1.0f, 0};
 
@@ -349,8 +442,32 @@ void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
     renderBeginInfo.framebuffer = framebuffers[imageIndex];
     vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    m_pbr.bind(cmdBuffer, currentFrame);
-    m_pbr.model->draw(cmdBuffer, m_pbr.pipelineLayout);
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, cubeMap.pipeline);
+    vkCmdBindDescriptorSets(cmdBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            cubeMap.pipelineLayout,
+                            0,
+                            1,
+                            &cubeMap.descriptorSets[currentFrame],
+                            0,
+                            nullptr);
+
+    auto modelView = m_mainCamera.getModelView();
+    vkCmdPushConstants(cmdBuffer, cubeMap.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(modelView), &modelView);
+
+    cubeMap.model->draw(cmdBuffer);
+
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, scene.pipeline);
+    vkCmdBindDescriptorSets(cmdBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            scene.pipelineLayout,
+                            0,
+                            1,
+                            &scene.descriptorSets[currentFrame],
+                            0,
+                            nullptr);
+
+    scene.model->draw(cmdBuffer, scene.pipelineLayout);
 
     vkCmdEndRenderPass(cmdBuffer);
     vkEndCommandBuffer(cmdBuffer);

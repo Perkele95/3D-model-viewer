@@ -3,7 +3,7 @@
 #include "vulkan_initialisers.hpp"
 #include "buffer.hpp"
 
-constexpr uint8_t TEX2D_DEFAULT[] = {255, 255, 255, 255};
+constexpr uint8_t TEX2D_DEFAULT[] = {255, 0, 225, 255};
 
 class Texture
 {
@@ -36,22 +36,39 @@ protected:
 	uint32_t        m_mipLevels;
 	VkImageLayout   m_layout;
 };
-//TODO(arle): include non-mipmapped load from memory
+
 class Texture2D : public Texture
 {
 public:
-    // Includes untime mipmap generation, some formats do not support this
     CoreResult loadFromMemory(const VulkanDevice *device,
                               VkQueue queue,
                               VkFormat format,
                               VkExtent2D extent,
+                              size_t channels,
                               const void *src);
 
-    CoreResult loadFromFile(const VulkanDevice* device,
-                            VkQueue queue,
-                            VkFormat format,
-                            const char *filepath);
+    CoreResult loadAddMipMap(const VulkanDevice *device,
+                             VkQueue queue,
+                             VkFormat format,
+                             VkExtent2D extent,
+                             size_t channels,
+                             const void *src);
+
+    CoreResult loadRGBA(const VulkanDevice* device,
+                        VkQueue queue,
+                        const char *filepath,
+                        bool genMipMap = false);
 
 private:
-    void loadFallbackTexture(const VulkanDevice* device, VkQueue queue);
+    void loadDefault(const VulkanDevice *device, VkQueue queue);
+};
+
+class TextureCubeMap : public Texture
+{
+public:
+    static constexpr size_t LAYER_COUNT = 6;
+
+    void load(const VulkanDevice* device, VkQueue queue);
+
+    const char *filenames[LAYER_COUNT];
 };

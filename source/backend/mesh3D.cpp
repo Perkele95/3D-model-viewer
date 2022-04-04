@@ -52,8 +52,10 @@ void Mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
     vertex++;
 
     // Vertex fill
-    for (size_t i = 0; i < N_STACKS - 1; i++){
-        for (size_t j = 0; j < N_SLICES; j++){
+    for (size_t i = 0; i < N_STACKS - 1; i++)
+    {
+        for (size_t j = 0; j < N_SLICES; j++)
+        {
             const auto xSegment = float(j) / float(N_SLICES);
             const auto ySegment = float(i + 1) / float(N_STACKS);
             const auto theta = 2 * PI32 * xSegment;
@@ -87,7 +89,8 @@ void Mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
     const auto indexLast = uint32_t(vertices.capacity() - 1);
 
     // Top and bottom triangles
-    for (uint32_t i = 0; i < N_SLICES; i++){
+    for (uint32_t i = 0; i < N_SLICES; i++)
+    {
         auto i0 = i + 1;
         auto i1 = i0 % N_SLICES + 1;
         *(index++) = 0;
@@ -102,10 +105,12 @@ void Mesh3D::loadSphere(const VulkanDevice* device, VkQueue queue)
     }
 
     // Quad fill the rest of the sphere
-    for (uint32_t i = 0; i < N_STACKS - 2; i++){
+    for (uint32_t i = 0; i < N_STACKS - 2; i++)
+    {
         const auto i0 = i * N_SLICES + 1;
         const auto i1 = (i + 1) * N_SLICES + 1;
-        for (uint32_t j = 0; j < N_SLICES; j++){
+        for (uint32_t j = 0; j < N_SLICES; j++)
+        {
             const auto j0 = i0 + j;
             const auto j1 = i0 + (j + 1) % N_SLICES;
             const auto j2 = i1 + (j + 1) % N_SLICES;
@@ -183,7 +188,8 @@ void Mesh3D::loadCube(const VulkanDevice* device, VkQueue queue)
     vertices[23] = {points[5], normalLeft, uvs[3]};
 
     auto indices = data_buffer<MeshIndex>(36);
-    for (uint32_t i = 0; i < 6; i++){
+    for (uint32_t i = 0; i < 6; i++)
+    {
         const auto index = 6 * i;
         const auto offset = 4 * i;
         indices[index] = offset;

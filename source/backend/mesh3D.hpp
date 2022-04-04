@@ -20,8 +20,6 @@ public:
         {2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(MeshVertex, uv)}
     };
 
-    Mesh3D() : m_vertices(), m_indices(), m_indexCount(0){}
-
     void destroy(VkDevice device);
 
     void load(const VulkanDevice *device,

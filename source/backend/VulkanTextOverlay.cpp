@@ -279,6 +279,7 @@ void VulkanTextOverlay::prepareFontTexture()
                                  graphicsQueue,
                                  VK_FORMAT_R8_UNORM,
                                  {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT},
+                                 1,
                                  fontpixels);
 }
 

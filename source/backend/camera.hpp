@@ -22,6 +22,12 @@ struct alignas(16) mvp_matrix
     vec4<float> position;
 };
 
+struct alignas(16) ModelViewMatrix
+{
+    mat4x4 view;
+    mat4x4 proj;
+};
+
 // NOTE(arle): radians, not degrees
 
 class Camera
@@ -29,7 +35,7 @@ class Camera
 public:
     static constexpr float FOV_DEFAULT = GetRadians(60.0f);
     static constexpr float FOV_LIMITS_LOW = GetRadians(15.0f);
-    static constexpr float FOV_LIMITS_HIGH = GetRadians(120.0f);
+    static constexpr float FOV_LIMITS_HIGH = GetRadians(105.0f);
 
     static constexpr float DEFAULT_ZNEAR = 0.1f;
     static constexpr float DEFAULT_ZFAR = 100.0f;
@@ -40,8 +46,10 @@ public:
     static constexpr auto GLOBAL_UP = vec3(0.0f, 1.0f, 0.0f);
 
     void init();
-    void update(float dt);
-    mvp_matrix calculateMatrix(float aspectRatio);
+    void update(float dt, float aspectRatio);
+
+    mvp_matrix getModelViewProjection();
+    ModelViewMatrix getModelView();
 
     float           fov;
     float           sensitivity;
@@ -50,6 +58,7 @@ public:
 private:
     void updateVectors();
 
+    mat4x4          m_view, m_proj;
     float           m_yaw, m_pitch;
     float           m_zNear, m_zFar;
     vec3<float>     m_position;

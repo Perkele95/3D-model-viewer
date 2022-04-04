@@ -5,6 +5,13 @@
 template<typename T, int N>
 constexpr size_t arraysize(T (&array)[N]) { return N; }
 
+template<typename T, int N>
+constexpr void arrayfill(T (&array)[N], const T &data)
+{
+    for (size_t i = 0; i < N; i++)
+        array[i] = data;
+}
+
 template<typename T>
 struct view
 {

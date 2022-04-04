@@ -12,7 +12,7 @@ void Camera::init()
     updateVectors();
 }
 
-void Camera::update(float dt)
+void Camera::update(float dt, float aspectRatio)
 {
     const auto speed = sensitivity * dt;
     if(controls.rotateUp)
@@ -36,15 +36,31 @@ void Camera::update(float dt)
         m_position += m_right * dt;
 
     updateVectors();
+
+    m_view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
+    m_proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
 }
 
-mvp_matrix Camera::calculateMatrix(float aspectRatio)
+mvp_matrix Camera::getModelViewProjection()
 {
     auto mvp = mvp_matrix();
-    mvp.view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
-    mvp.proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
+    mvp.view = m_view;
+    mvp.proj = m_proj;
     mvp.position = vec4(m_position, 1.0f);
     return mvp;
+}
+
+ModelViewMatrix Camera::getModelView()
+{
+    auto mv = ModelViewMatrix();
+    mv.view = m_view;
+    // Cancel out translation
+    mv.view(3, 0) = 0.0f;
+    mv.view(3, 1) = 0.0f;
+    mv.view(3, 2) = 0.0f;
+    mv.view(3, 3) = 1.0f;
+    mv.proj = m_proj;
+    return mv;
 }
 
 void Camera::updateVectors()
