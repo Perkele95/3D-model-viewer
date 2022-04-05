@@ -34,9 +34,7 @@ void PBRModel::draw(VkCommandBuffer cmd, VkPipelineLayout layout)
 
 void CubeMapModel::load(const VulkanDevice *device, VkQueue queue)
 {
-    constexpr float SIZE = 4.0f;
-    constexpr size_t VERTICES_SIZE = 8 * sizeof(CubeMapVertex);
-    constexpr size_t INDEX_COUNT = 36;
+    constexpr size_t VERTICES_SIZE = VERTEX_COUNT * sizeof(CubeMapVertex);
     constexpr size_t INDICES_SIZE = INDEX_COUNT * sizeof(uint32_t);
 
     auto vertexInfo = vkInits::bufferCreateInfo(VERTICES_SIZE, USAGE_VERTEX_TRANSFER_SRC);
@@ -49,7 +47,7 @@ void CubeMapModel::load(const VulkanDevice *device, VkQueue queue)
 
     CubeMapVertex *vertices = nullptr;
     vkMapMemory(device->device, vertexTransfer.memory, 0, VERTICES_SIZE, 0, (void**)(&vertices));
-#if 1
+
     vertices[0] = {vec3(-SIZE, -SIZE, -SIZE)};
     vertices[1] = {vec3(SIZE, -SIZE, -SIZE)};
     vertices[2] = {vec3(SIZE, SIZE, -SIZE)};
@@ -58,53 +56,12 @@ void CubeMapModel::load(const VulkanDevice *device, VkQueue queue)
     vertices[5] = {vec3(SIZE, -SIZE, SIZE)};
     vertices[6] = {vec3(SIZE, SIZE, SIZE)};
     vertices[7] = {vec3(-SIZE, SIZE, SIZE)};
-#else
-    const vec3<float> points[] = {
-        vec3(-SIZE, -SIZE, -SIZE),
-        vec3(SIZE, -SIZE, -SIZE),
-        vec3(SIZE, SIZE, -SIZE),
-        vec3(-SIZE, SIZE, -SIZE),
-        vec3(-SIZE, -SIZE, SIZE),
-        vec3(SIZE, -SIZE, SIZE),
-        vec3(SIZE, SIZE, SIZE),
-        vec3(-SIZE, SIZE, SIZE),
-    };
 
-    vertices[0] = {points[0]};
-    vertices[1] = {points[3]};
-    vertices[2] = {points[2]};
-    vertices[3] = {points[1]};
-
-    vertices[4] = {points[4]};
-    vertices[5] = {points[5]};
-    vertices[6] = {points[6]};
-    vertices[7] = {points[7]};
-
-    vertices[8] = {points[3]};
-    vertices[9] = {points[7]};
-    vertices[10] = {points[6]};
-    vertices[11] = {points[2]};
-
-    vertices[12] = {points[4]};
-    vertices[13] = {points[0]};
-    vertices[14] = {points[1]};
-    vertices[15] = {points[5]};
-
-    vertices[16] = {points[4]};
-    vertices[17] = {points[7]};
-    vertices[18] = {points[3]};
-    vertices[19] = {points[0]};
-
-    vertices[20] = {points[1]};
-    vertices[21] = {points[2]};
-    vertices[22] = {points[6]};
-    vertices[23] = {points[5]};
-#endif
     vkUnmapMemory(device->device, vertexTransfer.memory);
 
     uint32_t *indices = nullptr;
     vkMapMemory(device->device, indexTransfer.memory, 0, INDICES_SIZE, 0, (void**)(&indices));
-#if 1
+
     indices[0] = 0;
     indices[1] = 3;
     indices[2] = 2;
@@ -146,19 +103,7 @@ void CubeMapModel::load(const VulkanDevice *device, VkQueue queue)
     indices[33] = 6;
     indices[34] = 5;
     indices[35] = 1;
-#else
-    for (uint32_t i = 0; i < 6; i++)
-    {
-        const auto index = 6 * i;
-        const auto offset = 4 * i;
-        indices[index] = offset;
-        indices[index + 1] = offset + 1;
-        indices[index + 2] = offset + 2;
-        indices[index + 3] = offset + 2;
-        indices[index + 4] = offset + 3;
-        indices[index + 5] = offset;
-    }
-#endif
+
     vkUnmapMemory(device->device, indexTransfer.memory);
 
     vertexInfo.usage = USAGE_VERTEX_TRANSFER_DST;
@@ -176,8 +121,6 @@ void CubeMapModel::load(const VulkanDevice *device, VkQueue queue)
 
     vertexTransfer.destroy(device->device);
     indexTransfer.destroy(device->device);
-
-    m_indexCount = INDEX_COUNT;
 }
 
 void CubeMapModel::destroy(VkDevice device)
@@ -195,5 +138,5 @@ void CubeMapModel::draw(VkCommandBuffer cmd)
     const VkDeviceSize indexOffset = 0;
     vkCmdBindIndexBuffer(cmd, m_indices.data, indexOffset, VK_INDEX_TYPE_UINT32);
 
-    vkCmdDrawIndexed(cmd, m_indexCount, 1, 0, 0, 0);
+    vkCmdDrawIndexed(cmd, INDEX_COUNT, 1, 0, 0, 0);
 }

@@ -30,13 +30,13 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
 
     buildUniformBuffers();
     buildScene();
-    buildCubeMap();
+    buildSkybox();
     buildDescriptors();
 
     scene.vertexShader.load(device, INTERNAL_DIR "shaders/pbr_vert.spv");
     scene.fragmentShader.load(device, INTERNAL_DIR "shaders/pbr_frag.spv");
-    cubeMap.vertexShader.load(device, INTERNAL_DIR "shaders/cubemap_vert.spv");
-    cubeMap.fragmentShader.load(device, INTERNAL_DIR "shaders/cubemap_frag.spv");
+    skybox.vertexShader.load(device, INTERNAL_DIR "shaders/skybox_vert.spv");
+    skybox.fragmentShader.load(device, INTERNAL_DIR "shaders/skybox_frag.spv");
 
     buildPipelines();
 
@@ -59,10 +59,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
     m_overlay->textSize = 1.0f;
 
     m_overlay->begin();
-
-    constexpr auto titleString = view("PBR demo");
-    m_overlay->draw(titleString, vec2(50.0f, 12.0f));
-
+    m_overlay->draw("PBR demo", vec2(50.0f, 12.0f));
     m_overlay->end();
 }
 
@@ -72,12 +69,12 @@ ModelViewer::~ModelViewer()
 
     m_overlay->destroy();
 
-    vkDestroyPipeline(device, cubeMap.pipeline, nullptr);
-    vkDestroyPipelineLayout(device, cubeMap.pipelineLayout, nullptr);
-    vkDestroyDescriptorSetLayout(device, cubeMap.setLayout, nullptr);
-    cubeMap.vertexShader.destroy(device);
-    cubeMap.fragmentShader.destroy(device);
-    cubeMap.model->destroy(device);
+    vkDestroyPipeline(device, skybox.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, skybox.pipelineLayout, nullptr);
+    vkDestroyDescriptorSetLayout(device, skybox.setLayout, nullptr);
+    skybox.vertexShader.destroy(device);
+    skybox.fragmentShader.destroy(device);
+    skybox.model->destroy(device);
 
     vkDestroyPipeline(device, scene.pipeline, nullptr);
     vkDestroyPipelineLayout(device, scene.pipelineLayout, nullptr);
@@ -135,12 +132,13 @@ void ModelViewer::onWindowSize(int32_t width, int32_t height)
 
     vkDestroyPipeline(device, scene.pipeline, nullptr);
     vkDestroyPipelineLayout(device, scene.pipelineLayout, nullptr);
-    vkDestroyPipeline(device, cubeMap.pipeline, nullptr);
-    vkDestroyPipelineLayout(device, cubeMap.pipelineLayout, nullptr);
+    vkDestroyPipeline(device, skybox.pipeline, nullptr);
+    vkDestroyPipelineLayout(device, skybox.pipelineLayout, nullptr);
 
     // NOTE(arle): pipeline layout does not need to be recreated
     buildPipelines();
 
+    m_overlay->extent = extent;
     m_overlay->onWindowResize();
 }
 
@@ -195,20 +193,20 @@ void ModelViewer::buildScene()
     scene.model = model;
 }
 
-void ModelViewer::buildCubeMap()
+void ModelViewer::buildSkybox()
 {
     auto model = push<CubeMapModel>(1);
     model->load(&device, graphicsQueue);
 
-    model->map.filenames[0] = INTERNAL_DIR "assets/skybox/posx.jpg";
-    model->map.filenames[1] = INTERNAL_DIR "assets/skybox/negx.jpg";
-    model->map.filenames[2] = INTERNAL_DIR "assets/skybox/posy.jpg";
-    model->map.filenames[3] = INTERNAL_DIR "assets/skybox/negy.jpg";
-    model->map.filenames[4] = INTERNAL_DIR "assets/skybox/posz.jpg";
-    model->map.filenames[5] = INTERNAL_DIR "assets/skybox/negz.jpg";
+    model->map.filenames[0] = INTERNAL_DIR "assets/skybox/px.png";
+    model->map.filenames[1] = INTERNAL_DIR "assets/skybox/nx.png";
+    model->map.filenames[2] = INTERNAL_DIR "assets/skybox/py.png";
+    model->map.filenames[3] = INTERNAL_DIR "assets/skybox/ny.png";
+    model->map.filenames[4] = INTERNAL_DIR "assets/skybox/pz.png";
+    model->map.filenames[5] = INTERNAL_DIR "assets/skybox/nz.png";
     model->map.load(&device, graphicsQueue);
 
-    cubeMap.model = model;
+    skybox.model = model;
 }
 
 void ModelViewer::buildUniformBuffers()
@@ -283,25 +281,25 @@ void ModelViewer::buildDescriptors()
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }
 
-    // Cubemap
+    // Skybox
 
-    const VkDescriptorSetLayoutBinding cubemapBindings[] = {
+    const VkDescriptorSetLayoutBinding skyboxBindings[] = {
         vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
     };
 
-    setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(cubemapBindings);
-    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &cubeMap.setLayout);
+    setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(skyboxBindings);
+    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &skybox.setLayout);
 
-    arrayfill(layouts, cubeMap.setLayout);
+    arrayfill(layouts, skybox.setLayout);
 
     allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
-    vkAllocateDescriptorSets(device, &allocInfo, cubeMap.descriptorSets);
+    vkAllocateDescriptorSets(device, &allocInfo, skybox.descriptorSets);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        auto &setRef = cubeMap.descriptorSets[i];
+        auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &cubeMap.model->map.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &skybox.model->map.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -370,10 +368,10 @@ void ModelViewer::buildPipelines()
     pipelineInfo.renderPass = renderPass;
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &scene.pipeline);
 
-    // Cubemap
+    // Skybox
 
-    shaderStages[0] = cubeMap.vertexShader.shaderStage();
-    shaderStages[1] = cubeMap.fragmentShader.shaderStage();
+    shaderStages[0] = skybox.vertexShader.shaderStage();
+    shaderStages[1] = skybox.fragmentShader.shaderStage();
 
     bindingDescription.stride = sizeof(CubeMapVertex);
 
@@ -384,18 +382,15 @@ void ModelViewer::buildPipelines()
     depthStencil.depthTestEnable = VK_FALSE;
     depthStencil.depthWriteEnable = VK_FALSE;
 
-    VkPushConstantRange cubemapPushconstant{};
-    cubemapPushconstant.offset = 0;
-    cubemapPushconstant.size = 2 * sizeof(mat4x4);
-    cubemapPushconstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    auto skyboxPushConstant = ModelViewMatrix::pushConstant();
 
-    pipelineLayoutInfo.pSetLayouts = &cubeMap.setLayout;
-    pipelineLayoutInfo.pPushConstantRanges = &cubemapPushconstant;
+    pipelineLayoutInfo.pSetLayouts = &skybox.setLayout;
+    pipelineLayoutInfo.pPushConstantRanges = &skyboxPushConstant;
     pipelineLayoutInfo.pushConstantRangeCount = 1;
-    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &cubeMap.pipelineLayout);
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &skybox.pipelineLayout);
 
-    pipelineInfo.layout = cubeMap.pipelineLayout;
-    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &cubeMap.pipeline);
+    pipelineInfo.layout = skybox.pipelineLayout;
+    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skybox.pipeline);
 }
 
 void ModelViewer::updateCamera(float dt)
@@ -442,20 +437,21 @@ void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
     renderBeginInfo.framebuffer = framebuffers[imageIndex];
     vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, cubeMap.pipeline);
+    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipeline);
     vkCmdBindDescriptorSets(cmdBuffer,
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            cubeMap.pipelineLayout,
+                            skybox.pipelineLayout,
                             0,
                             1,
-                            &cubeMap.descriptorSets[currentFrame],
+                            &skybox.descriptorSets[currentFrame],
                             0,
                             nullptr);
 
+    auto [stage, offset, size] = ModelViewMatrix::pushConstant();
     auto modelView = m_mainCamera.getModelView();
-    vkCmdPushConstants(cmdBuffer, cubeMap.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(modelView), &modelView);
+    vkCmdPushConstants(cmdBuffer, skybox.pipelineLayout, stage, offset, size, &modelView);
 
-    cubeMap.model->draw(cmdBuffer);
+    skybox.model->draw(cmdBuffer);
 
     vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, scene.pipeline);
     vkCmdBindDescriptorSets(cmdBuffer,

@@ -31,8 +31,7 @@ void VulkanTextOverlay::init(const VulkanDevice* device, linear_storage *storage
     m_vertexShader.load(m_device->device, INTERNAL_DIR "shaders/gui_vert.spv");
     m_fragmentShader.load(m_device->device, INTERNAL_DIR "shaders/gui_frag.spv");
 
-    m_commandPool = device->commandPool;
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(m_commandPool, MAX_IMAGES_IN_FLIGHT);
+    auto cmdInfo = vkInits::commandBufferAllocateInfo(device->commandPool, MAX_IMAGES_IN_FLIGHT);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, commandBuffers);
 
     prepareFontTexture();
@@ -61,8 +60,6 @@ void VulkanTextOverlay::destroy()
 
 void VulkanTextOverlay::onWindowResize()
 {
-    m_commandPool = m_device->commandPool;
-
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device->device, m_pipelineLayout, nullptr);
 

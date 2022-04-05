@@ -30,7 +30,7 @@ public:
 
 private:
     void buildScene();
-    void buildCubeMap();
+    void buildSkybox();
     void buildUniformBuffers();
     void buildDescriptors();
     void buildPipelines(); // TODO(arle): split into pipeline & layout
@@ -61,7 +61,7 @@ private:
         PBRModel*               model;
     }scene;
 
-    struct CubeMap
+    struct Skybox
     {
         VkPipeline              pipeline;
         VkPipelineLayout        pipelineLayout;
@@ -70,5 +70,5 @@ private:
         VkDescriptorSetLayout   setLayout;
         VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
         CubeMapModel*           model;
-    }cubeMap;
+    }skybox;
 };

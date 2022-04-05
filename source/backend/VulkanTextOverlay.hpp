@@ -4,7 +4,7 @@
 #include "storage.hpp"
 #include "buffer.hpp"
 #include "shader.hpp"
-#include "texture.hpp"
+#include "VulkanTexture.hpp"
 
 struct alignas(4) quad_vertex
 {
@@ -61,7 +61,6 @@ private:
     void prepareRenderBuffers();
 
     const VulkanDevice*     m_device;
-    VkCommandPool           m_commandPool;
     VkRenderPass            m_renderPass;
     VkDescriptorPool        m_descriptorPool;
     VkDescriptorSetLayout   m_setLayout;

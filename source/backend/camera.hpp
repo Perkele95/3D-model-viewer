@@ -24,6 +24,15 @@ struct alignas(16) mvp_matrix
 
 struct alignas(16) ModelViewMatrix
 {
+    static constexpr VkPushConstantRange pushConstant()
+    {
+        VkPushConstantRange constant{};
+        constant.offset = 0;
+        constant.size = sizeof(ModelViewMatrix);
+        constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        return constant;
+    }
+
     mat4x4 view;
     mat4x4 proj;
 };

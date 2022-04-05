@@ -3,7 +3,7 @@
 #include "vulkan_initialisers.hpp"
 #include "VulkanDevice.hpp"
 #include "buffer.hpp"
-#include "texture.hpp"
+#include "VulkanTexture.hpp"
 #include "mesh3D.hpp"
 
 class PBRModel
@@ -44,7 +44,10 @@ public:
 
     TextureCubeMap  map;
 private:
+    static constexpr float SIZE = 10.0f;
+    static constexpr uint32_t VERTEX_COUNT = 8;
+    static constexpr uint32_t INDEX_COUNT = 36;
+
     VulkanBuffer    m_vertices;
     VulkanBuffer    m_indices;
-    uint32_t        m_indexCount;
 };

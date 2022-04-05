@@ -1,6 +1,6 @@
 #include "vulkan_initialisers.hpp"
 #include "VulkanDevice.hpp"
-#include "texture.hpp"
+#include "VulkanTexture.hpp"
 
 class pbr_material
 {

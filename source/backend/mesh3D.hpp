@@ -27,8 +27,8 @@ public:
               view<MeshVertex> vertices,
               view<MeshIndex> indices);
 
-    void loadSphere(const VulkanDevice* device, VkQueue queue);
-    void loadCube(const VulkanDevice* device, VkQueue queue);
+    void loadSphere(const VulkanDevice *device, VkQueue queue);
+    void loadCube(const VulkanDevice *device, VkQueue queue);
 
     void draw(VkCommandBuffer cmd, VkPipelineLayout layout);
 
