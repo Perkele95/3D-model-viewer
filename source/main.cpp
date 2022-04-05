@@ -2,39 +2,49 @@
 #include "platform/platform.hpp"
 #include "model_viewer.hpp"
 
-void WindowSizeDispatch(pltf::logical_device device, int32_t width, int32_t height)
+template<typename T>
+class EventDispatcher
 {
-    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
-    app->onWindowSize(width, height);
-}
+public:
+    EventDispatcher(pltf::logical_device device, T *handle)
+    {
+        pltf::DeviceSetHandle(device, handle);
+    }
 
-void KeyEventDispatch(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
-{
-    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
-    app->onKeyEvent(key, mod);
-}
+    static void WindowSize(pltf::logical_device device, int32_t width, int32_t height)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onWindowSize(width, height);
+    }
 
-void MouseEventDispatch(pltf::logical_device device, pltf::mouse_button button)
-{
-    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
-    app->onMouseButtonEvent(button);
-}
+    static void KeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onKeyEvent(key, mod);
+    }
 
-void ScrollWheelDispatch(pltf::logical_device device, double x, double y)
-{
-    auto app = static_cast<ModelViewer*>(pltf::DeviceGetHandle(device));
-    app->onScrollWheelEvent(x, y);
-}
+    static void MouseEvent(pltf::logical_device device, pltf::mouse_button button)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onMouseButtonEvent(button);
+    }
+
+    static void ScrollWheel(pltf::logical_device device, double x, double y)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onScrollWheelEvent(x, y);
+    }
+};
 
 int EntryPoint(pltf::logical_device device)
 {
     auto app = ModelViewer(device);
+    auto dispatcher = EventDispatcher<ModelViewer>(device, &app);
 
-    pltf::DeviceSetHandle(device, &app);
-    pltf::EventsSetWindowSizeProc(device, WindowSizeDispatch);
-    pltf::EventsSetKeyDownProc(device, KeyEventDispatch);
-    pltf::EventsSetMouseDownProc(device, MouseEventDispatch);
-    pltf::EventsSetScrollWheelProc(device, ScrollWheelDispatch);
+    pltf::EventsSetWindowSizeProc(device, dispatcher.WindowSize);
+    pltf::EventsSetKeyDownProc(device, dispatcher.KeyEvent);
+    pltf::EventsSetMouseDownProc(device, dispatcher.MouseEvent);
+    pltf::EventsSetScrollWheelProc(device, dispatcher.ScrollWheel);
 
     app.run();
 
