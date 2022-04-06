@@ -9,8 +9,6 @@
 #include "backend/lights.hpp"
 #include "backend/model3D.hpp"
 
-#include "mv_utils/mat4.hpp"
-
 class ModelViewer : public VulkanInstance
 {
 public:

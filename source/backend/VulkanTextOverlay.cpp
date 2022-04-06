@@ -28,8 +28,15 @@ void VulkanTextOverlay::init(const VulkanDevice* device, linear_storage *storage
     m_zOrder = Z_ORDER_GUI_DEFAULT;
     m_device = device;
 
-    m_vertexShader.load(m_device->device, INTERNAL_DIR "shaders/gui_vert.spv");
-    m_fragmentShader.load(m_device->device, INTERNAL_DIR "shaders/gui_frag.spv");
+    auto sb = StringbBuilder(100);
+    constexpr auto shaderPath = view("../../shaders/");
+
+    sb << shaderPath << view("gui_vert.spv");
+    m_vertexShader.load(m_device->device, sb.c_str());
+    sb.flush() << shaderPath << view("gui_frag.spv");
+    m_fragmentShader.load(m_device->device, sb.c_str());
+
+    sb.destroy();
 
     auto cmdInfo = vkInits::commandBufferAllocateInfo(device->commandPool, MAX_IMAGES_IN_FLIGHT);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, commandBuffers);

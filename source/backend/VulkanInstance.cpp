@@ -210,8 +210,8 @@ void VulkanInstance::pickPhysicalDevice()
 {
     uint32_t physDeviceCount = 0;
     vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
-    auto physDevices = data_buffer<VkPhysicalDevice>(physDeviceCount);
-    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices.data());
+    auto physDevices = new VkPhysicalDevice[physDeviceCount];
+    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices);
 
     const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
     {
@@ -230,9 +230,10 @@ void VulkanInstance::pickPhysicalDevice()
     {
         uint32_t extensionCount = 0;
         vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, nullptr);
-        auto availableExtensions = data_buffer<VkExtensionProperties>(extensionCount);
-        vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions.data());
-        const bool extensionsSupported = findExtensionProperty(availableExtensions.getView());
+        auto availableExtensions = new VkExtensionProperties[extensionCount];
+        vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions);
+        const bool extensionsSupported = findExtensionProperty(view(availableExtensions, extensionCount));
+        delete availableExtensions;
 
         uint32_t formatCount = 0, presentModeCount = 0;
         vkGetPhysicalDeviceSurfaceFormatsKHR(physDevices[i], m_surface, &formatCount, nullptr);
@@ -241,8 +242,8 @@ void VulkanInstance::pickPhysicalDevice()
 
         uint32_t propCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, nullptr);
-        auto queueFamilyProps = data_buffer<VkQueueFamilyProperties>(propCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps.data());
+        auto queueFamilyProps = new VkQueueFamilyProperties[propCount];
+        vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps);
 
         device.queueBits.graphics = 0;
         device.queueBits.present = 0;
@@ -265,6 +266,8 @@ void VulkanInstance::pickPhysicalDevice()
             if(hasGraphicsFamily && hasPresentFamily)
                 break;
         }
+        delete queueFamilyProps;
+
         const bool isValid = extensionsSupported && adequateCapabilities &&
                                 hasGraphicsFamily && hasPresentFamily;
         if(isValid)
@@ -273,6 +276,8 @@ void VulkanInstance::pickPhysicalDevice()
             break;
         }
     }
+    delete physDevices;
+
     if(device.gpu == VK_NULL_HANDLE)
         coreMessage(log_level::error, "No suitable GPU found");
 }

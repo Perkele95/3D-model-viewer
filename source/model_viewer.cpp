@@ -33,10 +33,19 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
     buildSkybox();
     buildDescriptors();
 
-    scene.vertexShader.load(device, INTERNAL_DIR "shaders/pbr_vert.spv");
-    scene.fragmentShader.load(device, INTERNAL_DIR "shaders/pbr_frag.spv");
-    skybox.vertexShader.load(device, INTERNAL_DIR "shaders/skybox_vert.spv");
-    skybox.fragmentShader.load(device, INTERNAL_DIR "shaders/skybox_frag.spv");
+    constexpr auto shaderPath = view("../../shaders/");
+    auto sb = StringbBuilder();
+
+    sb << shaderPath << view("pbr_vert.spv");
+    scene.vertexShader.load(device, sb.c_str());
+    sb.flush() << shaderPath << view("pbr_frag.spv");
+    scene.fragmentShader.load(device, sb.c_str());
+    sb.flush() << shaderPath << view("skybox_vert.spv");
+    skybox.vertexShader.load(device, sb.c_str());
+    sb.flush() << shaderPath << view("skybox_frag.spv");
+    skybox.fragmentShader.load(device, sb.c_str());
+
+    sb.destroy();
 
     buildPipelines();
 
@@ -177,18 +186,26 @@ void ModelViewer::buildScene()
     model->mesh.loadSphere(&device, graphicsQueue);
     model->transform = mat4x4::identity();
 
-#define MATERIAL_NAME "patterned-bw-vinyl-bl/"
-    auto albedoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "albedo.png";
-    auto normalPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "normal.png";
-    auto roughnessPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "roughness.png";
-    auto metallicPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "metallic.png";
-    auto aoPath = INTERNAL_DIR MATERIALS_DIR MATERIAL_NAME "ao.png";
-#undef MATERIAL_NAME
-    model->albedo.loadRGBA(&device, graphicsQueue, albedoPath, true);
-    model->normal.loadRGBA(&device, graphicsQueue, normalPath);
-    model->roughness.loadRGBA(&device, graphicsQueue, roughnessPath);
-    model->metallic.loadRGBA(&device, graphicsQueue, metallicPath);
-    model->ao.loadRGBA(&device, graphicsQueue, aoPath);
+    auto sb = StringbBuilder();
+    constexpr auto assetsPath = view("../../assets/materials/");
+    constexpr auto materialName = view("patterned-bw-vinyl-bl/");
+
+    sb << assetsPath << materialName << view("albedo.png");
+    model->albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
+
+    sb.flush() << assetsPath << materialName << view("normal.png");
+    model->normal.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+    sb.flush() << assetsPath << materialName << view("roughness.png");
+    model->roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+    sb.flush() << assetsPath << materialName << view("metallic.png");
+    model->metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+    sb.flush() << assetsPath << materialName << view("ao.png");
+    model->ao.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+    sb.destroy();
 
     scene.model = model;
 }
@@ -198,13 +215,27 @@ void ModelViewer::buildSkybox()
     auto model = push<CubeMapModel>(1);
     model->load(&device, graphicsQueue);
 
-    model->map.filenames[0] = INTERNAL_DIR "assets/skybox/px.png";
-    model->map.filenames[1] = INTERNAL_DIR "assets/skybox/nx.png";
-    model->map.filenames[2] = INTERNAL_DIR "assets/skybox/py.png";
-    model->map.filenames[3] = INTERNAL_DIR "assets/skybox/ny.png";
-    model->map.filenames[4] = INTERNAL_DIR "assets/skybox/pz.png";
-    model->map.filenames[5] = INTERNAL_DIR "assets/skybox/nz.png";
+    StringbBuilder sbs[] = {
+        StringbBuilder(100),
+        StringbBuilder(100),
+        StringbBuilder(100),
+        StringbBuilder(100),
+        StringbBuilder(100),
+        StringbBuilder(100)
+    };
+
+    constexpr auto skyboxPath = view("../../assets/skybox/");
+
+    model->map.filenames[0] = (sbs[0] << skyboxPath << "px.png").c_str();
+    model->map.filenames[1] = (sbs[1] << skyboxPath << "nx.png").c_str();
+    model->map.filenames[2] = (sbs[2] << skyboxPath << "py.png").c_str();
+    model->map.filenames[3] = (sbs[3] << skyboxPath << "ny.png").c_str();
+    model->map.filenames[4] = (sbs[4] << skyboxPath << "pz.png").c_str();
+    model->map.filenames[5] = (sbs[5] << skyboxPath << "nz.png").c_str();
     model->map.load(&device, graphicsQueue);
+
+    for (size_t i = 0; i < arraysize(sbs); i++)
+        sbs[i].destroy();
 
     skybox.model = model;
 }

@@ -3,6 +3,7 @@
 #include "mv_utils/utilities.hpp"
 #include "mv_utils/array_types.hpp"
 #include "mv_utils/mat4.hpp"
+#include "mv_utils/stringbuilder.hpp"
 #include "platform/platform.hpp"
 
 #if defined(DEBUG)
@@ -14,10 +15,6 @@
 
 enum class log_level {info, warning, error, trace};
 using log_message_callback = void(*)(log_level, const char*);
-
-// NOTE(arle): temporary, to be replaced
-#define INTERNAL_DIR "../../"
-#define MATERIALS_DIR "assets/materials/"
 
 constexpr size_t KiloBytes(const size_t amount) {return amount * 1024ULL;}
 constexpr size_t MegaBytes(const size_t amount) {return amount * 1024ULL * 1024ULL;}

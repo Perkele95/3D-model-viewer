@@ -36,46 +36,6 @@ struct view
 };
 
 template<typename T>
-class data_buffer
-{
-public:
-    data_buffer(size_t capacity)
-    {
-        m_data = new T[capacity];
-        m_capacity = capacity;
-    }
-
-    data_buffer(const data_buffer &ref) = delete;
-    data_buffer(const data_buffer &&rval) = delete;
-
-    ~data_buffer()
-    {
-        delete[] m_data;
-        m_data = nullptr;
-    }
-
-    data_buffer &operator=(const data_buffer &ref) = delete;
-    data_buffer &operator=(const data_buffer &&rval) = delete;
-
-    constexpr T &operator[](size_t index) { return m_data[index]; }
-
-    T *data() { return m_data; }
-    size_t capacity() { return m_capacity; }
-
-    void fill(const T &data)
-    {
-        for (size_t i = 0; i < m_capacity; i++)
-            m_data[i] = data;
-    }
-
-    view<T> getView() { return view<T>(m_data, m_capacity); }
-
-private:
-    T*      m_data;
-    size_t  m_capacity;
-};
-
-template<typename T>
 class fixed_capacity_array
 {
 public:
