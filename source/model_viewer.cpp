@@ -34,7 +34,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
     buildDescriptors();
 
     constexpr auto shaderPath = view("../../shaders/");
-    auto sb = StringbBuilder();
+    auto sb = StringbBuilder(100);
 
     sb << shaderPath << view("pbr_vert.spv");
     scene.vertexShader.load(device, sb.c_str());
@@ -67,8 +67,17 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
     m_overlay->textType = text_coord_type::relative;
     m_overlay->textSize = 1.0f;
 
+    VkPhysicalDeviceProperties deviceProps;
+    vkGetPhysicalDeviceProperties(device.gpu, &deviceProps);
+    const auto deviceString = view<const char>(deviceProps.deviceName, StringbBuilder::getLength(deviceProps.deviceName));
+
     m_overlay->begin();
     m_overlay->draw("PBR demo", vec2(50.0f, 12.0f));
+
+    m_overlay->textSize = 0.8f;
+    m_overlay->textAlignment = text_align::left;
+    m_overlay->draw("Device:", vec2(5.0f, 88.0f));
+    m_overlay->draw(deviceString, vec2(5.0f, 90.0f));
     m_overlay->end();
 }
 
@@ -186,7 +195,7 @@ void ModelViewer::buildScene()
     model->mesh.loadSphere(&device, graphicsQueue);
     model->transform = mat4x4::identity();
 
-    auto sb = StringbBuilder();
+    auto sb = StringbBuilder(100);
     constexpr auto assetsPath = view("../../assets/materials/");
     constexpr auto materialName = view("patterned-bw-vinyl-bl/");
 

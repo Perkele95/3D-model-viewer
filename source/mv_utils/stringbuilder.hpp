@@ -6,7 +6,7 @@
 class StringbBuilder
 {
 public:
-    static constexpr size_t DEFAULT_MAX = 260;
+    static constexpr size_t DEFAULT_MAX = 256;
 
     static constexpr size_t getLength(const char *cstring)
     {
