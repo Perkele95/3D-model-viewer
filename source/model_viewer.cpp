@@ -12,17 +12,15 @@ void CoreMessageCallback(log_level level, const char *string)
     pltf::DebugBreak();
 }
 
-ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaBytes(64))
+ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platform, MegaBytes(64))
 {
     settings.title = "Pbr Demo";
     settings.syncMode = VSyncMode::Off;
     settings.enValidation = C_VALIDATION;
 
-    VulkanInstance::platformDevice = platform;
+    auto dispatcher = EventDispatcher<ModelViewer>(platform, this);
+
     VulkanInstance::coreMessage = CoreMessageCallback;
-
-    pltf::WindowCreate(platformDevice, settings.title);
-
     VulkanInstance::prepare();
 
     m_mainCamera.init();
@@ -69,7 +67,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(MegaByt
 
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(device.gpu, &deviceProps);
-    const auto deviceString = view<const char>(deviceProps.deviceName, StringbBuilder::getLength(deviceProps.deviceName));
+    const auto deviceString = view<const char>(deviceProps.deviceName, StringbBuilder::strlen(deviceProps.deviceName));
 
     m_overlay->begin();
     m_overlay->draw("PBR demo", vec2(50.0f, 12.0f));
@@ -186,6 +184,193 @@ void ModelViewer::onScrollWheelEvent(double x, double y)
 {
     m_mainCamera.fov -= GetRadians(float(y));
     m_mainCamera.fov = clamp(m_mainCamera.fov, Camera::FOV_LIMITS_LOW, Camera::FOV_LIMITS_HIGH);
+}
+
+void ModelViewer::generateBDRF()
+{
+    const auto format = VK_FORMAT_R16G16_SFLOAT;
+    const uint32_t dimension = 512;
+
+    // Target texture
+
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.format = format;
+    imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.extent = {dimension, dimension, 1};
+    vkCreateImage(device, &imageInfo, nullptr, &brdf.image);
+
+    VkMemoryRequirements memReqs{};
+    vkGetImageMemoryRequirements(device, brdf.image, &memReqs);
+
+    auto allocInfo = device.getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+    vkAllocateMemory(device, &allocInfo, nullptr, &brdf.memory);
+    vkBindImageMemory(device, brdf.image, brdf.memory, 0);
+
+    auto samplerInfo = vkInits::samplerCreateInfo();
+    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    vkCreateSampler(device, &samplerInfo, nullptr, &brdf.sampler);
+
+    auto viewInfo = vkInits::imageViewCreateInfo();
+    viewInfo.image = brdf.image;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    vkCreateImageView(device, &viewInfo, nullptr, &brdf.view);
+
+    brdf.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    brdf.descriptor.imageView = brdf.view;
+    brdf.descriptor.sampler = brdf.sampler;
+
+    // Render pass
+
+    auto colourAttachment = vkInits::attachmentDescription(format);
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+    VkAttachmentReference colourAttachmentRef{};
+    colourAttachmentRef.attachment = 0;
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colourAttachmentRef;
+
+    VkSubpassDependency dependencies[2];
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colourAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+
+    VkRenderPass brdfRenderPass = VK_NULL_HANDLE;
+    vkCreateRenderPass(device, &renderPassInfo, nullptr, &brdfRenderPass);
+
+    // Framebuffer
+
+    auto frameBufferInfo = vkInits::framebufferCreateInfo();
+    frameBufferInfo.renderPass = brdfRenderPass;
+    frameBufferInfo.attachmentCount = 1;
+    frameBufferInfo.pAttachments = &brdf.view;
+    frameBufferInfo.width = dimension;
+    frameBufferInfo.height = dimension;
+
+    VkFramebuffer brdfFramebuffer = VK_NULL_HANDLE;
+    vkCreateFramebuffer(device, &frameBufferInfo, nullptr, &brdfFramebuffer);
+
+    // No descriptors
+
+    // Pipelinelayout
+
+    VkPipelineVertexInputStateCreateInfo emptyInputState{};
+    emptyInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+    auto inputAssembly = vkInits::inputAssemblyInfo();
+    auto viewport = vkInits::viewportInfo({dimension, dimension});
+    auto scissor = vkInits::scissorInfo({dimension, dimension});
+
+    VkPipelineViewportStateCreateInfo viewportState{};
+    viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewportState.viewportCount = 1;
+    viewportState.pViewports = &viewport;
+    viewportState.scissorCount = 1;
+    viewportState.pScissors = &scissor;
+
+    auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
+    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+    auto depthStencil = vkInits::depthStencilStateInfo();
+    auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
+    auto colourBlend = vkInits::pipelineColorBlendStateCreateInfo();
+    colourBlend.attachmentCount = 1;
+    colourBlend.pAttachments = &colorBlendAttachment;
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.pSetLayouts = VK_NULL_HANDLE;
+    pipelineLayoutInfo.setLayoutCount = 0;
+
+    VkPipelineLayout brdfPipelineLayout = VK_NULL_HANDLE;
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &brdfPipelineLayout);
+
+    // shader stages & shader load
+
+    auto sb = StringbBuilder(100);
+    constexpr auto shaderPath = view("../../shaders/");
+
+    VertexShader brdfVertexShader;
+    sb << shaderPath << view("brdf_vert.spv");
+    brdfVertexShader.load(device, sb.c_str());
+
+    FragmentShader brdfFragmentShader;
+    sb.flush() << shaderPath << view("brdf_frag.spv");
+    brdfFragmentShader.load(device, "path");
+
+    sb.destroy();
+
+    const VkPipelineShaderStageCreateInfo shaderStages[] = {
+        brdfVertexShader.shaderStage(), brdfFragmentShader.shaderStage()
+    };
+
+    // Pipeline
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = uint32_t(arraysize(shaderStages));
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &emptyInputState;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colourBlend;
+    pipelineInfo.layout = scene.pipelineLayout;
+    pipelineInfo.renderPass = renderPass;
+
+    VkPipeline brdfPipeline = VK_NULL_HANDLE;
+    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &brdfPipeline);
+
+    // Draw
+
+    VkClearValue clearValue;
+    clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(brdfRenderPass, {dimension, dimension});
+    renderBeginInfo.framebuffer = brdfFramebuffer;
+    renderBeginInfo.clearValueCount = 1;
+    renderBeginInfo.pClearValues = &clearValue;
+
+    auto drawCmd = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    vkCmdBeginRenderPass(drawCmd, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    vkCmdBindPipeline(drawCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, brdfPipeline);
+    vkCmdDraw(drawCmd, 4, 1, 0, 0);
+
+    device.flushCommandBuffer(drawCmd, graphicsQueue);
+
+    vkQueueWaitIdle(graphicsQueue);
+
+    //
 }
 
 void ModelViewer::buildScene()
@@ -459,12 +644,9 @@ void ModelViewer::updateLights()
 
 void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
 {
-    VkClearValue colourValue;
-    colourValue.color = {0.1f, 0.1f, 0.1f, 1.0f};
-    VkClearValue depthStencilValue;
-    depthStencilValue.depthStencil = {1.0f, 0};
-
-    const VkClearValue clearValues[] = {colourValue, depthStencilValue};
+    VkClearValue clearValues[2];
+    clearValues[0].color = {0.0f, 0.0f, 0.0f, 1.0f};
+    clearValues[1].depthStencil = {1.0f, 0};
 
     auto cmdBeginInfo = vkInits::commandBufferBeginInfo(VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT);
     auto renderBeginInfo = vkInits::renderPassBeginInfo(renderPass, extent);

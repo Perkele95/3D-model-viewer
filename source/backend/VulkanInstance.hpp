@@ -35,8 +35,9 @@ struct ImageResource
 class VulkanInstance : public linear_storage
 {
 public:
-    VulkanInstance(size_t storageSize): linear_storage(storageSize)
+    VulkanInstance(pltf::logical_device device, size_t storageSize): linear_storage(storageSize)
     {
+        platformDevice = device;
         resizeRequired = false;
         imageCount = 0;
         imageIndex = 0;
@@ -52,7 +53,7 @@ protected:
 
     // Settings
 
-    VulkanInstanceSettings            settings;
+    VulkanInstanceSettings      settings;
     pltf::logical_device        platformDevice;
     VulkanDevice                device;
     log_message_callback        coreMessage;

@@ -8,7 +8,7 @@ class StringbBuilder
 public:
     static constexpr size_t DEFAULT_MAX = 256;
 
-    static constexpr size_t getLength(const char *cstring)
+    static constexpr size_t strlen(const char *cstring)
     {
         size_t count = 1;
         while (*cstring++)
@@ -61,13 +61,13 @@ public:
 
     constexpr StringbBuilder &operator<<(const char *cstring)
     {
-        const auto length = getLength(cstring);
+        const auto length = strlen(cstring);
         return (*this << view(cstring, length));
     }
 
     constexpr StringbBuilder &operator<<(char *cstring)
     {
-        const auto length = getLength(cstring);
+        const auto length = strlen(cstring);
         return (*this << view(cstring, length));
     }
 

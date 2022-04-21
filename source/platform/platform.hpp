@@ -219,12 +219,17 @@ namespace pltf
 
 	// Events
 
+	struct EventCallbacks
+	{
+		window_size_callback 	windowSize;
+		key_event_callback		keyEvent;
+		mouse_move_callback		mouseMove;
+		mouse_button_callback	mouseButton;
+		scroll_wheel_callback	scrollWheel;
+	};
+
 	void EventsPoll(logical_device device);
-	void EventsSetWindowSizeProc(logical_device device, window_size_callback proc);
-	void EventsSetKeyDownProc(logical_device device, key_event_callback proc);
-	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc);
-	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc);
-	void EventsSetScrollWheelProc(logical_device device, scroll_wheel_callback proc);
+	void EventsBindCallbacks(logical_device device, const EventCallbacks &callbacks);
 
 	// Input state
 

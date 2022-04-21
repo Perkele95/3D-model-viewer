@@ -354,6 +354,8 @@ void VulkanTextOverlay::preparePipeline()
 
     auto depthStencil = vkInits::depthStencilStateInfo();
     auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
+    colorBlendAttachment.blendEnable = VK_TRUE;
+
     auto colourBlend = vkInits::pipelineColorBlendStateCreateInfo();
     colourBlend.attachmentCount = 1;
     colourBlend.pAttachments = &colorBlendAttachment;

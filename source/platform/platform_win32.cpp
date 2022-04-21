@@ -275,34 +275,13 @@ namespace pltf
 		}
 	}
 
-	void EventsSetWindowSizeProc(logical_device device, window_size_callback proc)
+	void EventsBindCallbacks(logical_device device, const EventCallbacks &callbacks)
 	{
-		if(proc != nullptr)
-			device->windowSizeCallback = proc;
-	}
-
-	void EventsSetKeyDownProc(logical_device device, key_event_callback proc)
-    {
-		if(proc != nullptr)
-        	device->keyEventCallback = proc;
-    }
-
-	void EventsSetMouseMoveProc(logical_device device, mouse_move_callback proc)
-    {
-		if(proc != nullptr)
-        	device->mouseMoveCallback = proc;
-    }
-
-	void EventsSetMouseDownProc(logical_device device, mouse_button_callback proc)
-    {
-		if(proc != nullptr)
-        	device->mouseButtonCallback = proc;
-    }
-
-	void EventsSetScrollWheelProc(logical_device device, scroll_wheel_callback proc)
-	{
-		if(proc != nullptr)
-        	device->scrollWheelCallback = proc;
+		device->windowSizeCallback = callbacks.windowSize ? callbacks.windowSize : device->windowSizeCallback;
+		device->keyEventCallback = callbacks.keyEvent ? callbacks.keyEvent : device->keyEventCallback;
+		device->mouseMoveCallback = callbacks.mouseMove ? callbacks.mouseMove : device->mouseMoveCallback;
+		device->mouseButtonCallback = callbacks.mouseButton ? callbacks.mouseButton : device->mouseButtonCallback;
+		device->scrollWheelCallback = callbacks.scrollWheel ? callbacks.scrollWheel : device->scrollWheelCallback;
 	}
 
 	inline int GetVirtualKey(key_code key)

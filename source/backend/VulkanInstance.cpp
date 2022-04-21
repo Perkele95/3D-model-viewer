@@ -2,6 +2,8 @@
 
 void VulkanInstance::prepare()
 {
+    pltf::WindowCreate(platformDevice, settings.title);
+
     auto appInfo = vkInits::applicationInfo(settings.title);
     auto instanceInfo = vkInits::instanceCreateInfo();
     instanceInfo.pApplicationInfo = &appInfo;
@@ -433,9 +435,9 @@ VkResult VulkanInstance::prepareRenderpass()
 
     const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
 
-    VkAttachmentReference coluorAttachmentRef{};
-    coluorAttachmentRef.attachment = 0;
-    coluorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    VkAttachmentReference colourAttachmentRef{};
+    colourAttachmentRef.attachment = 0;
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference depthAttachmentRef{};
     depthAttachmentRef.attachment = 1;
@@ -448,7 +450,7 @@ VkResult VulkanInstance::prepareRenderpass()
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &coluorAttachmentRef;
+    subpass.pColorAttachments = &colourAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
     subpass.pResolveAttachments = &colourResolveRef;
 
