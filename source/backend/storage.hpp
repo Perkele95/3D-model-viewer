@@ -19,7 +19,7 @@ public:
     }
 
     template<typename T>
-    T *push(size_t count)
+    T *allocate(size_t count)
     {
         alignas(T) auto block = static_cast<T*>(m_cursor);
         m_cursor = static_cast<T*>(m_cursor) + count;
@@ -27,14 +27,9 @@ public:
     }
 
     template<typename T>
-    view<T> pushView(size_t count)
+    constexpr view<T> allocateView(size_t count)
     {
-        return view<T>(push<T>(count), count);
-    }
-
-    linear_storage *getStorageInstance()
-    {
-        return this;
+        return view<T>(allocate<T>(count), count);
     }
 
 private:

@@ -43,10 +43,10 @@ void VulkanInstance::prepare()
 
     // Allocate and aquire images
 
-    m_swapchainImages = push<VkImage>(imageCount);
+    m_swapchainImages = allocate<VkImage>(imageCount);
     vkGetSwapchainImagesKHR(device, m_swapchain, &imageCountLocal, m_swapchainImages);
 
-    m_swapchainViews = push<VkImageView>(imageCount);
+    m_swapchainViews = allocate<VkImageView>(imageCount);
     prepareSwapchainViews();
 
     prepareSampleCount();
@@ -55,7 +55,7 @@ void VulkanInstance::prepare()
     prepareDepth();
     prepareRenderpass();
 
-    framebuffers = push<VkFramebuffer>(imageCount);
+    framebuffers = allocate<VkFramebuffer>(imageCount);
     prepareFramebuffers();
 
     // Sync data

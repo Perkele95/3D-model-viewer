@@ -21,7 +21,8 @@ float random(vec2 co)
 
 // Hammersley Points on the Hemisphere by Holger Dammertz
 // http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html
-vec2 Hammersley(uint i, uint N) {
+vec2 Hammersley(uint i, uint N)
+{
     uint bits = (i << 16u) | (i >> 16u);
     bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
     bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);

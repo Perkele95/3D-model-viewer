@@ -23,6 +23,8 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
     VulkanInstance::coreMessage = CoreMessageCallback;
     VulkanInstance::prepare();
 
+    generateBDRF();
+
     m_mainCamera.init();
     m_lights.init();
 
@@ -49,7 +51,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
 
     // Prepare text overlay
 
-    m_overlay = push<VulkanTextOverlay>(1);
+    m_overlay = allocate<VulkanTextOverlay>(1);
 
     m_overlay->depthFormat = depthFormat;
     m_overlay->surfaceFormat = surfaceFormat;
@@ -82,6 +84,11 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
 ModelViewer::~ModelViewer()
 {
     vkDeviceWaitIdle(device);
+
+    vkDestroySampler(device, brdf.sampler, nullptr);
+    vkDestroyImageView(device, brdf.view, nullptr);
+    vkDestroyImage(device, brdf.image, nullptr);
+    vkFreeMemory(device, brdf.memory, nullptr);
 
     m_overlay->destroy();
 
@@ -277,7 +284,7 @@ void ModelViewer::generateBDRF()
     VkFramebuffer brdfFramebuffer = VK_NULL_HANDLE;
     vkCreateFramebuffer(device, &frameBufferInfo, nullptr, &brdfFramebuffer);
 
-    // No descriptors
+    // Ddescriptors - none needed
 
     // Pipelinelayout
 
@@ -323,7 +330,7 @@ void ModelViewer::generateBDRF()
 
     FragmentShader brdfFragmentShader;
     sb.flush() << shaderPath << view("brdf_frag.spv");
-    brdfFragmentShader.load(device, "path");
+    brdfFragmentShader.load(device, sb.c_str());
 
     sb.destroy();
 
@@ -344,8 +351,8 @@ void ModelViewer::generateBDRF()
     pipelineInfo.pMultisampleState = &multisampling;
     pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colourBlend;
-    pipelineInfo.layout = scene.pipelineLayout;
-    pipelineInfo.renderPass = renderPass;
+    pipelineInfo.layout = brdfPipelineLayout;
+    pipelineInfo.renderPass = brdfRenderPass;
 
     VkPipeline brdfPipeline = VK_NULL_HANDLE;
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &brdfPipeline);
@@ -365,19 +372,23 @@ void ModelViewer::generateBDRF()
     vkCmdBeginRenderPass(drawCmd, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(drawCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, brdfPipeline);
     vkCmdDraw(drawCmd, 4, 1, 0, 0);
+    vkCmdEndRenderPass(drawCmd);
 
     device.flushCommandBuffer(drawCmd, graphicsQueue);
 
-    vkQueueWaitIdle(graphicsQueue);
-
-    //
+    vkDestroyPipeline(device, brdfPipeline, nullptr);
+    vkDestroyPipelineLayout(device, brdfPipelineLayout, nullptr);
+    brdfVertexShader.destroy(device);
+    brdfFragmentShader.destroy(device);
+    vkDestroyFramebuffer(device, brdfFramebuffer, nullptr);
+    vkDestroyRenderPass(device, brdfRenderPass, nullptr);
 }
 
 void ModelViewer::buildScene()
 {
-    auto model = push<PBRModel>(1);
+    auto model = allocate<PBRModel>(1);
 
-    model->mesh.loadSphere(&device, graphicsQueue);
+    model->mesh.loadCube(&device, graphicsQueue);
     model->transform = mat4x4::identity();
 
     auto sb = StringbBuilder(100);
@@ -406,7 +417,7 @@ void ModelViewer::buildScene()
 
 void ModelViewer::buildSkybox()
 {
-    auto model = push<CubeMapModel>(1);
+    auto model = allocate<CubeMapModel>(1);
     model->load(&device, graphicsQueue);
 
     StringbBuilder sbs[] = {

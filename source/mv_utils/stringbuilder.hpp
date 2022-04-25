@@ -59,6 +59,11 @@ public:
         return *this;
     }
 
+    constexpr StringbBuilder &operator<<(const StringbBuilder &ref)
+    {
+        return (*this << ref.getView());
+    }
+
     constexpr StringbBuilder &operator<<(const char *cstring)
     {
         const auto length = strlen(cstring);
@@ -78,12 +83,12 @@ public:
         return *this;
     }
 
-    constexpr const char *c_str()
+    constexpr const char *c_str() const
     {
         return m_str;
     }
 
-    constexpr view<const char> getView()
+    constexpr view<const char> getView() const
     {
         return view<const char>(m_str, m_length);
     }
