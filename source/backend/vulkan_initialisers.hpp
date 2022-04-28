@@ -148,6 +148,14 @@ namespace vkInits
         return attachmentDescription;
     }
 
+    INIT_API attachmentReference(uint32_t attachment)
+    {
+        VkAttachmentReference ref{};
+        ref.attachment = attachment;
+        ref.layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        return ref;
+    }
+
     INIT_API shaderModuleCreateInfo(const void *source, size_t size)
     {
         VkShaderModuleCreateInfo shaderModuleInfo{};

@@ -1,9 +1,9 @@
 #include "model_viewer.hpp"
 
 #if defined(DEBUG)
-static const bool C_VALIDATION = true;
+static const bool ENABLE_VALIDATION = true;
 #else
-static const bool C_VALIDATION = false;
+static const bool ENABLE_VALIDATION = false;
 #endif
 
 void CoreMessageCallback(log_level level, const char *string)
@@ -14,16 +14,16 @@ void CoreMessageCallback(log_level level, const char *string)
 
 ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platform, MegaBytes(64))
 {
-    settings.title = "Pbr Demo";
+    settings.title = "PBR Demo";
     settings.syncMode = VSyncMode::Off;
-    settings.enValidation = C_VALIDATION;
+    settings.enValidation = ENABLE_VALIDATION;
 
     auto dispatcher = EventDispatcher<ModelViewer>(platform, this);
 
     VulkanInstance::coreMessage = CoreMessageCallback;
     VulkanInstance::prepare();
 
-    generateBDRF();
+    generateBrdfLUT();
 
     m_mainCamera.init();
     m_lights.init();
@@ -33,16 +33,15 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
     buildSkybox();
     buildDescriptors();
 
-    constexpr auto shaderPath = view("../../shaders/");
     auto sb = StringbBuilder(100);
 
-    sb << shaderPath << view("pbr_vert.spv");
+    sb << SHADERS_PATH << view("pbr_vert.spv");
     scene.vertexShader.load(device, sb.c_str());
-    sb.flush() << shaderPath << view("pbr_frag.spv");
+    sb.flush() << SHADERS_PATH << view("pbr_frag.spv");
     scene.fragmentShader.load(device, sb.c_str());
-    sb.flush() << shaderPath << view("skybox_vert.spv");
+    sb.flush() << SHADERS_PATH << view("skybox_vert.spv");
     skybox.vertexShader.load(device, sb.c_str());
-    sb.flush() << shaderPath << view("skybox_frag.spv");
+    sb.flush() << SHADERS_PATH << view("skybox_frag.spv");
     skybox.fragmentShader.load(device, sb.c_str());
 
     sb.destroy();
@@ -69,15 +68,16 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
 
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(device.gpu, &deviceProps);
-    const auto deviceString = view<const char>(deviceProps.deviceName, StringbBuilder::strlen(deviceProps.deviceName));
+    const char *deviceNameString = deviceProps.deviceName;
+    const auto deviceNameView = StringbBuilder::MakeView(deviceNameString);
 
     m_overlay->begin();
-    m_overlay->draw("PBR demo", vec2(50.0f, 12.0f));
+    m_overlay->draw(StringbBuilder::MakeView(settings.title), vec2(50.0f, 12.0f));
 
     m_overlay->textSize = 0.8f;
     m_overlay->textAlignment = text_align::left;
     m_overlay->draw("Device:", vec2(5.0f, 88.0f));
-    m_overlay->draw(deviceString, vec2(5.0f, 90.0f));
+    m_overlay->draw(deviceNameView, vec2(5.0f, 90.0f));
     m_overlay->end();
 }
 
@@ -193,7 +193,7 @@ void ModelViewer::onScrollWheelEvent(double x, double y)
     m_mainCamera.fov = clamp(m_mainCamera.fov, Camera::FOV_LIMITS_LOW, Camera::FOV_LIMITS_HIGH);
 }
 
-void ModelViewer::generateBDRF()
+void ModelViewer::generateBrdfLUT()
 {
     const auto format = VK_FORMAT_R16G16_SFLOAT;
     const uint32_t dimension = 512;
@@ -284,8 +284,6 @@ void ModelViewer::generateBDRF()
     VkFramebuffer brdfFramebuffer = VK_NULL_HANDLE;
     vkCreateFramebuffer(device, &frameBufferInfo, nullptr, &brdfFramebuffer);
 
-    // Ddescriptors - none needed
-
     // Pipelinelayout
 
     VkPipelineVertexInputStateCreateInfo emptyInputState{};
@@ -322,14 +320,13 @@ void ModelViewer::generateBDRF()
     // shader stages & shader load
 
     auto sb = StringbBuilder(100);
-    constexpr auto shaderPath = view("../../shaders/");
 
     VertexShader brdfVertexShader;
-    sb << shaderPath << view("brdf_vert.spv");
+    sb << SHADERS_PATH << view("brdf_vert.spv");
     brdfVertexShader.load(device, sb.c_str());
 
     FragmentShader brdfFragmentShader;
-    sb.flush() << shaderPath << view("brdf_frag.spv");
+    sb.flush() << SHADERS_PATH << view("brdf_frag.spv");
     brdfFragmentShader.load(device, sb.c_str());
 
     sb.destroy();
@@ -384,30 +381,34 @@ void ModelViewer::generateBDRF()
     vkDestroyRenderPass(device, brdfRenderPass, nullptr);
 }
 
+void ModelViewer::generateIrradianceCube()
+{
+    // TODO
+}
+
 void ModelViewer::buildScene()
 {
     auto model = allocate<PBRModel>(1);
 
-    model->mesh.loadCube(&device, graphicsQueue);
+    model->mesh.loadSphere(&device, graphicsQueue);
     model->transform = mat4x4::identity();
 
     auto sb = StringbBuilder(100);
-    constexpr auto assetsPath = view("../../assets/materials/");
-    constexpr auto materialName = view("patterned-bw-vinyl-bl/");
+    constexpr auto materialPath = view("materials/patterned-bw-vinyl-bl/");
 
-    sb << assetsPath << materialName << view("albedo.png");
+    sb << ASSETS_PATH << materialPath << view("albedo.png");
     model->albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
 
-    sb.flush() << assetsPath << materialName << view("normal.png");
+    sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
     model->normal.loadRGBA(&device, graphicsQueue, sb.c_str());
 
-    sb.flush() << assetsPath << materialName << view("roughness.png");
+    sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
     model->roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
 
-    sb.flush() << assetsPath << materialName << view("metallic.png");
+    sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
     model->metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
 
-    sb.flush() << assetsPath << materialName << view("ao.png");
+    sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
     model->ao.loadRGBA(&device, graphicsQueue, sb.c_str());
 
     sb.destroy();
@@ -602,7 +603,7 @@ void ModelViewer::buildPipelines()
     pipelineInfo.pColorBlendState = &colourBlend;
     pipelineInfo.layout = scene.pipelineLayout;
     pipelineInfo.renderPass = renderPass;
-    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &scene.pipeline);
+    vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &scene.pipeline);
 
     // Skybox
 
@@ -626,7 +627,7 @@ void ModelViewer::buildPipelines()
     vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &skybox.pipelineLayout);
 
     pipelineInfo.layout = skybox.pipelineLayout;
-    vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skybox.pipeline);
+    vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &skybox.pipeline);
 }
 
 void ModelViewer::updateCamera(float dt)

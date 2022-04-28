@@ -18,7 +18,82 @@ void VulkanInstance::prepare()
 
     pltf::SurfaceCreate(platformDevice, m_instance, &m_surface);
 
-    pickPhysicalDevice();
+    const auto pickGpu = [this]()
+    {
+        uint32_t physDeviceCount = 0;
+        vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
+        auto physDevices = new VkPhysicalDevice[physDeviceCount];
+        vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices);
+
+        const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
+        {
+            for(size_t i = 0; i < arraysize(DeviceExtensions); i++)
+            {
+                for(size_t j = 0; j < availableExtensions.count; j++)
+                {
+                    if(strcmp(DeviceExtensions[i], availableExtensions[j].extensionName) == 0)
+                        return true;
+                }
+            }
+            return false;
+        };
+
+        for(size_t i = 0; i < physDeviceCount; i++)
+        {
+            uint32_t extensionCount = 0;
+            vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, nullptr);
+            auto availableExtensions = new VkExtensionProperties[extensionCount];
+            vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions);
+            const bool extensionsSupported = findExtensionProperty(view(availableExtensions, extensionCount));
+            delete availableExtensions;
+
+            uint32_t formatCount = 0, presentModeCount = 0;
+            vkGetPhysicalDeviceSurfaceFormatsKHR(physDevices[i], m_surface, &formatCount, nullptr);
+            vkGetPhysicalDeviceSurfacePresentModesKHR(physDevices[i], m_surface, &presentModeCount, nullptr);
+            const bool adequateCapabilities = (formatCount > 0) && (presentModeCount > 0);
+
+            uint32_t propCount = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, nullptr);
+            auto queueFamilyProps = new VkQueueFamilyProperties[propCount];
+            vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps);
+
+            device.queueBits.graphics = 0;
+            device.queueBits.present = 0;
+            bool hasGraphicsFamily = false, hasPresentFamily = false;
+            for(uint32_t queueIndex = 0; queueIndex < propCount; queueIndex++)
+            {
+                if(queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                {
+                    hasGraphicsFamily = true;
+                    device.queueBits.graphics = queueIndex;
+                }
+
+                VkBool32 presentSupport = false;
+                vkGetPhysicalDeviceSurfaceSupportKHR(physDevices[i], queueIndex, m_surface, &presentSupport);
+                if(presentSupport)
+                {
+                    hasPresentFamily = true;
+                    device.queueBits.present = queueIndex;
+                }
+                if(hasGraphicsFamily && hasPresentFamily)
+                    break;
+            }
+            delete queueFamilyProps;
+
+            const bool isValid = extensionsSupported && adequateCapabilities &&
+                                    hasGraphicsFamily && hasPresentFamily;
+            if(isValid)
+            {
+                device.gpu = physDevices[i];
+                break;
+            }
+        }
+        delete physDevices;
+
+        if(device.gpu == VK_NULL_HANDLE)
+            coreMessage(log_level::error, "No suitable GPU found");
+    };
+    pickGpu();
 
     refreshCapabilities();
 
@@ -29,9 +104,49 @@ void VulkanInstance::prepare()
     vkGetDeviceQueue(device, device.queueBits.graphics, 0, &graphicsQueue);
     vkGetDeviceQueue(device, device.queueBits.present, 0, &m_presentQueue);
 
+    const auto prepareSurfaceFormat = [this]()
+    {
+        uint32_t count = 0;
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device.gpu, m_surface, &count, nullptr);
+        auto surfaceFormats = new VkSurfaceFormatKHR[count];
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device.gpu, m_surface, &count, surfaceFormats);
+
+        surfaceFormat = surfaceFormats[0];
+        for(size_t i = 0; i < count; i++)
+        {
+            const bool formatCheck = surfaceFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB;
+            const bool colourSpaceCheck = surfaceFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            if(formatCheck && colourSpaceCheck)
+            {
+                surfaceFormat = surfaceFormats[i];
+                break;
+            }
+        }
+
+        delete surfaceFormats;
+    };
     prepareSurfaceFormat();
-    const auto mode = static_cast<VkPresentModeKHR>(settings.syncMode);
-    preparePresentMode(mode);
+
+    const auto preparePresentMode = [this](VkPresentModeKHR mode)
+    {
+        uint32_t count = 0;
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device.gpu, m_surface, &count, nullptr);
+        auto presentModes = new VkPresentModeKHR[count];
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device.gpu, m_surface, &count, presentModes);
+
+        m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        for(size_t i = 0; i < count; i++)
+        {
+            if(presentModes[i] == mode)
+            {
+                m_presentMode = mode;
+                break;
+            }
+        }
+
+        delete presentModes;
+    };
+    preparePresentMode(static_cast<VkPresentModeKHR>(settings.syncMode));
 
     prepareSwapchain(VK_NULL_HANDLE);
 
@@ -49,30 +164,147 @@ void VulkanInstance::prepare()
     m_swapchainViews = allocate<VkImageView>(imageCount);
     prepareSwapchainViews();
 
+    const auto prepareSampleCount = [this]()
+    {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(device.gpu, &props);
+
+        const auto samples = props.limits.framebufferDepthSampleCounts &
+                            props.limits.framebufferColorSampleCounts;
+
+        sampleCount = VK_SAMPLE_COUNT_1_BIT;
+        for (uint32_t bit = VK_SAMPLE_COUNT_64_BIT; bit != VK_SAMPLE_COUNT_1_BIT; bit >>= 1)
+        {
+            if(samples & bit)
+            {
+                sampleCount = VkSampleCountFlagBits(bit);
+                break;
+            }
+        }
+    };
     prepareSampleCount();
+
     prepareMsaa();
+
+    const auto prepareDepthFormat = [this]()
+    {
+        depthFormat = VK_FORMAT_UNDEFINED;
+        constexpr VkFormat formats[] = {
+            VK_FORMAT_D24_UNORM_S8_UINT,
+            VK_FORMAT_D32_SFLOAT,
+            VK_FORMAT_D32_SFLOAT_S8_UINT
+        };
+
+        for(size_t i = 0; i < arraysize(formats); i++)
+        {
+            VkFormatProperties props{};
+            vkGetPhysicalDeviceFormatProperties(device.gpu, formats[i], &props);
+            if(props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+            {
+                depthFormat = formats[i];
+                break;
+            }
+        }
+    };
     prepareDepthFormat();
+
     prepareDepth();
+
+    const auto prepareRenderpass = [this]()
+    {
+        auto colourAttachment = vkInits::attachmentDescription(surfaceFormat.format);
+        colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colourAttachment.samples = sampleCount;
+
+        auto depthAttachment = vkInits::attachmentDescription(depthFormat);
+        depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachment.samples = sampleCount;
+
+        auto colourResolve = vkInits::attachmentDescription(surfaceFormat.format);
+        colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
+
+        const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
+
+        auto colourAttachmentRef = vkInits::attachmentReference(0);
+        colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        auto depthAttachmentRef = vkInits::attachmentReference(1);
+        depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        auto colourResolveRef = vkInits::attachmentReference(2);
+        colourResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass{};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &colourAttachmentRef;
+        subpass.pDepthStencilAttachment = &depthAttachmentRef;
+        subpass.pResolveAttachments = &colourResolveRef;
+
+        VkSubpassDependency dependencies[2];
+        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass = 0;
+        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+        dependencies[1].srcSubpass = 0;
+        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+        VkRenderPassCreateInfo renderPassInfo{};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = uint32_t(arraysize(attachments));
+        renderPassInfo.pAttachments = attachments;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+        renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+        renderPassInfo.pDependencies = dependencies;
+
+        return vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
+    };
     prepareRenderpass();
 
     framebuffers = allocate<VkFramebuffer>(imageCount);
     prepareFramebuffers();
 
-    // Sync data
-
-    auto semaphoreInfo = vkInits::semaphoreCreateInfo();
-    auto fenceInfo = vkInits::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    const auto prepareSyncData = [this]()
     {
-        vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_sync.imageAvailableSPs[i]);
-        vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_sync.renderFinishedSPs[i]);
-        vkCreateFence(device, &fenceInfo, nullptr, &m_sync.inFlightFences[i]);
-    }
+        auto semaphoreInfo = vkInits::semaphoreCreateInfo();
+        auto fenceInfo = vkInits::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+        for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        {
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_sync.imageAvailableSPs[i]);
+            vkCreateSemaphore(device, &semaphoreInfo, nullptr, &m_sync.renderFinishedSPs[i]);
+            vkCreateFence(device, &fenceInfo, nullptr, &m_sync.inFlightFences[i]);
+        }
+    };
+    prepareSyncData();
 
-    // Command buffers
+    const auto prepareCommandBuffers = [this]()
+    {
+        auto cmdInfo = vkInits::commandBufferAllocateInfo(device.commandPool, MAX_IMAGES_IN_FLIGHT);
+        vkAllocateCommandBuffers(device, &cmdInfo, commandBuffers);
+    };
+    prepareCommandBuffers();
 
-    auto cmdInfo = vkInits::commandBufferAllocateInfo(device.commandPool, MAX_IMAGES_IN_FLIGHT);
-    vkAllocateCommandBuffers(device, &cmdInfo, commandBuffers);
+    const auto preparePipelineCache = [this]()
+    {
+        VkPipelineCacheCreateInfo pipelineCacheInfo{};
+        pipelineCacheInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+        pipelineCacheInfo.pInitialData = VK_NULL_HANDLE;
+        pipelineCacheInfo.initialDataSize = 0;
+        vkCreatePipelineCache(device, &pipelineCacheInfo, nullptr, &pipelineCache);
+    };
+    preparePipelineCache();
 
     // Init submit & present infos
 
@@ -97,6 +329,8 @@ void VulkanInstance::prepare()
 
 void VulkanInstance::destroy()
 {
+    vkDestroyPipelineCache(device, pipelineCache, nullptr);
+
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
         vkDestroyFence(device, m_sync.inFlightFences[i], nullptr);
@@ -208,82 +442,6 @@ void VulkanInstance::submitFrame()
     }
 }
 
-void VulkanInstance::pickPhysicalDevice()
-{
-    uint32_t physDeviceCount = 0;
-    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, nullptr);
-    auto physDevices = new VkPhysicalDevice[physDeviceCount];
-    vkEnumeratePhysicalDevices(m_instance, &physDeviceCount, physDevices);
-
-    const auto findExtensionProperty = [](view<VkExtensionProperties> availableExtensions)
-    {
-        for(size_t i = 0; i < arraysize(DeviceExtensions); i++)
-        {
-            for(size_t j = 0; j < availableExtensions.count; j++)
-            {
-                if(strcmp(DeviceExtensions[i], availableExtensions[j].extensionName) == 0)
-                    return true;
-            }
-        }
-        return false;
-    };
-
-    for(size_t i = 0; i < physDeviceCount; i++)
-    {
-        uint32_t extensionCount = 0;
-        vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, nullptr);
-        auto availableExtensions = new VkExtensionProperties[extensionCount];
-        vkEnumerateDeviceExtensionProperties(physDevices[i], nullptr, &extensionCount, availableExtensions);
-        const bool extensionsSupported = findExtensionProperty(view(availableExtensions, extensionCount));
-        delete availableExtensions;
-
-        uint32_t formatCount = 0, presentModeCount = 0;
-        vkGetPhysicalDeviceSurfaceFormatsKHR(physDevices[i], m_surface, &formatCount, nullptr);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(physDevices[i], m_surface, &presentModeCount, nullptr);
-        const bool adequateCapabilities = (formatCount > 0) && (presentModeCount > 0);
-
-        uint32_t propCount = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, nullptr);
-        auto queueFamilyProps = new VkQueueFamilyProperties[propCount];
-        vkGetPhysicalDeviceQueueFamilyProperties(physDevices[i], &propCount, queueFamilyProps);
-
-        device.queueBits.graphics = 0;
-        device.queueBits.present = 0;
-        bool hasGraphicsFamily = false, hasPresentFamily = false;
-        for(uint32_t queueIndex = 0; queueIndex < propCount; queueIndex++)
-        {
-            if(queueFamilyProps[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                hasGraphicsFamily = true;
-                device.queueBits.graphics = queueIndex;
-            }
-
-            VkBool32 presentSupport = false;
-            vkGetPhysicalDeviceSurfaceSupportKHR(physDevices[i], queueIndex, m_surface, &presentSupport);
-            if(presentSupport)
-            {
-                hasPresentFamily = true;
-                device.queueBits.present = queueIndex;
-            }
-            if(hasGraphicsFamily && hasPresentFamily)
-                break;
-        }
-        delete queueFamilyProps;
-
-        const bool isValid = extensionsSupported && adequateCapabilities &&
-                                hasGraphicsFamily && hasPresentFamily;
-        if(isValid)
-        {
-            device.gpu = physDevices[i];
-            break;
-        }
-    }
-    delete physDevices;
-
-    if(device.gpu == VK_NULL_HANDLE)
-        coreMessage(log_level::error, "No suitable GPU found");
-}
-
 VkResult VulkanInstance::prepareSwapchain(VkSwapchainKHR oldSwapchain)
 {
     auto info = vkInits::swapchainCreateInfo(oldSwapchain);
@@ -329,25 +487,6 @@ void VulkanInstance::prepareSwapchainViews()
     }
 }
 
-void VulkanInstance::prepareSampleCount()
-{
-    VkPhysicalDeviceProperties props{};
-    vkGetPhysicalDeviceProperties(device.gpu, &props);
-
-    const auto samples = props.limits.framebufferDepthSampleCounts &
-                         props.limits.framebufferColorSampleCounts;
-
-    sampleCount = VK_SAMPLE_COUNT_1_BIT;
-    for (uint32_t bit = VK_SAMPLE_COUNT_64_BIT; bit != VK_SAMPLE_COUNT_1_BIT; bit >>= 1)
-    {
-        if(samples & bit)
-        {
-            sampleCount = VkSampleCountFlagBits(bit);
-            break;
-        }
-    }
-}
-
 void VulkanInstance::prepareMsaa()
 {
     auto msaaInfo = vkInits::imageCreateInfo();
@@ -373,27 +512,6 @@ void VulkanInstance::prepareMsaa()
     vkCreateImageView(device, &viewInfo, nullptr, &m_msaa.view);
 }
 
-void VulkanInstance::prepareDepthFormat()
-{
-    depthFormat = VK_FORMAT_UNDEFINED;
-    constexpr VkFormat formats[] = {
-        VK_FORMAT_D24_UNORM_S8_UINT,
-        VK_FORMAT_D32_SFLOAT,
-        VK_FORMAT_D32_SFLOAT_S8_UINT
-    };
-
-    for(size_t i = 0; i < arraysize(formats); i++)
-    {
-        VkFormatProperties props{};
-        vkGetPhysicalDeviceFormatProperties(device.gpu, formats[i], &props);
-        if(props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
-        {
-            depthFormat = formats[i];
-            break;
-        }
-    }
-}
-
 void VulkanInstance::prepareDepth()
 {
     auto depthInfo = vkInits::imageCreateInfo();
@@ -416,71 +534,6 @@ void VulkanInstance::prepareDepth()
     viewInfo.format = depthInfo.format;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
     vkCreateImageView(device, &viewInfo, nullptr, &m_depth.view);
-}
-
-VkResult VulkanInstance::prepareRenderpass()
-{
-    auto colourAttachment = vkInits::attachmentDescription(surfaceFormat.format);
-    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colourAttachment.samples = sampleCount;
-
-    auto depthAttachment = vkInits::attachmentDescription(depthFormat);
-    depthAttachment.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.samples = sampleCount;
-
-    auto colourResolve = vkInits::attachmentDescription(surfaceFormat.format);
-    colourResolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    colourResolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    colourResolve.samples = VK_SAMPLE_COUNT_1_BIT;
-
-    const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
-
-    VkAttachmentReference colourAttachmentRef{};
-    colourAttachmentRef.attachment = 0;
-    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
-    depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference colourResolveRef{};
-    colourResolveRef.attachment = 2;
-    colourResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colourAttachmentRef;
-    subpass.pDepthStencilAttachment = &depthAttachmentRef;
-    subpass.pResolveAttachments = &colourResolveRef;
-
-    VkSubpassDependency dependencies[2];
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = uint32_t(arraysize(attachments));
-    renderPassInfo.pAttachments = attachments;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-    renderPassInfo.pDependencies = dependencies;
-
-    return vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass);
 }
 
 void VulkanInstance::prepareFramebuffers()
@@ -528,46 +581,4 @@ void VulkanInstance::refreshCapabilities()
     // Refresh aspect ratio
 
     aspectRatio = float(extent.width) / float(extent.height);
-}
-
-void VulkanInstance::prepareSurfaceFormat()
-{
-    uint32_t count = 0;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device.gpu, m_surface, &count, nullptr);
-    auto surfaceFormats = new VkSurfaceFormatKHR[count];
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device.gpu, m_surface, &count, surfaceFormats);
-
-    surfaceFormat = surfaceFormats[0];
-    for(size_t i = 0; i < count; i++)
-    {
-        const bool formatCheck = surfaceFormats[i].format == VK_FORMAT_B8G8R8A8_SRGB;
-        const bool colourSpaceCheck = surfaceFormats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-        if(formatCheck && colourSpaceCheck)
-        {
-            surfaceFormat = surfaceFormats[i];
-            break;
-        }
-    }
-
-    delete surfaceFormats;
-}
-
-void VulkanInstance::preparePresentMode(VkPresentModeKHR preferredMode)
-{
-    uint32_t count = 0;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device.gpu, m_surface, &count, nullptr);
-    auto presentModes = new VkPresentModeKHR[count];
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device.gpu, m_surface, &count, presentModes);
-
-    m_presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    for(size_t i = 0; i < count; i++)
-    {
-        if(presentModes[i] == preferredMode)
-        {
-            m_presentMode = preferredMode;
-            break;
-        }
-    }
-
-    delete presentModes;
 }

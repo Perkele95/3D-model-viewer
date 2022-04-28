@@ -8,12 +8,22 @@ class StringbBuilder
 public:
     static constexpr size_t DEFAULT_MAX = 256;
 
-    static constexpr size_t strlen(const char *cstring)
+    static constexpr size_t Strlen(const char *cstring)
     {
         size_t count = 1;
         while (*cstring++)
             count++;
         return count;
+    }
+
+    static constexpr view<const char> MakeView(const char *cstring)
+    {
+        return view(cstring, Strlen(cstring));
+    }
+
+    static constexpr view<char> MakeView(char *cstring)
+    {
+        return view(cstring, Strlen(cstring));
     }
 
     StringbBuilder(size_t capacity = DEFAULT_MAX)
@@ -66,13 +76,13 @@ public:
 
     constexpr StringbBuilder &operator<<(const char *cstring)
     {
-        const auto length = strlen(cstring);
+        const auto length = Strlen(cstring);
         return (*this << view(cstring, length));
     }
 
     constexpr StringbBuilder &operator<<(char *cstring)
     {
-        const auto length = strlen(cstring);
+        const auto length = Strlen(cstring);
         return (*this << view(cstring, length));
     }
 

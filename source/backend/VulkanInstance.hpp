@@ -75,21 +75,17 @@ protected:
     VkQueue                     graphicsQueue;
     VkFramebuffer*              framebuffers;
     VkRenderPass                renderPass;
+    VkPipelineCache             pipelineCache;
 
 private:
     void pickPhysicalDevice();
     void getSwapchainImages();
     VkResult prepareSwapchain(VkSwapchainKHR oldSwapchain);
     void prepareSwapchainViews();
-    void prepareSampleCount();
     void prepareMsaa();
-    void prepareDepthFormat();
     void prepareDepth();
-    VkResult prepareRenderpass();
     void prepareFramebuffers();
     void refreshCapabilities();
-    void prepareSurfaceFormat();
-    void preparePresentMode(VkPresentModeKHR preferredMode);
 
     VkInstance                  m_instance;
     VkSurfaceKHR                m_surface;

@@ -36,7 +36,7 @@ vec3 ImportanceSampleGGX(vec2 Xi, float roughness, vec3 N)
 {
     const float a = roughness * roughness;
 
-    const float phi = 2 * PI * Xi.x;// + random(normal.xz) * 0.1;
+    const float phi = 2 * PI * Xi.x + random(N.xz) * 0.1;
     const float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
     const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 

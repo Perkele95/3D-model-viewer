@@ -226,22 +226,19 @@ void VulkanTextOverlay::prepareRenderpass()
 
     const VkAttachmentDescription attachments[] = {colourAttachment, depthAttachment, colourResolve};
 
-    VkAttachmentReference coluorAttachmentRef{};
-    coluorAttachmentRef.attachment = 0;
-    coluorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference depthAttachmentRef{};
-    depthAttachmentRef.attachment = 1;
+    auto depthAttachmentRef = vkInits::attachmentReference(1);
     depthAttachmentRef.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
-    VkAttachmentReference colourResolveRef{};
-    colourResolveRef.attachment = 2;
+    auto colourResolveRef = vkInits::attachmentReference(2);
     colourResolveRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &coluorAttachmentRef;
+    subpass.pColorAttachments = &colourAttachmentRef;
     subpass.pDepthStencilAttachment = &depthAttachmentRef;
     subpass.pResolveAttachments = &colourResolveRef;
 

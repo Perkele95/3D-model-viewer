@@ -69,7 +69,12 @@ public:
     void onScrollWheelEvent(double x, double y);
 
 private:
-    void generateBDRF();
+    // Pre-generated pbr textures
+
+    void generateBrdfLUT();
+    void generateIrradianceCube();
+    void generatePrefilteredCube();
+
     void buildScene();
     void buildSkybox();
     void buildUniformBuffers();
@@ -97,6 +102,8 @@ private:
         VkSampler               sampler;
         VkDescriptorImageInfo   descriptor;
     }brdf;
+
+    TextureCubeMap              irradiance;
 
     struct Scene
     {

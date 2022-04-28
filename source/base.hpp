@@ -40,3 +40,6 @@ enum class CoreResult
     Format_Not_Supported,
     Source_Missing
 };
+
+constexpr auto SHADERS_PATH = view("../../shaders/");
+constexpr auto ASSETS_PATH = view("../../assets/");
