@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "array_types.hpp"
 
 constexpr float PI32 = 3.141592741f;
 constexpr double PI64 = 3.141592653589793;
@@ -48,11 +49,11 @@ constexpr T max(T a, T b)
     return a > b ? a : b;
 }
 
-template<typename T, int N>
-constexpr T accumulate(const T (&array)[N], T value = T(0))
+template<typename T>
+constexpr T accumulate(view<T> source, T initalValue = T(0))
 {
-    for (size_t i = 0; i < N; i++)
-        value += array[i];
+    for (size_t i = 0; i < source.count; i++)
+        initalValue += source[i];
 
-    return value;
+    return initalValue;
 }

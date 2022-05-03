@@ -54,13 +54,13 @@ namespace vkInits
         return info;
     }
 
-    INIT_API descriptorPoolCreateInfo(view<const VkDescriptorPoolSize> poolSizes, size_t maxSets)
+    INIT_API descriptorPoolCreateInfo(view<const VkDescriptorPoolSize> poolSizes, uint32_t maxSets)
     {
         VkDescriptorPoolCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         info.pPoolSizes = poolSizes.data;
         info.poolSizeCount = uint32_t(poolSizes.count);
-        info.maxSets = uint32_t(maxSets);
+        info.maxSets = maxSets;
         return info;
     }
 
@@ -281,6 +281,15 @@ namespace vkInits
         return bufferCopy;
     }
 
+    INIT_API imageSubresourceRange()
+    {
+        VkImageSubresourceRange subresourceRange{};
+        subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        subresourceRange.levelCount = 1;
+        subresourceRange.layerCount = 1;
+        return subresourceRange;
+    }
+
     INIT_API imageMemoryBarrier(VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
     {
         VkImageMemoryBarrier barrier{};
@@ -352,6 +361,15 @@ namespace vkInits
         return result;
     }
 
+    INIT_API pipelineViewportStateCreateInfo(uint32_t viewportCount, uint32_t scissorCount)
+    {
+        VkPipelineViewportStateCreateInfo viewportState{};
+        viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewportState.viewportCount = viewportCount;
+        viewportState.scissorCount = scissorCount;
+        return viewportState;
+    }
+
     INIT_API viewportInfo(VkExtent2D extent)
     {
         VkViewport result{};
@@ -414,6 +432,24 @@ namespace vkInits
         colourblend.blendConstants[2] = 0.0f;
         colourblend.blendConstants[3] = 0.0f;
         return colourblend;
+    }
+
+    INIT_API pipelineDynamicStateCreateInfo()
+    {
+        VkPipelineDynamicStateCreateInfo info{};
+        info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        info.pDynamicStates = nullptr;
+        info.dynamicStateCount = 0;
+        return info;
+    }
+
+    INIT_API pushConstantRange(VkShaderStageFlags stage, uint32_t size, uint32_t offset= 0)
+    {
+        VkPushConstantRange push;
+        push.offset = offset;
+        push.size = size;
+        push.stageFlags = stage;
+        return push;
     }
 
     INIT_API pipelineMultisampleStateCreateInfo(VkSampleCountFlagBits rasterizationSamples)

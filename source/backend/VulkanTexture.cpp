@@ -11,88 +11,9 @@ void Texture::destroy(VkDevice device)
     vkDestroyImage(device, m_image, nullptr);
 }
 
-void Texture::insertMemoryBarrier(VkCommandBuffer cmd,
-                                  VkImageLayout oldLayout,
-                                  VkImageLayout newLayout,
-                                  VkAccessFlags srcAccessMask,
-                                  VkAccessFlags dstAccessMask,
-                                  VkPipelineStageFlags srcStageMask,
-                                  VkPipelineStageFlags dstStageMask,
-                                  VkImageSubresourceRange subresourceRange)
-{
-    auto barrier = vkInits::imageMemoryBarrier(m_image, oldLayout, newLayout);
-    barrier.srcAccessMask = srcAccessMask;
-    barrier.dstAccessMask = dstAccessMask;
-    barrier.subresourceRange = subresourceRange;
-    vkCmdPipelineBarrier(cmd, srcStageMask, dstStageMask,
-                         0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-void Texture::setImageLayout(VkCommandBuffer cmd,
-                             VkImageLayout newLayout,
-                             VkPipelineStageFlags srcStage,
-                             VkPipelineStageFlags dstStage)
-{
-    auto imageBarrier = vkInits::imageMemoryBarrier(m_image, m_layout, newLayout);
-
-    switch (m_layout)
-    {
-    case VK_IMAGE_LAYOUT_UNDEFINED:
-        imageBarrier.srcAccessMask = VK_ACCESS_NONE;
-        break;
-    case VK_IMAGE_LAYOUT_PREINITIALIZED:
-        imageBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-        imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-        imageBarrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-        imageBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        break;
-    default:
-        break;
-    }
-
-    switch (newLayout)
-    {
-    case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-        imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-        imageBarrier.dstAccessMask = imageBarrier.dstAccessMask | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        break;
-    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-        if (imageBarrier.srcAccessMask == VK_ACCESS_NONE)
-            imageBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        break;
-    default:
-        break;
-    }
-
-    vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr,
-                         0, nullptr, 1, &imageBarrier);
-    m_layout = newLayout;
-}
-
 void Texture::updateDescriptor()
 {
-    descriptor.imageLayout = m_layout;
+    descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     descriptor.imageView = m_view;
     descriptor.sampler = m_sampler;
 }
@@ -104,7 +25,6 @@ CoreResult Texture2D::loadFromMemory(const VulkanDevice *device,
                                      size_t channels,
                                      const void *src)
 {
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     m_extent = extent;
     m_mipLevels = 1;
 
@@ -131,18 +51,23 @@ CoreResult Texture2D::loadFromMemory(const VulkanDevice *device,
 
     auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-    setImageLayout(command,
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+    vkTools::SetImageLayout(command,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            m_image);
 
     const auto copyRegion = vkInits::bufferImageCopy(m_extent);
-    vkCmdCopyBufferToImage(command, transfer.data, m_image, m_layout, 1, &copyRegion);
+    vkCmdCopyBufferToImage(command, transfer.data, m_image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    setImageLayout(command,
-                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                   VK_PIPELINE_STAGE_TRANSFER_BIT,
-                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    vkTools::SetImageLayout(command,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                            m_image);
 
     device->flushCommandBuffer(command, queue);
 
@@ -179,7 +104,6 @@ CoreResult Texture2D::loadAddMipMap(const VulkanDevice *device,
         return CoreResult::Format_Not_Supported;
 
     m_extent = extent;
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     m_mipLevels = 1 + uint32_t(std::floor(std::log2(max(m_extent.width, m_extent.height))));
 
     // Transfer buffer
@@ -217,27 +141,29 @@ CoreResult Texture2D::loadAddMipMap(const VulkanDevice *device,
     subResourceRange.layerCount = 1;
     subResourceRange.levelCount = 1;
 
-    insertMemoryBarrier(copyCmd,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        VK_ACCESS_NONE,
-                        VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        subResourceRange);
+    vkTools::InsertMemoryarrier(copyCmd,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_ACCESS_NONE,
+                                VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                subResourceRange,
+                                m_image);
 
     const auto copyRegion = vkInits::bufferImageCopy(m_extent);
     vkCmdCopyBufferToImage(copyCmd, transfer.data, m_image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    insertMemoryBarrier(copyCmd,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_ACCESS_TRANSFER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        subResourceRange);
+    vkTools::InsertMemoryarrier(copyCmd,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_ACCESS_TRANSFER_READ_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                subResourceRange,
+                                m_image);
 
     device->flushCommandBuffer(copyCmd, queue);
     transfer.destroy(device->device);
@@ -269,14 +195,14 @@ CoreResult Texture2D::loadAddMipMap(const VulkanDevice *device,
         dstSubRange.layerCount = 1;
         dstSubRange.levelCount = 1;
 
-        insertMemoryBarrier(blitCmd,
-                            VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_ACCESS_NONE,
-                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            dstSubRange);
+        vkTools::InsertMemoryarrier(blitCmd,
+                                    VK_IMAGE_LAYOUT_UNDEFINED,
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    VK_ACCESS_NONE,
+                                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    dstSubRange, m_image);
 
         vkCmdBlitImage(blitCmd,
                         m_image,
@@ -287,28 +213,28 @@ CoreResult Texture2D::loadAddMipMap(const VulkanDevice *device,
                         &blit,
                         VK_FILTER_LINEAR);
 
-        insertMemoryBarrier(blitCmd,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                            VK_ACCESS_TRANSFER_WRITE_BIT,
-                            VK_ACCESS_TRANSFER_READ_BIT,
-                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            VK_PIPELINE_STAGE_TRANSFER_BIT,
-                            dstSubRange);
+        vkTools::InsertMemoryarrier(blitCmd,
+                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                                    VK_ACCESS_TRANSFER_READ_BIT,
+                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                    dstSubRange, m_image);
     }
 
     subResourceRange.levelCount = m_mipLevels;
-    insertMemoryBarrier(blitCmd,
-                        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_ACCESS_TRANSFER_READ_BIT,
-                        VK_ACCESS_SHADER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        subResourceRange);
+
+    vkTools::InsertMemoryarrier(blitCmd,
+                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_ACCESS_TRANSFER_READ_BIT,
+                                VK_ACCESS_SHADER_READ_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                subResourceRange, m_image);
 
     device->flushCommandBuffer(blitCmd, queue);
-    m_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
     auto viewInfo = vkInits::imageViewCreateInfo();
     viewInfo.image = m_image;
@@ -357,7 +283,6 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
     auto src = TEX2D_DEFAULT;
     auto format = VK_FORMAT_R8G8B8A8_SRGB;
     m_extent = {1, 1};
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     m_mipLevels = 1;
 
     auto transferInfo = vkInits::bufferCreateInfo(sizeof(TEX2D_DEFAULT), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
@@ -382,18 +307,23 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
 
     auto command = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-    setImageLayout(command,
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                   VK_PIPELINE_STAGE_TRANSFER_BIT);
+    vkTools::SetImageLayout(command,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            m_image);
 
     const auto copyRegion = vkInits::bufferImageCopy(m_extent);
-    vkCmdCopyBufferToImage(command, transfer.data, m_image, m_layout, 1, &copyRegion);
+    vkCmdCopyBufferToImage(command, transfer.data, m_image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-    setImageLayout(command,
-                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                   VK_PIPELINE_STAGE_TRANSFER_BIT,
-                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+    vkTools::SetImageLayout(command,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_PIPELINE_STAGE_TRANSFER_BIT,
+                            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                            m_image);
 
     device->flushCommandBuffer(command, queue);
 
@@ -414,7 +344,6 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
 
 void TextureCubeMap::load(const VulkanDevice *device, VkQueue queue)
 {
-    m_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     m_mipLevels = 1;
 
     int x, y, channels;
@@ -483,28 +412,27 @@ void TextureCubeMap::load(const VulkanDevice *device, VkQueue queue)
     subResourceRange.layerCount = LAYER_COUNT;
     subResourceRange.levelCount = m_mipLevels;
 
-    insertMemoryBarrier(cmd,
-                        VK_IMAGE_LAYOUT_UNDEFINED,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        VK_ACCESS_NONE,
-                        VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        subResourceRange);
+    vkTools::InsertMemoryarrier(cmd,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_ACCESS_NONE,
+                                VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                subResourceRange, m_image);
 
     vkCmdCopyBufferToImage(cmd, transfer.data, m_image,
                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                           uint32_t(arraysize(bufferImageCopies)),
-                           bufferImageCopies);
+                           LAYER_COUNT, bufferImageCopies);
 
-    insertMemoryBarrier(cmd,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                        VK_ACCESS_TRANSFER_WRITE_BIT,
-                        VK_ACCESS_SHADER_READ_BIT,
-                        VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                        subResourceRange);
+    vkTools::InsertMemoryarrier(cmd,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_ACCESS_TRANSFER_WRITE_BIT,
+                                VK_ACCESS_SHADER_READ_BIT,
+                                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                subResourceRange, m_image);
 
     device->flushCommandBuffer(cmd, queue);
 
@@ -520,6 +448,5 @@ void TextureCubeMap::load(const VulkanDevice *device, VkQueue queue)
     viewInfo.subresourceRange = subResourceRange;
     vkCreateImageView(device->device, &viewInfo, nullptr, &m_view);
 
-    m_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     updateDescriptor();
 }

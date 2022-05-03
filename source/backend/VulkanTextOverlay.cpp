@@ -303,8 +303,7 @@ void VulkanTextOverlay::prepareDescriptors()
     // Sets
 
     VkDescriptorSetLayout layouts[MAX_IMAGES_IN_FLIGHT] = {};
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        layouts[i] = m_setLayout;
+    arrayfill(layouts, m_setLayout);
 
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);

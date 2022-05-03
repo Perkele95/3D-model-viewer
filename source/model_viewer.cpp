@@ -23,15 +23,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
     VulkanInstance::coreMessage = CoreMessageCallback;
     VulkanInstance::prepare();
 
-    generateBrdfLUT();
-
-    m_mainCamera.init();
-    m_lights.init();
-
-    buildUniformBuffers();
-    buildScene();
-    buildSkybox();
-    buildDescriptors();
+    loadResources();
 
     auto sb = StringbBuilder(100);
 
@@ -45,6 +37,15 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
     skybox.fragmentShader.load(device, sb.c_str());
 
     sb.destroy();
+
+    generateBrdfLUT();
+    generateIrradianceMap();
+
+    m_mainCamera.init();
+    m_lights.init();
+
+    buildUniformBuffers();
+    buildDescriptors();
 
     buildPipelines();
 
@@ -89,6 +90,11 @@ ModelViewer::~ModelViewer()
     vkDestroyImageView(device, brdf.view, nullptr);
     vkDestroyImage(device, brdf.image, nullptr);
     vkFreeMemory(device, brdf.memory, nullptr);
+
+    vkDestroySampler(device, irradiance.sampler, nullptr);
+    vkDestroyImageView(device, irradiance.view, nullptr);
+    vkDestroyImage(device, irradiance.image, nullptr);
+    vkFreeMemory(device, irradiance.memory, nullptr);
 
     m_overlay->destroy();
 
@@ -195,8 +201,8 @@ void ModelViewer::onScrollWheelEvent(double x, double y)
 
 void ModelViewer::generateBrdfLUT()
 {
-    const auto format = VK_FORMAT_R16G16_SFLOAT;
-    const uint32_t dimension = 512;
+    constexpr auto format = VK_FORMAT_R16G16_SFLOAT;
+    constexpr uint32_t dimension = 512;
 
     // Target texture
 
@@ -234,8 +240,7 @@ void ModelViewer::generateBrdfLUT()
     auto colourAttachment = vkInits::attachmentDescription(format);
     colourAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-    VkAttachmentReference colourAttachmentRef{};
-    colourAttachmentRef.attachment = 0;
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
     colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
@@ -354,7 +359,7 @@ void ModelViewer::generateBrdfLUT()
     VkPipeline brdfPipeline = VK_NULL_HANDLE;
     vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &brdfPipeline);
 
-    // Draw
+    // Render
 
     VkClearValue clearValue;
     clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
@@ -381,69 +386,439 @@ void ModelViewer::generateBrdfLUT()
     vkDestroyRenderPass(device, brdfRenderPass, nullptr);
 }
 
-void ModelViewer::generateIrradianceCube()
+void ModelViewer::generateIrradianceMap()
 {
-    // TODO
-}
+    // Constants
 
-void ModelViewer::buildScene()
-{
-    auto model = allocate<PBRModel>(1);
+    constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    constexpr uint32_t dimension = 32;
+    const auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(dimension))) + 1;
 
-    model->mesh.loadSphere(&device, graphicsQueue);
-    model->transform = mat4x4::identity();
+    // Irradiance texture
+    {
+        auto imageInfo = vkInits::imageCreateInfo();
+        imageInfo.format = format;
+        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.extent = {dimension, dimension, 1};
+        imageInfo.arrayLayers = 6;
+        imageInfo.mipLevels = mipLevels;
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+        vkCreateImage(device, &imageInfo, nullptr, &irradiance.image);
 
-    auto sb = StringbBuilder(100);
-    constexpr auto materialPath = view("materials/patterned-bw-vinyl-bl/");
+        VkMemoryRequirements memReqs{};
+        vkGetImageMemoryRequirements(device, irradiance.image, &memReqs);
 
-    sb << ASSETS_PATH << materialPath << view("albedo.png");
-    model->albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
+        auto allocInfo = device.getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+        vkAllocateMemory(device, &allocInfo, nullptr, &irradiance.memory);
+        vkBindImageMemory(device, irradiance.image, irradiance.memory, 0);
 
-    sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
-    model->normal.loadRGBA(&device, graphicsQueue, sb.c_str());
+        auto samplerInfo = vkInits::samplerCreateInfo();
+        samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+        vkCreateSampler(device, &samplerInfo, nullptr, &irradiance.sampler);
 
-    sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
-    model->roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
+        auto viewInfo = vkInits::imageViewCreateInfo();
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+        viewInfo.image = irradiance.image;
+        viewInfo.format = imageInfo.format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.levelCount = mipLevels;
+        viewInfo.subresourceRange.layerCount = 6;
+        vkCreateImageView(device, &viewInfo, nullptr, &irradiance.view);
 
-    sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
-    model->metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
+        irradiance.descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        irradiance.descriptor.imageView = irradiance.view;
+        irradiance.descriptor.sampler = irradiance.sampler;
+    }
 
-    sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
-    model->ao.loadRGBA(&device, graphicsQueue, sb.c_str());
+    // Render pass
 
-    sb.destroy();
+    auto colourAttachment = vkInits::attachmentDescription(format);
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-    scene.model = model;
-}
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
-void ModelViewer::buildSkybox()
-{
-    auto model = allocate<CubeMapModel>(1);
-    model->load(&device, graphicsQueue);
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colourAttachmentRef;
 
-    StringbBuilder sbs[] = {
-        StringbBuilder(100),
-        StringbBuilder(100),
-        StringbBuilder(100),
-        StringbBuilder(100),
-        StringbBuilder(100),
-        StringbBuilder(100)
+    VkSubpassDependency dependencies[2];
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colourAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+
+    VkRenderPass irradianceRenderpass = VK_NULL_HANDLE;
+    vkCreateRenderPass(device, &renderPassInfo, nullptr, &irradianceRenderpass);
+
+    // Offscreen framebuffer
+
+    struct
+    {
+        VkImage image;
+        VkImageView view;
+        VkDeviceMemory memory;
+        VkFramebuffer framebuffer;
+    }offscreen;
+
+    {
+        auto imageInfo = vkInits::imageCreateInfo();
+        imageInfo.format = format;
+        imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.extent = {dimension, dimension, 1};
+        imageInfo.arrayLayers = 1;
+        imageInfo.mipLevels = 1;
+        vkCreateImage(device, &imageInfo, nullptr, &offscreen.image);
+
+        VkMemoryRequirements memReqs{};
+        vkGetImageMemoryRequirements(device, offscreen.image, &memReqs);
+
+        auto allocInfo = device.getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+        vkAllocateMemory(device, &allocInfo, nullptr, &offscreen.memory);
+        vkBindImageMemory(device, offscreen.image, offscreen.memory, 0);
+
+        auto viewInfo = vkInits::imageViewCreateInfo();
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.image = offscreen.image;
+        viewInfo.format = imageInfo.format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.levelCount = 1;
+        viewInfo.subresourceRange.layerCount = 1;
+        vkCreateImageView(device, &viewInfo, nullptr, &offscreen.view);
+
+        auto framebufferInfo = vkInits::framebufferCreateInfo();
+        framebufferInfo.width = dimension;
+        framebufferInfo.height = dimension;
+        framebufferInfo.renderPass = irradianceRenderpass;
+        framebufferInfo.pAttachments = &offscreen.view;
+        framebufferInfo.attachmentCount = 1;
+        vkCreateFramebuffer(device, &framebufferInfo, nullptr, &offscreen.framebuffer);
+
+        auto cmd = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+        vkTools::SetImageLayout(cmd,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                offscreen.image);
+        device.flushCommandBuffer(cmd, graphicsQueue);
+    }
+
+    // Descriptors
+
+    constexpr auto descType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    const VkDescriptorPoolSize poolSizes[] = {
+        vkInits::descriptorPoolSize(descType, 1)
     };
 
-    constexpr auto skyboxPath = view("../../assets/skybox/");
+    const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, 1);
+    VkDescriptorPool irradianceDescriptorPool = VK_NULL_HANDLE;
+    vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &irradianceDescriptorPool);
 
-    model->map.filenames[0] = (sbs[0] << skyboxPath << "px.png").c_str();
-    model->map.filenames[1] = (sbs[1] << skyboxPath << "nx.png").c_str();
-    model->map.filenames[2] = (sbs[2] << skyboxPath << "py.png").c_str();
-    model->map.filenames[3] = (sbs[3] << skyboxPath << "ny.png").c_str();
-    model->map.filenames[4] = (sbs[4] << skyboxPath << "pz.png").c_str();
-    model->map.filenames[5] = (sbs[5] << skyboxPath << "nz.png").c_str();
-    model->map.load(&device, graphicsQueue);
+    const VkDescriptorSetLayoutBinding bindings[] = {
+        vkInits::descriptorSetLayoutBinding(0, descType, VK_SHADER_STAGE_FRAGMENT_BIT)
+    };
 
-    for (size_t i = 0; i < arraysize(sbs); i++)
-        sbs[i].destroy();
+    auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
+    VkDescriptorSetLayout irradianceSetLayout = VK_NULL_HANDLE;
+    vkCreateDescriptorSetLayout(device, &setLayoutInfo, nullptr, &irradianceSetLayout);
 
-    skybox.model = model;
+    VkDescriptorSetLayout setLayouts[]  = {irradianceSetLayout};
+
+    auto setAllocInfo = vkInits::descriptorSetAllocateInfo(irradianceDescriptorPool, setLayouts);
+    VkDescriptorSet irradianceDescriptorSet = VK_NULL_HANDLE;
+    vkAllocateDescriptorSets(device, &setAllocInfo, &irradianceDescriptorSet);
+
+    const VkWriteDescriptorSet writes[] = {
+        vkInits::writeDescriptorSet(0, descType, irradianceDescriptorSet, &skybox.model->map.descriptor)
+    };
+
+    vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
+
+    // Shaders
+
+    auto sb = StringbBuilder(100);
+    sb << SHADERS_PATH << view("irradiance_frag.spv");
+
+    FragmentShader irradianceFragmentShader;
+    irradianceFragmentShader.load(device, sb.c_str());
+    sb.destroy();
+
+    const VkPipelineShaderStageCreateInfo shaderStages[] = {
+        skybox.vertexShader.shaderStage(), irradianceFragmentShader.shaderStage()
+    };
+
+    // Pipeline
+
+    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(vec3<float>));
+
+    VkVertexInputAttributeDescription attributes[] = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0}
+    };
+
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = attributes;
+
+    auto inputAssembly = vkInits::inputAssemblyInfo();
+    auto viewportState = vkInits::pipelineViewportStateCreateInfo(1, 1);
+    auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+    auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
+    auto depthStencil = vkInits::depthStencilStateInfo();
+    auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
+    auto colourBlend = vkInits::pipelineColorBlendStateCreateInfo();
+    colourBlend.attachmentCount = 1;
+    colourBlend.pAttachments = &colorBlendAttachment;
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+    auto dynamicStateInfo = vkInits::pipelineDynamicStateCreateInfo();
+    dynamicStateInfo.pDynamicStates = dynamicStates;
+    dynamicStateInfo.dynamicStateCount = uint32_t(arraysize(dynamicStates));
+
+    const auto pushConstant = vkInits::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 2 * sizeof(mat4x4));
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.pSetLayouts = &irradianceSetLayout;
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+
+    VkPipelineLayout irradiancePipelineLayout = VK_NULL_HANDLE;
+    vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &irradiancePipelineLayout);
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = uint32_t(arraysize(shaderStages));
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssembly;
+    pipelineInfo.pViewportState = &viewportState;
+    pipelineInfo.pRasterizationState = &rasterizer;
+    pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
+    pipelineInfo.pColorBlendState = &colourBlend;
+    pipelineInfo.layout = irradiancePipelineLayout;
+    pipelineInfo.pDynamicState = &dynamicStateInfo;
+    pipelineInfo.renderPass = irradianceRenderpass;
+
+    VkPipeline irradiancePipeline = VK_NULL_HANDLE;
+    vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &irradiancePipeline);
+
+    // Render
+
+    VkClearValue clearValue;
+    clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(irradianceRenderpass, {dimension, dimension});
+    renderBeginInfo.framebuffer = offscreen.framebuffer;
+    renderBeginInfo.clearValueCount = 1;
+    renderBeginInfo.pClearValues = &clearValue;
+
+    const mat4x4 viewMatrices[] = {
+        mat4x4::lookAt(vec3(0.0f), vec3(1.0f, 0.0f, 0.0f), Camera::GLOBAL_UP),
+        mat4x4::lookAt(vec3(0.0f), vec3(-1.0f, 0.0f, 0.0f), Camera::GLOBAL_UP),
+        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 1.0f, 0.0f), Camera::GLOBAL_UP),
+        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, -1.0f, 0.0f), Camera::GLOBAL_UP),
+        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 0.0f, 1.0f), Camera::GLOBAL_UP),
+        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 0.0f, -1.0f), Camera::GLOBAL_UP)
+    };
+
+    auto cmd = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+    auto viewport = vkInits::viewportInfo({dimension, dimension});
+    auto scissor = vkInits::scissorInfo({dimension, dimension});
+
+    vkCmdSetViewport(cmd, 0, 1, &viewport);
+    vkCmdSetScissor(cmd, 0, 1, &scissor);
+
+    VkImageSubresourceRange subresourceRange{};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    subresourceRange.levelCount = mipLevels;
+    subresourceRange.layerCount = 6;
+
+    vkTools::SetImageLayout(cmd,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            irradiance.image,
+                            subresourceRange);
+
+    for (uint32_t level = 0; level < mipLevels; level++)
+    {
+        for (uint32_t i = 0; i < 6; i++)
+        {
+            viewport.width = float(dimension * std::pow(0.5f, level));
+            viewport.height = float(dimension * std::pow(0.5f, level));
+            vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+            vkCmdBeginRenderPass(cmd, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+            alignas(16) mat4x4 pushBlock[] = {
+                viewMatrices[i],
+                mat4x4::perspective(PI32 / 2, 1.0f, Camera::DEFAULT_ZNEAR, Camera::DEFAULT_ZFAR)
+            };
+
+            vkCmdPushConstants(cmd, irradiancePipelineLayout,
+                               pushConstant.stageFlags,
+                               pushConstant.offset,
+                               pushConstant.size,
+                               &pushBlock);
+
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, irradiancePipeline);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    irradiancePipelineLayout, 0, 1,
+                                    &irradianceDescriptorSet, 0, nullptr);
+
+            skybox.model->draw(cmd);
+
+            vkCmdEndRenderPass(cmd);
+
+            vkTools::SetImageLayout(cmd,
+                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    offscreen.image);
+
+            VkImageCopy copyRegion{};
+            copyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.srcSubresource.baseArrayLayer = 0;
+            copyRegion.srcSubresource.layerCount = 1;
+            copyRegion.srcSubresource.mipLevel = 0;
+            copyRegion.srcOffset = {};
+
+            copyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copyRegion.dstSubresource.baseArrayLayer = i;
+            copyRegion.dstSubresource.layerCount = 1;
+            copyRegion.dstSubresource.mipLevel = level;
+            copyRegion.dstOffset = {};
+
+            copyRegion.extent.width = uint32_t(viewport.width);
+            copyRegion.extent.height = uint32_t(viewport.height);
+            copyRegion.extent.depth = 1;
+
+            vkCmdCopyImage(cmd, offscreen.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           irradiance.image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &copyRegion);
+
+            vkTools::SetImageLayout(cmd,
+                                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                    VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                    offscreen.image);
+        }
+    }
+
+    vkTools::SetImageLayout(cmd,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            irradiance.image, subresourceRange);
+
+    device.flushCommandBuffer(cmd, graphicsQueue);
+
+    vkDestroyRenderPass(device, irradianceRenderpass, nullptr);
+    vkDestroyFramebuffer(device, offscreen.framebuffer, nullptr);
+    vkFreeMemory(device, offscreen.memory, nullptr);
+    vkDestroyImageView(device, offscreen.view, nullptr);
+    vkDestroyImage(device, offscreen.image, nullptr);
+    vkDestroyDescriptorPool(device, irradianceDescriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(device, irradianceSetLayout, nullptr);
+    vkDestroyPipeline(device, irradiancePipeline, nullptr);
+    vkDestroyPipelineLayout(device, irradiancePipelineLayout, nullptr);
+    irradianceFragmentShader.destroy(device);
+}
+
+void ModelViewer::loadResources()
+{
+    // Object
+    {
+        scene.model = allocate<PBRModel>(1);
+
+        scene.model->mesh.loadSphere(&device, graphicsQueue);
+        scene.model->transform = mat4x4::identity();
+
+        auto sb = StringbBuilder(100);
+        constexpr auto materialPath = view("materials/patterned-bw-vinyl-bl/");
+
+        sb << ASSETS_PATH << materialPath << view("albedo.png");
+        scene.model->albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
+
+        sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
+        scene.model->normal.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+        sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
+        scene.model->roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+        sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
+        scene.model->metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+        sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
+        scene.model->ao.loadRGBA(&device, graphicsQueue, sb.c_str());
+
+        sb.destroy();
+    }
+
+    // Skybox
+    {
+        skybox.model = allocate<CubeMapModel>(1);
+        skybox.model->load(&device, graphicsQueue);
+
+        StringbBuilder sbs[] = {
+            StringbBuilder(100),
+            StringbBuilder(100),
+            StringbBuilder(100),
+            StringbBuilder(100),
+            StringbBuilder(100),
+            StringbBuilder(100)
+        };
+
+        constexpr auto skyboxPath = view("../../assets/skybox/");
+
+        skybox.model->map.filenames[0] = (sbs[0] << skyboxPath << view("px.png")).c_str();
+        skybox.model->map.filenames[1] = (sbs[1] << skyboxPath << view("nx.png")).c_str();
+        skybox.model->map.filenames[2] = (sbs[2] << skyboxPath << view("py.png")).c_str();
+        skybox.model->map.filenames[3] = (sbs[3] << skyboxPath << view("ny.png")).c_str();
+        skybox.model->map.filenames[4] = (sbs[4] << skyboxPath << view("pz.png")).c_str();
+        skybox.model->map.filenames[5] = (sbs[5] << skyboxPath << view("nz.png")).c_str();
+        skybox.model->map.load(&device, graphicsQueue);
+
+        for (size_t i = 0; i < arraysize(sbs); i++)
+            sbs[i].destroy();
+    }
 }
 
 void ModelViewer::buildUniformBuffers()
@@ -470,9 +845,7 @@ void ModelViewer::buildDescriptors()
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_IMAGES_IN_FLIGHT)
     };
 
-    size_t maxSets = 0;
-    for (size_t i = 0; i < arraysize(poolSizes); i++)
-        maxSets += poolSizes[i].descriptorCount;
+    auto maxSets = vkTools::descriptorPoolMaxSets(poolSizes);
 
     const auto descriptorPoolInfo = vkInits::descriptorPoolCreateInfo(poolSizes, maxSets);
     vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &m_descriptorPool);

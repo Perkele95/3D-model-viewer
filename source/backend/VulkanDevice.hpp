@@ -2,6 +2,7 @@
 
 #include "../base.hpp"
 #include "vulkan_initialisers.hpp"
+#include "VulkanTools.hpp"
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
 

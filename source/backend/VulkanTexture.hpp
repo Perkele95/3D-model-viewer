@@ -11,21 +11,8 @@ public:
     void destroy(VkDevice device);
 
     VkDescriptorImageInfo descriptor;
+
 protected:
-    void insertMemoryBarrier(VkCommandBuffer cmd,
-                             VkImageLayout oldLayout,
-                             VkImageLayout newLayout,
-                             VkAccessFlags srcAccessMask,
-                             VkAccessFlags dstAccessMask,
-                             VkPipelineStageFlags srcStageMask,
-                             VkPipelineStageFlags dstStageMask,
-                             VkImageSubresourceRange subresourceRange);
-
-    void setImageLayout(VkCommandBuffer cmd,
-                        VkImageLayout newLayout,
-                        VkPipelineStageFlags srcStage,
-                        VkPipelineStageFlags dstStage);
-
     void updateDescriptor();
 
     VkImage         m_image;
@@ -34,7 +21,6 @@ protected:
     VkExtent2D      m_extent;
     VkSampler       m_sampler;
 	uint32_t        m_mipLevels;
-	VkImageLayout   m_layout;
 };
 
 class Texture2D : public Texture

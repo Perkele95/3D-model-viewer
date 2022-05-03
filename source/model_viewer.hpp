@@ -72,11 +72,10 @@ private:
     // Pre-generated pbr textures
 
     void generateBrdfLUT();
-    void generateIrradianceCube();
+    void generateIrradianceMap();
     void generatePrefilteredCube();
 
-    void buildScene();
-    void buildSkybox();
+    void loadResources();
     void buildUniformBuffers();
     void buildDescriptors();
     void buildPipelines(); // TODO(arle): split into pipeline & layout
@@ -94,17 +93,16 @@ private:
     SceneLights             m_lights;
     VkDescriptorPool        m_descriptorPool;
 
-    struct BRDF
+    struct PreGenerated
     {
         VkImage                 image;
         VkImageView             view;
         VkDeviceMemory          memory;
         VkSampler               sampler;
         VkDescriptorImageInfo   descriptor;
-    }brdf;
+    }brdf, irradiance;
 
-    TextureCubeMap              irradiance;
-
+    // TODO(arle): separate models and textures away from structs
     struct Scene
     {
         VkPipeline              pipeline;

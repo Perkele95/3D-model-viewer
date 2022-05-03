@@ -115,6 +115,12 @@ inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, T value)
     return a;
 }
 
+template<typename T>
+inline vec2<T> VECTOR_API operator-(vec2<T> a)
+{
+    return vec2(-a.x, -a.y);
+}
+
 // vec3
 
 template<typename T>
@@ -238,6 +244,12 @@ inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, T value)
     return a;
 }
 
+template<typename T>
+inline vec3<T> VECTOR_API operator-(vec3<T> a)
+{
+    return vec3(-a.x, -a.y, -a.z);
+}
+
 // vec4
 
 template<typename T>
@@ -356,4 +368,10 @@ inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, T value)
     a.z /= value;
     a.w /= value;
     return a;
+}
+
+template<typename T>
+inline vec4<T> VECTOR_API operator-(vec4<T> a)
+{
+    return vec4(-a.x, -a.y, -a.z, -a.w);
 }
