@@ -6,14 +6,14 @@ void Camera::init()
     this->sensitivity = 2.0f;
     m_zNear = DEFAULT_ZNEAR;
     m_zFar = DEFAULT_ZFAR;
-    m_position = vec3(0.0f, 0.0f, -5.0f);
+    m_position = vec3(0.0f, 0.0f, -4.0f);
     m_yaw = DEFAULT_YAW;
     m_pitch = 0.0f;
-    updateVectors();
 }
 
 void Camera::update(float dt, float aspectRatio)
 {
+
     const auto speed = sensitivity * dt;
     if(controls.rotateUp)
         m_pitch += speed;
@@ -37,7 +37,7 @@ void Camera::update(float dt, float aspectRatio)
 
     updateVectors();
 
-    m_view = mat4x4::lookAt(m_position, m_position + m_front, m_up);
+    m_view = mat4x4::lookAt2(m_position + m_front, m_front, m_right, m_up);
     m_proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
 }
 
@@ -74,7 +74,7 @@ void Camera::updateVectors()
     const auto pitchCosine = std::cos(m_pitch);
     const auto pitchSine = std::sin(m_pitch);
 
-    m_front = vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine).normalise();
-    m_right = (m_front.crossProduct(GLOBAL_UP)).normalise();
-    m_up = (m_right.crossProduct(m_front)).normalise();
+    m_front = normalise(vec3(yawCosine * pitchCosine, pitchSine, yawSine * pitchCosine));
+    m_right = normalise(cross(m_front, GLOBAL_UP));
+    m_up = normalise(cross(m_right, m_front));
 }

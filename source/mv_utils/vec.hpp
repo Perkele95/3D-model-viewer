@@ -30,32 +30,6 @@ struct vec2
         return (this->x != other.x && this->y != other.y);
     }
 
-    float length() const
-    {
-        auto result = sqrtf(float(this->x) * float(this->x) + float(this->y) * float(this->y));
-        return result;
-    }
-
-    float lengthSquared() const
-    {
-        auto result = float(this->x) * float(this->x) + float(this->y) * float(this->y);
-        return result;
-    }
-
-    vec2<T> normalise()
-    {
-        const auto length = this->length();
-        this->x = T(float(this->x) / length);
-        this->y = T(float(this->y) / length);
-        return *this;
-    }
-
-    float dotProduct(vec2<T> other) const
-    {
-        auto result = float(this->x) * float(other.x) + float(this->y) * float(other.y);
-        return result;
-    }
-
     T x, y;
 };
 
@@ -139,46 +113,6 @@ struct vec3
     constexpr bool operator!=(vec3<T> other) const
     {
         return (this->x != other.x && this->y != other.y && this->z != other.z);
-    }
-
-    float length() const
-    {
-        auto result = sqrtf(float(this->x) * float(this->x) + float(this->y) * float(this->y) +
-                            float(this->z) * float(this->z));
-        return result;
-    }
-
-    float lengthSquared() const
-    {
-        auto result = float(this->x) * float(this->x) + float(this->y) * float(this->y) +
-                      float(this->z) * float(this->z);
-        return result;
-    }
-
-    vec3<T> normalise()
-    {
-        const auto length = this->length();
-        this->x = T(float(this->x) / length);
-        this->y = T(float(this->y) / length);
-        this->z = T(float(this->z) / length);
-        return *this;
-    }
-
-    float VECTOR_API dotProduct(vec3<T> other) const
-    {
-        auto result = float(this->x) * float(other.x) + float(this->y) * float(other.y) +
-                      float(this->z) * float(other.z);
-        return result;
-    }
-
-    vec3<T> VECTOR_API crossProduct(vec3<T> other) const
-    {
-        auto result = vec3(
-            this->y * other.z - this->z * other.y,
-            this->z * other.x - this->x * other.z,
-            this->x * other.y - this->y * other.x
-        );
-        return result;
     }
 
     T x, y, z;
@@ -272,37 +206,6 @@ struct vec4
                 this->z != other.z && this->w != other.w);
     }
 
-    float length() const
-    {
-        auto result = sqrtf(float(this->x) * float(this->x) + float(this->y) * float(this->y) +
-                            float(this->z) * float(this->z) + float(this->w) * float(this->w));
-        return result;
-    }
-
-    float lengthSquared() const
-    {
-        auto result = float(this->x) * float(this->x) + float(this->y) * float(this->y) +
-                      float(this->z) * float(this->z) + float(this->w) * float(this->w);
-        return result;
-    }
-
-    vec4<T> normalise()
-    {
-        const auto length = this->length();
-        this->x = T(float(this->x) / length);
-        this->y = T(float(this->y) / length);
-        this->z = T(float(this->z) / length);
-        this->w = T(float(this->w) / length);
-        return *this;
-    }
-
-    float dotProduct(vec4<T> other) const
-    {
-        auto result = float(this->x) * float(other.x) + float(this->y) * float(other.y) +
-                      float(this->z) * float(other.z) + float(this->w) * float(other.w);
-        return result;
-    }
-
     T x, y, z, w;
 };
 
@@ -374,4 +277,120 @@ template<typename T>
 inline vec4<T> VECTOR_API operator-(vec4<T> a)
 {
     return vec4(-a.x, -a.y, -a.z, -a.w);
+}
+
+// Float & double specific functions
+
+inline float VECTOR_API length(vec2<float> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y);
+}
+
+inline double VECTOR_API length(vec2<double> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y);
+}
+
+inline float VECTOR_API length(vec3<float> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+}
+
+inline double VECTOR_API length(vec3<double> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y) + a.z * a.z;
+}
+
+inline float VECTOR_API length(vec4<float> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y + a.z * a.z + a.w * a.w);
+}
+
+inline double VECTOR_API length(vec4<double> a)
+{
+    return std::sqrt(a.x * a.x + a.y * a.y) + a.z * a.z + a.w * a.w;
+}
+
+inline vec2<float> VECTOR_API normalise(vec2<float> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    return a;
+}
+
+inline vec2<double> VECTOR_API normalise(vec2<double> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    return a;
+}
+
+inline vec3<float> VECTOR_API normalise(vec3<float> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    a.z /= len;
+    return a;
+}
+
+inline vec3<double> VECTOR_API normalise(vec3<double> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    a.z /= len;
+    return a;
+}
+
+inline vec4<float> VECTOR_API normalise(vec4<float> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    a.z /= len;
+    a.w /= len;
+    return a;
+}
+
+inline vec4<double> VECTOR_API normalise(vec4<double> a)
+{
+    const auto len = length(a);
+    a.x /= len;
+    a.y /= len;
+    a.z /= len;
+    a.w /= len;
+    return a;
+}
+
+inline float VECTOR_API dot(vec3<float> a, vec3<float> b)
+{
+    return (a.x * b.x + a.y * b.y + a.z * b.z);
+}
+
+inline double VECTOR_API dot(vec3<double> a, vec3<double> b)
+{
+    return (a.x * b.x + a.y * b.y + a.z * b.z);
+}
+
+inline vec3<float> VECTOR_API cross(vec3<float> a, vec3<float> b)
+{
+    auto result = vec3(
+        (a.y * b.z) - (a.z * b.y),
+        (a.z * b.x) - (a.x * b.z),
+        (a.x * b.y) - (a.y * b.x)
+    );
+    return result;
+}
+
+inline vec3<double> VECTOR_API cross(vec3<double> a, vec3<double> b)
+{
+    auto result = vec3(
+        (a.y * b.z) - (a.z * b.y),
+        (a.z * b.x) - (a.x * b.z),
+        (a.x * b.y) - (a.y * b.x)
+    );
+    return result;
 }

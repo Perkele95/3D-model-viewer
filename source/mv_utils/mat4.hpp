@@ -5,6 +5,9 @@
 
 // NOTE(arle): Translate - Rotate - Scale
 
+struct mat4x4;
+constexpr mat4x4 VECTOR_API operator*(mat4x4 a, mat4x4 b);
+
 struct mat4x4
 {
     mat4x4() = default;
@@ -92,27 +95,44 @@ struct mat4x4
 
     static mat4x4 VECTOR_API lookAt(vec3<float> eye, vec3<float> centre, vec3<float> up)
     {
-        auto Z = vec3(eye - centre).normalise();
-        auto X = up.crossProduct(Z).normalise();
-        auto Y = Z.crossProduct(X).normalise();
+        auto f = normalise(centre - eye);
+        auto s = normalise(cross(f, up));
+        auto u = cross(s, f);
 
-        auto translation = eye - Z;
+        eye += f;
 
         auto result = mat4x4::identity();
-        result.data[0][0] = X.x;
-        result.data[1][0] = X.y;
-        result.data[2][0] = X.z;
-        result.data[3][0] = -X.dotProduct(translation);
+        result(0, 0) = s.x;
+        result(1, 0) = s.y;
+        result(2, 0) = s.z;
+        result(3, 0) = -dot(s, eye);
+        result(0, 1) = u.x;
+        result(1, 1) = u.y;
+        result(2, 1) = u.z;
+        result(3, 1) = -dot(u, eye);
+        result(0, 2) = f.x;
+        result(1, 2) = f.y;
+        result(2, 2) = f.z;
+        result(3, 2) = dot(f, eye);
+        return result;
+    }
 
-        result.data[0][1] = Y.x;
-        result.data[1][1] = Y.y;
-        result.data[2][1] = Y.z;
-        result.data[3][1] = -Y.dotProduct(translation);
-
-        result.data[0][2] = Z.x;
-        result.data[1][2] = Z.y;
-        result.data[2][2] = Z.z;
-        result.data[3][2] = -Z.dotProduct(translation);
+    static mat4x4 VECTOR_API lookAt2(vec3<float> centre, vec3<float> forward,
+                                     vec3<float> right, vec3<float> up)
+    {
+        auto result = mat4x4::identity();
+        result(0, 0) = right.x;
+        result(1, 0) = right.y;
+        result(2, 0) = right.z;
+        result(3, 0) = -dot(right, centre);
+        result(0, 1) = up.x;
+        result(1, 1) = up.y;
+        result(2, 1) = up.z;
+        result(3, 1) = -dot(up, centre);
+        result(0, 2) = -forward.x;
+        result(1, 2) = -forward.y;
+        result(2, 2) = -forward.z;
+        result(3, 2) = dot(forward, centre);
         return result;
     }
 
