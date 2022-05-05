@@ -2,6 +2,7 @@
 
 #include "../base.hpp"
 #include "vulkan_initialisers.hpp"
+#include "VulkanBuffer.hpp"
 #include "VulkanTools.hpp"
 
 constexpr size_t MAX_IMAGES_IN_FLIGHT = 2;
@@ -52,6 +53,12 @@ public:
     VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
     VkCommandBuffer createCommandBuffer(VkCommandBufferLevel level, bool begin = true) const;
     void flushCommandBuffer(VkCommandBuffer command, VkQueue queue, bool free = true) const;
+
+    VkResult createBuffer(VkBufferUsageFlags usage,
+                          VkMemoryPropertyFlags memFlags,
+                          VkDeviceSize size,
+                          VulkanBuffer &buffer,
+                          const void *src = nullptr) const;
 
     // ~Tools
 

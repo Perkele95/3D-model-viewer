@@ -3,11 +3,11 @@
 #include "base.hpp"
 #include "backend/VulkanInstance.hpp"
 #include "backend/VulkanTextOverlay.hpp"
+#include "backend/VulkanModels.hpp"
 
 #include "backend/shader.hpp"
 #include "backend/camera.hpp"
 #include "backend/lights.hpp"
-#include "backend/model3D.hpp"
 
 template<typename T>
 class EventDispatcher
@@ -93,6 +93,22 @@ private:
     SceneLights             m_lights;
     VkDescriptorPool        m_descriptorPool;
 
+    struct ModelAssets
+    {
+        Model3D                 object;
+        CubemapModel            skybox;
+    }models;
+
+    struct TextureAssets
+    {
+        Texture2D               albedo;
+        Texture2D               normal;
+        Texture2D               roughness;
+        Texture2D               metallic;
+        Texture2D               ao;
+        TextureCubeMap          skybox;
+    }textures;
+
     struct PreGenerated
     {
         VkImage                 image;
@@ -102,7 +118,6 @@ private:
         VkDescriptorImageInfo   descriptor;
     }brdf, irradiance;
 
-    // TODO(arle): separate models and textures away from structs
     struct Scene
     {
         VkPipeline              pipeline;
@@ -113,7 +128,6 @@ private:
         VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
         VulkanBuffer            cameraBuffers[MAX_IMAGES_IN_FLIGHT];
         VulkanBuffer            lightBuffers[MAX_IMAGES_IN_FLIGHT];
-        PBRModel*               model;
     }scene;
 
     struct Skybox
@@ -124,6 +138,5 @@ private:
         FragmentShader          fragmentShader;
         VkDescriptorSetLayout   setLayout;
         VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
-        CubeMapModel*           model;
     }skybox;
 };

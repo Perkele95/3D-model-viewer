@@ -1,7 +1,7 @@
 #pragma once
 
 #include "vulkan_initialisers.hpp"
-#include "buffer.hpp"
+#include "VulkanDevice.hpp"
 
 constexpr uint8_t TEX2D_DEFAULT[] = {255, 0, 225, 255};
 
@@ -54,7 +54,6 @@ class TextureCubeMap : public Texture
 public:
     static constexpr size_t LAYER_COUNT = 6;
 
-    void load(const VulkanDevice* device, VkQueue queue);
-
-    const char *filenames[LAYER_COUNT];
+    void load(const VulkanDevice* device,VkQueue queue,
+              const char *(&files)[LAYER_COUNT]);
 };

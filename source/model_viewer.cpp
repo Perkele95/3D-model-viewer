@@ -103,14 +103,21 @@ ModelViewer::~ModelViewer()
     vkDestroyDescriptorSetLayout(device, skybox.setLayout, nullptr);
     skybox.vertexShader.destroy(device);
     skybox.fragmentShader.destroy(device);
-    skybox.model->destroy(device);
 
     vkDestroyPipeline(device, scene.pipeline, nullptr);
     vkDestroyPipelineLayout(device, scene.pipelineLayout, nullptr);
     vkDestroyDescriptorSetLayout(device, scene.setLayout, nullptr);
     scene.vertexShader.destroy(device);
     scene.fragmentShader.destroy(device);
-    scene.model->destroy(device);
+
+    textures.albedo.destroy(device);
+    textures.normal.destroy(device);
+    textures.roughness.destroy(device);
+    textures.metallic.destroy(device);
+    textures.ao.destroy(device);
+    textures.skybox.destroy(device);
+    models.skybox.destroy(device);
+    models.object.destroy(device);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
@@ -554,7 +561,7 @@ void ModelViewer::generateIrradianceMap()
     vkAllocateDescriptorSets(device, &setAllocInfo, &irradianceDescriptorSet);
 
     const VkWriteDescriptorSet writes[] = {
-        vkInits::writeDescriptorSet(0, descType, irradianceDescriptorSet, &skybox.model->map.descriptor)
+        vkInits::writeDescriptorSet(0, descType, irradianceDescriptorSet, &textures.skybox.descriptor)
     };
 
     vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -698,7 +705,7 @@ void ModelViewer::generateIrradianceMap()
                                     irradiancePipelineLayout, 0, 1,
                                     &irradianceDescriptorSet, 0, nullptr);
 
-            skybox.model->draw(cmd);
+            models.skybox.draw(cmd);
 
             vkCmdEndRenderPass(cmd);
 
@@ -766,36 +773,33 @@ void ModelViewer::loadResources()
 {
     // Object
     {
-        scene.model = allocate<PBRModel>(1);
-
-        scene.model->mesh.loadSphere(&device, graphicsQueue);
-        scene.model->transform = mat4x4::identity();
+        models.object.loadSpherePrimitive(&device, graphicsQueue);
+        models.object.transform = mat4x4::identity();
 
         auto sb = StringbBuilder(100);
         constexpr auto materialPath = view("materials/patterned-bw-vinyl-bl/");
 
         sb << ASSETS_PATH << materialPath << view("albedo.png");
-        scene.model->albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
+        textures.albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
 
         sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
-        scene.model->normal.loadRGBA(&device, graphicsQueue, sb.c_str());
+        textures.normal.loadRGBA(&device, graphicsQueue, sb.c_str());
 
         sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
-        scene.model->roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
+        textures.roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
 
         sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
-        scene.model->metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
+        textures.metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
 
         sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
-        scene.model->ao.loadRGBA(&device, graphicsQueue, sb.c_str());
+        textures.ao.loadRGBA(&device, graphicsQueue, sb.c_str());
 
         sb.destroy();
     }
 
     // Skybox
     {
-        skybox.model = allocate<CubeMapModel>(1);
-        skybox.model->load(&device, graphicsQueue);
+        models.skybox.load(&device, graphicsQueue);
 
         StringbBuilder sbs[] = {
             StringbBuilder(100),
@@ -808,13 +812,15 @@ void ModelViewer::loadResources()
 
         constexpr auto skyboxPath = view("../../assets/skybox/");
 
-        skybox.model->map.filenames[0] = (sbs[0] << skyboxPath << view("px.png")).c_str();
-        skybox.model->map.filenames[1] = (sbs[1] << skyboxPath << view("nx.png")).c_str();
-        skybox.model->map.filenames[2] = (sbs[2] << skyboxPath << view("py.png")).c_str();
-        skybox.model->map.filenames[3] = (sbs[3] << skyboxPath << view("ny.png")).c_str();
-        skybox.model->map.filenames[4] = (sbs[4] << skyboxPath << view("pz.png")).c_str();
-        skybox.model->map.filenames[5] = (sbs[5] << skyboxPath << view("nz.png")).c_str();
-        skybox.model->map.load(&device, graphicsQueue);
+        const char *files[] = {
+            (sbs[0] << skyboxPath << view("px.png")).c_str(),
+            (sbs[1] << skyboxPath << view("nx.png")).c_str(),
+            (sbs[2] << skyboxPath << view("py.png")).c_str(),
+            (sbs[3] << skyboxPath << view("ny.png")).c_str(),
+            (sbs[4] << skyboxPath << view("pz.png")).c_str(),
+            (sbs[5] << skyboxPath << view("nz.png")).c_str()
+        };
+        textures.skybox.load(&device, graphicsQueue, files);
 
         for (size_t i = 0; i < arraysize(sbs); i++)
             sbs[i].destroy();
@@ -823,13 +829,12 @@ void ModelViewer::loadResources()
 
 void ModelViewer::buildUniformBuffers()
 {
-    const auto cameraInfo = vkInits::bufferCreateInfo(sizeof(mvp_matrix), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    const auto lightsInfo = vkInits::bufferCreateInfo(sizeof(LightData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        scene.cameraBuffers[i].create(&device, &cameraInfo, MEM_FLAG_HOST_VISIBLE);
-        scene.lightBuffers[i].create(&device, &lightsInfo, MEM_FLAG_HOST_VISIBLE);
+        device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
+                            sizeof(mvp_matrix), scene.cameraBuffers[i]);
+        device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
+                            sizeof(mvp_matrix), scene.lightBuffers[i]);
     }
 
     updateCamera(0.0f);
@@ -874,18 +879,15 @@ void ModelViewer::buildDescriptors()
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
-        const auto cameraInfo = scene.cameraBuffers[i].descriptor();
-        const auto lightsInfo = scene.lightBuffers[i].descriptor();
-
         auto &setRef = scene.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &cameraInfo),
-            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &lightsInfo),
-            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->albedo.descriptor),
-            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->normal.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->roughness.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->metallic.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &scene.model->ao.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &scene.cameraBuffers[i].descriptor),
+            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &scene.lightBuffers[i].descriptor),
+            vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.albedo.descriptor),
+            vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.normal.descriptor),
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.roughness.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.metallic.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.ao.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -909,7 +911,7 @@ void ModelViewer::buildDescriptors()
     {
         auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &skybox.model->map.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.skybox.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -922,14 +924,14 @@ void ModelViewer::buildPipelines()
         scene.vertexShader.shaderStage(), scene.fragmentShader.shaderStage()
     };
 
-    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(MeshVertex));
+    auto bindingDescription = vkInits::vertexBindingDescription(sizeof(Model3D::Vertex));
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(Mesh3D::Attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = Mesh3D::Attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(Model3D::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = Model3D::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewport = vkInits::viewportInfo(extent);
@@ -951,9 +953,7 @@ void ModelViewer::buildPipelines()
     colourBlend.attachmentCount = 1;
     colourBlend.pAttachments = &colorBlendAttachment;
 
-    const VkPushConstantRange pushConstants[] = {
-        PBRModel::pushConstant()
-    };
+    const VkPushConstantRange pushConstants[] = {Model3D::pushConstant()};
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -983,10 +983,10 @@ void ModelViewer::buildPipelines()
     shaderStages[0] = skybox.vertexShader.shaderStage();
     shaderStages[1] = skybox.fragmentShader.shaderStage();
 
-    bindingDescription.stride = sizeof(CubeMapVertex);
+    bindingDescription.stride = sizeof(CubemapModel::Vertex);
 
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(CubeMapModel::Attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = CubeMapModel::Attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(CubemapModel::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = CubemapModel::Attributes;
 
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     depthStencil.depthTestEnable = VK_FALSE;
@@ -1017,14 +1017,22 @@ void ModelViewer::updateCamera(float dt)
 
     const auto ubo = m_mainCamera.getModelViewProjection();
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        scene.cameraBuffers[i].fill(device, &ubo);
+    {
+        scene.cameraBuffers[i].map(device);
+        *static_cast<mvp_matrix*>(scene.cameraBuffers[i].mapped) = ubo;
+        scene.cameraBuffers[i].unmap(device);
+    }
 }
 
 void ModelViewer::updateLights()
 {
     const auto ubo = m_lights.getData();
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-        scene.lightBuffers[i].fill(device, &ubo);
+    {
+        scene.lightBuffers[i].map(device);
+        *static_cast<LightData*>(scene.lightBuffers[i].mapped) = ubo;
+        scene.lightBuffers[i].unmap(device);
+    }
 }
 
 void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
@@ -1044,33 +1052,40 @@ void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)
     renderBeginInfo.framebuffer = framebuffers[imageIndex];
     vkCmdBeginRenderPass(cmdBuffer, &renderBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipeline);
-    vkCmdBindDescriptorSets(cmdBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            skybox.pipelineLayout,
-                            0,
-                            1,
-                            &skybox.descriptorSets[currentFrame],
-                            0,
-                            nullptr);
+    {
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skybox.pipeline);
+        vkCmdBindDescriptorSets(cmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                skybox.pipelineLayout,
+                                0,
+                                1,
+                                &skybox.descriptorSets[currentFrame],
+                                0,
+                                nullptr);
 
-    auto [stage, offset, size] = ModelViewMatrix::pushConstant();
-    auto modelView = m_mainCamera.getModelView();
-    vkCmdPushConstants(cmdBuffer, skybox.pipelineLayout, stage, offset, size, &modelView);
+        const auto [stage, offset, size] = ModelViewMatrix::pushConstant();
+        auto modelView = m_mainCamera.getModelView();
+        vkCmdPushConstants(cmdBuffer, skybox.pipelineLayout, stage, offset, size, &modelView);
 
-    skybox.model->draw(cmdBuffer);
+        models.skybox.draw(cmdBuffer);
+    }
 
-    vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, scene.pipeline);
-    vkCmdBindDescriptorSets(cmdBuffer,
-                            VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            scene.pipelineLayout,
-                            0,
-                            1,
-                            &scene.descriptorSets[currentFrame],
-                            0,
-                            nullptr);
+    {
+        vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, scene.pipeline);
+        vkCmdBindDescriptorSets(cmdBuffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                scene.pipelineLayout,
+                                0,
+                                1,
+                                &scene.descriptorSets[currentFrame],
+                                0,
+                                nullptr);
 
-    scene.model->draw(cmdBuffer, scene.pipelineLayout);
+        const auto [stage, offset, size] = Model3D::pushConstant();
+        vkCmdPushConstants(cmdBuffer, scene.pipelineLayout, stage, offset, size, &models.object.transform);
+
+        models.object.draw(cmdBuffer);
+    }
 
     vkCmdEndRenderPass(cmdBuffer);
     vkEndCommandBuffer(cmdBuffer);

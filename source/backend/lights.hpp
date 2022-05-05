@@ -1,7 +1,6 @@
 #pragma once
 
 #include "VulkanDevice.hpp"
-#include "buffer.hpp"
 
 constexpr size_t LIGHTS_COUNT = 4;
 

@@ -102,3 +102,32 @@ void VulkanDevice::flushCommandBuffer(VkCommandBuffer command, VkQueue queue, bo
     if(free)
         vkFreeCommandBuffers(device, commandPool, 1, &command);
 }
+
+VkResult VulkanDevice::createBuffer(VkBufferUsageFlags usage,
+                                    VkMemoryPropertyFlags memFlags,
+                                    VkDeviceSize size,
+                                    VulkanBuffer &buffer,
+                                    const void *src) const
+{
+    auto bufferInfo = vkInits::bufferCreateInfo(size, usage);
+    auto result = vkCreateBuffer(device, &bufferInfo, nullptr, &buffer.data);
+
+    VkMemoryRequirements memReqs;
+    vkGetBufferMemoryRequirements(device, buffer.data, &memReqs);
+
+    auto allocInfo = getMemoryAllocInfo(memReqs, memFlags);
+    vkAllocateMemory(device, &allocInfo, nullptr, &buffer.memory);
+
+    buffer.size = size;
+    buffer.bind(device);
+    buffer.updateDescriptor();
+
+    if(src != nullptr)
+    {
+        buffer.map(device);
+        memcpy(buffer.mapped, src, size);
+        buffer.unmap(device);
+    }
+
+    return result;
+}

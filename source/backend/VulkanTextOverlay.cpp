@@ -75,10 +75,10 @@ void VulkanTextOverlay::onWindowResize()
 
 void VulkanTextOverlay::begin()
 {
-    vkMapMemory(m_device->device, m_vertexBuffer.memory, 0,
-                GUI_VERTEX_BUFFER_SIZE, 0, (void**)&m_mappedVertices);
-    vkMapMemory(m_device->device, m_indexBuffer.memory, 0,
-                GUI_INDEX_BUFFER_SIZE, 0, (void**)&m_mappedIndices);
+    m_vertexBuffer.map(m_device->device);
+    m_mappedVertices = static_cast<quad_vertex*>(m_vertexBuffer.mapped);
+    m_indexBuffer.map(m_device->device);
+    m_mappedIndices = static_cast<quad_index*>(m_indexBuffer.mapped);
 
     m_quadCount = 0;
     m_zOrder = Z_ORDER_GUI_DEFAULT;
@@ -163,8 +163,8 @@ void VulkanTextOverlay::draw(view<const char> stringView, vec2<float> position)
 
 void VulkanTextOverlay::end()
 {
-    vkUnmapMemory(m_device->device, m_vertexBuffer.memory);
-    vkUnmapMemory(m_device->device, m_indexBuffer.memory);
+    m_vertexBuffer.unmap(m_device->device);
+    m_indexBuffer.unmap(m_device->device);
     m_mappedVertices = nullptr;
     m_mappedIndices = nullptr;
 }
@@ -308,7 +308,6 @@ void VulkanTextOverlay::prepareDescriptors()
     auto allocInfo = vkInits::descriptorSetAllocateInfo(m_descriptorPool, layouts);
     vkAllocateDescriptorSets(m_device->device, &allocInfo, m_descriptorSets);
 
-    const auto samplerImageDesc = m_fontTexture.descriptor;
     for(size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
         const VkWriteDescriptorSet writes[] = {
@@ -381,9 +380,13 @@ void VulkanTextOverlay::preparePipeline()
 
 void VulkanTextOverlay::prepareRenderBuffers()
 {
-    auto vertexInfo = vkInits::bufferCreateInfo(GUI_VERTEX_BUFFER_SIZE, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-    m_vertexBuffer.create(m_device, &vertexInfo, MEM_FLAG_HOST_VISIBLE);
+    m_device->createBuffer(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                           MEM_FLAG_HOST_VISIBLE,
+                           GUI_VERTEX_BUFFER_SIZE,
+                           m_vertexBuffer);
 
-    auto indexInfo = vkInits::bufferCreateInfo(GUI_INDEX_BUFFER_SIZE, VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
-    m_indexBuffer.create(m_device, &indexInfo, MEM_FLAG_HOST_VISIBLE);
+    m_device->createBuffer(VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                           MEM_FLAG_HOST_VISIBLE,
+                           GUI_INDEX_BUFFER_SIZE,
+                           m_indexBuffer);
 }

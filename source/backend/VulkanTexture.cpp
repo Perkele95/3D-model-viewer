@@ -28,10 +28,10 @@ CoreResult Texture2D::loadFromMemory(const VulkanDevice *device,
     m_extent = extent;
     m_mipLevels = 1;
 
-    const auto size = channels * m_extent.width * m_extent.height;
-    auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = VulkanBuffer();
-    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
+    VulkanBuffer transfer;
+    device->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE,
+                         channels * m_extent.width * m_extent.height,
+                         transfer, src);
 
     auto imageInfo = vkInits::imageCreateInfo();
     imageInfo.extent = {m_extent.width, m_extent.height, 1};
@@ -108,10 +108,10 @@ CoreResult Texture2D::loadAddMipMap(const VulkanDevice *device,
 
     // Transfer buffer
 
-    const auto size = channels * m_extent.width * m_extent.height;
-    auto transferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = VulkanBuffer();
-    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
+    VulkanBuffer transfer;
+    device->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE,
+                         channels * m_extent.width * m_extent.height,
+                         transfer, src);
 
     auto imageInfo = vkInits::imageCreateInfo();
     imageInfo.extent = {m_extent.width, m_extent.height, 1};
@@ -285,9 +285,9 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
     m_extent = {1, 1};
     m_mipLevels = 1;
 
-    auto transferInfo = vkInits::bufferCreateInfo(sizeof(TEX2D_DEFAULT), VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    auto transfer = VulkanBuffer();
-    transfer.create(device, &transferInfo, MEM_FLAG_HOST_VISIBLE, src);
+    VulkanBuffer transfer;
+    device->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE,
+                         sizeof(TEX2D_DEFAULT), transfer, src);
 
     auto imageInfo = vkInits::imageCreateInfo();
     imageInfo.extent = {m_extent.width, m_extent.height, 1};
@@ -342,35 +342,35 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
     updateDescriptor();
 }
 
-void TextureCubeMap::load(const VulkanDevice *device, VkQueue queue)
+void TextureCubeMap::load(const VulkanDevice *device, VkQueue queue,
+                          const char *(&files)[LAYER_COUNT])
 {
     m_mipLevels = 1;
 
     int x, y, channels;
-    auto pixels = stbi_load(filenames[0], &x, &y, &channels, STBI_rgb_alpha);
+    auto pixels = stbi_load(files[0], &x, &y, &channels, STBI_rgb_alpha);
 
     const auto faceSize = 4 * x * y;
-    const auto size = LAYER_COUNT * faceSize;
 
-    auto transfer = VulkanBuffer();
-    auto bufferInfo = vkInits::bufferCreateInfo(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-    transfer.create(device, &bufferInfo, MEM_FLAG_HOST_VISIBLE);
+    VulkanBuffer transfer;
+    device->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         MEM_FLAG_HOST_VISIBLE,
+                         LAYER_COUNT * faceSize,
+                         transfer);
 
-    void *data = nullptr;
-    vkMapMemory(device->device, transfer.memory, 0, faceSize, 0, &data);
-    memcpy(data, pixels, faceSize);
-    vkUnmapMemory(device->device, transfer.memory);
+    transfer.map(device->device, 0, faceSize);
+    memcpy(transfer.mapped, pixels, faceSize);
+    transfer.unmap(device->device);
 
     stbi_image_free(pixels);
 
     for (uint32_t layer = 1; layer < LAYER_COUNT; layer++)
     {
-        pixels = stbi_load(filenames[layer], &x, &y, &channels, STBI_rgb_alpha);
+        pixels = stbi_load(files[layer], &x, &y, &channels, STBI_rgb_alpha);
 
-        auto offset = layer * faceSize;
-        vkMapMemory(device->device, transfer.memory, offset, faceSize, 0, &data);
-        memcpy(data, pixels, faceSize);
-        vkUnmapMemory(device->device, transfer.memory);
+        transfer.map(device->device, layer * faceSize, faceSize);
+        memcpy(transfer.mapped, pixels, faceSize);
+        transfer.unmap(device->device);
 
         stbi_image_free(pixels);
     }

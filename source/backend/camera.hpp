@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../mv_utils/mat4.hpp"
-#include "buffer.hpp"
+#include "VulkanDevice.hpp"
 
 struct CameraControls
 {
