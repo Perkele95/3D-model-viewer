@@ -1,7 +1,7 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout (location = 0) in vec3 inPosition;
+layout (location = 0) in vec3 inUVW;
 
 layout (location = 0) out vec4 outColour;
 
@@ -11,7 +11,7 @@ const float PI = 3.14159265359;
 
 void main()
 {
-    const vec3 normal = normalize(inPosition);
+    const vec3 normal = normalize(inUVW);
 
     vec3 irradiance = vec3(0.0);
 
@@ -35,7 +35,6 @@ void main()
             nSamples++;
         }
     }
-    irradiance *= PI * (1.0 / float(nSamples));
 
-    outColour = vec4(irradiance, 1.0);
+    outColour = vec4(irradiance * PI * (1.0 / float(nSamples)), 1.0);
 }

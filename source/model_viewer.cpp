@@ -395,8 +395,6 @@ void ModelViewer::generateBrdfLUT()
 
 void ModelViewer::generateIrradianceMap()
 {
-    // Constants
-
     constexpr auto format = VK_FORMAT_R16G16B16A16_SFLOAT;
     constexpr uint32_t dimension = 32;
     const auto mipLevels = static_cast<uint32_t>(std::floor(std::log2(dimension))) + 1;
@@ -420,7 +418,7 @@ void ModelViewer::generateIrradianceMap()
         vkAllocateMemory(device, &allocInfo, nullptr, &irradiance.memory);
         vkBindImageMemory(device, irradiance.image, irradiance.memory, 0);
 
-        auto samplerInfo = vkInits::samplerCreateInfo();
+        auto samplerInfo = vkInits::samplerCreateInfo(float(mipLevels));
         samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
         vkCreateSampler(device, &samplerInfo, nullptr, &irradiance.sampler);
 
@@ -599,6 +597,8 @@ void ModelViewer::generateIrradianceMap()
     auto rasterizer = vkInits::rasterizationStateInfo(VK_FRONT_FACE_COUNTER_CLOCKWISE);
     auto multisampling = vkInits::pipelineMultisampleStateCreateInfo(VK_SAMPLE_COUNT_1_BIT);
     auto depthStencil = vkInits::depthStencilStateInfo();
+    depthStencil.depthTestEnable = VK_FALSE;
+    depthStencil.depthWriteEnable = VK_FALSE;
     auto colorBlendAttachment = vkInits::pipelineColorBlendAttachmentState();
     auto colourBlend = vkInits::pipelineColorBlendStateCreateInfo();
     colourBlend.attachmentCount = 1;
@@ -609,7 +609,7 @@ void ModelViewer::generateIrradianceMap()
     dynamicStateInfo.pDynamicStates = dynamicStates;
     dynamicStateInfo.dynamicStateCount = uint32_t(arraysize(dynamicStates));
 
-    const auto pushConstant = vkInits::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 2 * sizeof(mat4x4));
+    const auto pushConstant = ModelViewMatrix::pushConstant();
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -642,20 +642,22 @@ void ModelViewer::generateIrradianceMap()
     // Render
 
     VkClearValue clearValue;
-    clearValue.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValue.color = {{0.0f, 0.0f, 0.2f, 1.0f}};
 
     auto renderBeginInfo = vkInits::renderPassBeginInfo(irradianceRenderpass, {dimension, dimension});
     renderBeginInfo.framebuffer = offscreen.framebuffer;
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = &clearValue;
 
+    auto forwardMatrix = mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 0.0f, 1.0f), Camera::GLOBAL_UP);
+
     const mat4x4 viewMatrices[] = {
-        mat4x4::lookAt(vec3(0.0f), vec3(1.0f, 0.0f, 0.0f), Camera::GLOBAL_UP),
-        mat4x4::lookAt(vec3(0.0f), vec3(-1.0f, 0.0f, 0.0f), Camera::GLOBAL_UP),
-        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 1.0f, 0.0f), Camera::GLOBAL_UP),
-        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, -1.0f, 0.0f), Camera::GLOBAL_UP),
-        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 0.0f, 1.0f), Camera::GLOBAL_UP),
-        mat4x4::lookAt(vec3(0.0f), vec3(0.0f, 0.0f, -1.0f), Camera::GLOBAL_UP)
+        forwardMatrix * mat4x4::rotateY(-PI32 / 2),
+        forwardMatrix * mat4x4::rotateY(PI32 / 2),
+        forwardMatrix * mat4x4::rotateX(PI32 / 2),
+        forwardMatrix * mat4x4::rotateX(-PI32 / 2),
+        forwardMatrix,
+        forwardMatrix * mat4x4::rotateY(PI32)
     };
 
     auto cmd = device.createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -694,16 +696,16 @@ void ModelViewer::generateIrradianceMap()
                 mat4x4::perspective(PI32 / 2, 1.0f, Camera::DEFAULT_ZNEAR, Camera::DEFAULT_ZFAR)
             };
 
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, irradiancePipeline);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    irradiancePipelineLayout, 0, 1,
+                                    &irradianceDescriptorSet, 0, nullptr);
+
             vkCmdPushConstants(cmd, irradiancePipelineLayout,
                                pushConstant.stageFlags,
                                pushConstant.offset,
                                pushConstant.size,
                                &pushBlock);
-
-            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, irradiancePipeline);
-            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                    irradiancePipelineLayout, 0, 1,
-                                    &irradianceDescriptorSet, 0, nullptr);
 
             models.skybox.draw(cmd);
 
@@ -911,7 +913,8 @@ void ModelViewer::buildDescriptors()
     {
         auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.skybox.descriptor)
+            //vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.skybox.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &irradiance.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
