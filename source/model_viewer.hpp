@@ -85,8 +85,6 @@ private:
     void updateLights();
     void recordFrame(VkCommandBuffer cmdBuffer);
 
-    // Scene & gui commands to be submitted
-
     VkCommandBuffer         m_commands[2];
     VulkanTextOverlay*      m_overlay;
     Camera                  m_mainCamera;

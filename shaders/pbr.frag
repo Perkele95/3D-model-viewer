@@ -20,22 +20,18 @@ layout(binding = 1) uniform light_data
     vec4 colours[4];
 } lights;
 
-layout(binding = 2) uniform sampler2D albedoMap;
-layout(binding = 3) uniform sampler2D normalMap;
-layout(binding = 4) uniform sampler2D roughnessMap;
-layout(binding = 5) uniform sampler2D metallicMap;
-layout(binding = 6) uniform sampler2D ambientMap;
+layout(binding = 2) uniform sampler2D brdfLUT;
+layout(binding = 3) uniform samplerCube irradianceMap;
+
+layout(binding = 4) uniform sampler2D albedoMap;
+layout(binding = 5) uniform sampler2D normalMap;
+layout(binding = 6) uniform sampler2D roughnessMap;
+layout(binding = 7) uniform sampler2D metallicMap;
+layout(binding = 8) uniform sampler2D ambientMap;
 
 const float PI = 3.14159265359;
 
-struct pbr_material
-{
-    vec3 albedo;
-    vec3 normal;
-    float roughness;
-    float metallic;
-    float ao;
-};
+// Distribution
 
 float DistributionGGX(float dotNH, float roughness)
 {
@@ -45,12 +41,19 @@ float DistributionGGX(float dotNH, float roughness)
     return alphaSquared / (PI * denom * denom);
 }
 
-vec3 FresnelSchlick(float cosTheta, vec3 albedo, float metallic)
+// Fresnel
+
+vec3 FresnelSchlick(vec3 F0, float cosTheta)
 {
-    const vec3 F0 = mix(vec3(0.04), albedo, metallic);
-    const vec3 F = F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-    return F;
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
 }
+
+vec3 FresnelSchlickRoughness(vec3 F0, float cosTheta, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Geometry
 
 float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
 {
@@ -62,7 +65,7 @@ float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
     const float GV = dotNV / (dotNV * kInv + k);
     return GL * GV;
 }
-
+/*
 vec3 BRDF(pbr_material material, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position)
 {
     const vec3 L = normalize(lightPosition - position);
@@ -89,12 +92,39 @@ vec3 BRDF(pbr_material material, vec3 V, vec3 lightPosition, vec3 lightColour, v
     const vec3 specular = numerator / denominator;
 
     return (Kd * material.albedo / PI + specular) * radiance * dotNL;
+}*/
+
+vec3 SpecularColour(vec3 L, vec3 V, vec3 N, vec3 F0, vec3 albedo,
+                    vec3 radiance, float roughness, float metallic)
+{
+    const vec3 H = normalize(V + L);
+    const float dotNH = max(dot(N, H), 0.0);
+    const float dotNV = max(dot(N, V), 0.0);
+    const float dotNL = max(dot(N, L), 0.0);
+
+    vec3 colour = vec3(0.0);
+
+    if(dotNL > 0.0)
+    {
+        const float D = DistributionGGX(dotNH, roughness);
+        const vec3 F = FresnelSchlick(F0, dotNV);
+        const float G = GeometrySchlickSmithGGX(dotNL, dotNV, roughness);
+        const vec3 specular = D * F * G / (4 * dotNL * dotNV + 0.001);
+        const vec3 kD = (1.0 - F) * (1.0 - metallic);
+        colour += (kD * albedo / PI + specular) * radiance * dotNL;
+    }
+
+    return colour;
+}
+
+vec3 SrgbToLinear(vec3 source)
+{
+    return pow(source, vec3(2.2));
 }
 
 vec3 calculateNormal()
 {
-    // NOTE(arle): pow(tex, C) turns SRGB -> linear
-    const vec3 tangentNormal = pow(texture(normalMap, inUV).rgb, vec3(2.2));
+    const vec3 tangentNormal = SrgbToLinear(texture(normalMap, inUV).rgb);
 
     const vec3 Q1 = dFdx(inPosition);
     const vec3 Q2 = dFdy(inPosition);
@@ -111,25 +141,36 @@ vec3 calculateNormal()
 
 void main()
 {
-    pbr_material material;
-    material.albedo = pow(texture(albedoMap, inUV).rgb, vec3(2.2));
-    material.normal = calculateNormal();
-    material.roughness = texture(roughnessMap, inUV).r;
-    material.metallic = texture(metallicMap, inUV).r;
-    material.ao = texture(ambientMap, inUV).r;
+    const vec3 albedo = SrgbToLinear(texture(albedoMap, inUV).rgb);
+    const float roughness = texture(roughnessMap, inUV).r;
+    const float metallic = texture(metallicMap, inUV).r;
+    const vec3 ao = texture(ambientMap, inUV).rrr;
 
+    const vec3 N = calculateNormal();
 	const vec3 V = normalize(camera.position.xyz - inPosition);
+    const vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
-    // Specular contribution
     vec3 Lo = vec3(0.0);
-    for (int i = 0; i < lights.positions.length(); i++){
-        const vec3 lp = lights.positions[i].xyz;
-        const vec3 lc = lights.colours[i].xyz;
-        Lo += BRDF(material, V, lp, lc, inPosition);
+    for (int i = 0; i < lights.positions.length(); i++)
+    {
+        const vec3 L = normalize(lights.positions[i].xyz);
+        const float dist = length(lights.positions[i].xyz - inPosition);
+        const vec3 radiance = lights.colours[i].xyz * (1.0 / dist * dist);
+
+        Lo += SpecularColour(L, V, N, F0, albedo, radiance, roughness, metallic);
     }
 
-    // Ambient combine
-    const vec3 ambient = vec3(0.02) * material.albedo * material.ao;
+	const vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    const vec3 irradiance = texture(irradianceMap, N).rgb;
+
+    const vec3 diffuse = irradiance * albedo;
+
+    const vec3 F = FresnelSchlickRoughness(F0, max(dot(N, V), 0.0), roughness);
+    const vec3 specular = /*reflection **/ (F * brdf.x + brdf.y);
+
+    const vec3 kD = (1.0 - F) * (1.0 - metallic);
+    const vec3 ambient = (kD * diffuse + specular) * ao;
+
     vec3 colour = ambient + Lo;
 
     // Reinhard HDR tonemapping
