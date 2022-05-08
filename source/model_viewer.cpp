@@ -40,6 +40,7 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
 
     generateBrdfLUT();
     generateIrradianceMap();
+    generatePrefilteredMap();
 
     m_mainCamera.init();
     m_lights.init();
@@ -86,15 +87,17 @@ ModelViewer::~ModelViewer()
 {
     vkDeviceWaitIdle(device);
 
-    vkDestroySampler(device, brdf.sampler, nullptr);
-    vkDestroyImageView(device, brdf.view, nullptr);
-    vkDestroyImage(device, brdf.image, nullptr);
-    vkFreeMemory(device, brdf.memory, nullptr);
+    const auto destroyPreGenerated = [](VkDevice vkDev, PreGenerated &resource)
+    {
+        vkDestroySampler(vkDev, resource.sampler, nullptr);
+        vkDestroyImageView(vkDev, resource.view, nullptr);
+        vkDestroyImage(vkDev, resource.image, nullptr);
+        vkFreeMemory(vkDev, resource.memory, nullptr);
+    };
 
-    vkDestroySampler(device, irradiance.sampler, nullptr);
-    vkDestroyImageView(device, irradiance.view, nullptr);
-    vkDestroyImage(device, irradiance.image, nullptr);
-    vkFreeMemory(device, irradiance.memory, nullptr);
+    destroyPreGenerated(device, brdf);
+    destroyPreGenerated(device, irradiance);
+    destroyPreGenerated(device, prefiltered);
 
     m_overlay->destroy();
 
@@ -1048,6 +1051,12 @@ void ModelViewer::generatePrefilteredMap()
     for (uint32_t level = 0; level < mipLevels; level++)
     {
         const float roughness = float(level) / float(mipLevels - 1);
+        vkCmdPushConstants(cmd, prefilteredPipelineLayout,
+                            pushConstants[1].stageFlags,
+                            pushConstants[1].offset,
+                            pushConstants[1].size,
+                            &roughness);
+
         for (uint32_t i = 0; i < 6; i++)
         {
             viewport.width = float(dimension * std::pow(0.5f, level));
@@ -1067,12 +1076,6 @@ void ModelViewer::generatePrefilteredMap()
                                pushConstants[0].offset,
                                pushConstants[0].size,
                                &pushBlock);
-
-            vkCmdPushConstants(cmd, prefilteredPipelineLayout,
-                               pushConstants[1].stageFlags,
-                               pushConstants[1].offset,
-                               pushConstants[1].size,
-                               &roughness);
 
             models.skybox.draw(cmd);
 
@@ -1283,7 +1286,11 @@ void ModelViewer::buildDescriptors()
     {
         auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
+#if 0
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &prefiltered.descriptor)
+#else
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.skybox.descriptor)
+#endif
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);

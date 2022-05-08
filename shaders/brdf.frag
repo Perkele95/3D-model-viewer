@@ -78,15 +78,15 @@ vec2 IntegrateBRDF(float roughness, float NoV)
         const vec3 H = ImportanceSampleGGX(Xi, roughness, N);
         const vec3 L = normalize(2.0 * dot(V, H) * H - V);
 
-        const float NoL = max(L.z, 0.0);
-        const float NoH = max(H.z, 0.0);
-        const float VoH = max(dot(V, H), 0.0);
+        const float NdotL = max(L.z, 0.0);
+        const float NdotH = max(H.z, 0.0);
+        const float VdotH = max(dot(V, H), 0.0);
 
-        if(NoL > 0.0)
+        if(NdotL > 0.0)
         {
-            const float G = GeometrySchlickSmithGGX(NoL, NoV, roughness);
-            const float GVis = G * VoH / (NoH * NoV);
-            const float Fc = pow(1.0 - VoH, 5.0);
+            const float G = GeometrySchlickSmithGGX(NdotL, NoV, roughness);
+            const float GVis = G * VdotH / (NdotH * NoV);
+            const float Fc = pow(1.0 - VdotH, 5.0);
             A += (1.0 - Fc) * GVis;
             B += Fc * GVis;
         }

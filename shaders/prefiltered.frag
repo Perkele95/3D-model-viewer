@@ -70,6 +70,8 @@ vec3 prefilter(vec3 R, float roughness)
     const vec3 N = R;
     const vec3 V = R;
 
+    const float mapDimension = float(textureSize(environmentMap, 0).s);
+
     float weight = 0.0;
     vec3 colour = vec3(0.0);
 
@@ -82,7 +84,16 @@ vec3 prefilter(vec3 R, float roughness)
         const float NdotL = max(dot(N, L), 0.0);
         if(NdotL > 0.0)
         {
-            colour += texture(environmentMap, inUVW).rgb * NdotL;
+            const float NdotH = max(dot(N, H), 0.0);
+            const float VdotH = max(dot(V, H), 0.0);
+
+            // Probability Distribution Function
+            const float pdf = DistributionGGX(NdotH, roughness) * NdotH / (4.0 * VdotH) + 0.0001;
+			const float solidAngleTexel = 4.0 * PI / (6.0 * mapDimension * mapDimension);
+			const float solidAngleSample = 1.0 / (float(NUM_SAMPLES) * pdf);
+            const float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(solidAngleSample / solidAngleTexel);
+
+            colour += texture(environmentMap, inUVW, mipLevel).rgb * NdotL;
             weight += NdotL;
         }
     }
