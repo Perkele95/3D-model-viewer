@@ -1,12 +1,19 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout (location = 0) in vec2 inUV;
+layout (location = 0) in vec3 inUVW;
 
 layout (location = 0) out vec4 outColour;
 
-const uint NUM_SAMPLES = 1024;
-const float PI = 3.1415926536;
+layout(binding = 0) uniform samplerCube environmentMap;
+
+layout(push_constant) uniform matrix
+{
+    layout(offset = 128) float roughness;
+} values;
+
+const uint NUM_SAMPLES = 1024;//TODO(arle): push constant
+const float PI = 3.14159265359;
 
 // http://byteblacksmith.com/improvements-to-the-canonical-one-liner-glsl-rand-for-opengl-es-2-0/
 float random(vec2 co)
@@ -50,27 +57,21 @@ vec3 ImportanceSampleGGX(vec2 Xi, float roughness, vec3 N)
     return tangentX * H.x + tangentY * H.y + N * H.z;
 }
 
-float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
+float DistributionGGX(float dotNH, float roughness)
 {
-    // k for IBL
-    const float k = (roughness * roughness) / 2.0;
-    const float GL = dotNL / (dotNL * (1.0 - k) + k);
-    const float GV = dotNV / (dotNV * (1.0 - k) + k);
-    return GL * GV;
+    const float alpha = roughness * roughness;
+    const float alphaSquared = alpha * alpha;
+    const float denom = dotNH * dotNH * (alphaSquared - 1.0) + 1.0;
+    return alphaSquared / (PI * denom * denom);
 }
 
-vec2 IntegrateBRDF(float roughness, float NoV)
+vec3 prefilter(vec3 R, float roughness)
 {
-	// Normal always points along z-axis for the 2D lookup
-	const vec3 N = vec3(0.0, 0.0, 1.0);
+    const vec3 N = R;
+    const vec3 V = R;
 
-    vec3 V;
-    V.x = sqrt(1.0 - NoV * NoV); // som
-    V.y = 0.0;
-    V.z = NoV; // cos
-
-    float A = 0.0;
-    float B = 0.0;
+    float weight = 0.0;
+    vec3 colour = vec3(0.0);
 
     for(uint i = 0; i < NUM_SAMPLES; i++)
     {
@@ -78,23 +79,18 @@ vec2 IntegrateBRDF(float roughness, float NoV)
         const vec3 H = ImportanceSampleGGX(Xi, roughness, N);
         const vec3 L = normalize(2.0 * dot(V, H) * H - V);
 
-        const float NoL = max(L.z, 0.0);
-        const float NoH = max(H.z, 0.0);
-        const float VoH = max(dot(V, H), 0.0);
-
-        if(NoL > 0.0)
+        const float NdotL = max(dot(N, L), 0.0);
+        if(NdotL > 0.0)
         {
-            const float G = GeometrySchlickSmithGGX(NoL, NoV, roughness);
-            const float GVis = G * VoH / (NoH * NoV);
-            const float Fc = pow(1.0 - VoH, 5.0);
-            A += (1.0 - Fc) * GVis;
-            B += Fc * GVis;
+            colour += texture(environmentMap, inUVW).rgb * NdotL;
+            weight += NdotL;
         }
     }
-    return vec2(A, B) / float(NUM_SAMPLES);
+    return colour / weight;
 }
 
 void main()
 {
-    outColour = vec4(IntegrateBRDF(inUV.s, inUV.t), 0.0, 1.0);
+    const vec3 N = normalize(inUVW);
+    outColour = vec4(prefilter(N, values.roughness), 1.0);
 }

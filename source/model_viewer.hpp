@@ -51,6 +51,14 @@ public:
     }
 };
 
+struct OffscreenBuffer
+{
+    VkImage         image;
+    VkImageView     view;
+    VkDeviceMemory  memory;
+    VkFramebuffer   framebuffer;
+};
+
 class ModelViewer : public VulkanInstance
 {
 public:
@@ -70,10 +78,11 @@ public:
 
 private:
     // Pre-generated pbr textures
-
+    // TODO(arle): Combine anything shared between these three (renderpass)
+    // irradiance and prefiltered are generated pretty much the same way.
     void generateBrdfLUT();
     void generateIrradianceMap();
-    void generatePrefilteredCube();
+    void generatePrefilteredMap();
 
     void loadResources();
     void buildUniformBuffers();
@@ -114,7 +123,7 @@ private:
         VkDeviceMemory          memory;
         VkSampler               sampler;
         VkDescriptorImageInfo   descriptor;
-    }brdf, irradiance;
+    }brdf, irradiance, prefiltered;
 
     struct Scene
     {
