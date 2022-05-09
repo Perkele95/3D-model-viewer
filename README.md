@@ -5,3 +5,6 @@ Flat colour pbr:
 
 Textured pbr:
 ![image](pbr_textured.png)
+
+With Image Based Lighting:
+![image](pbr_ibl.png)

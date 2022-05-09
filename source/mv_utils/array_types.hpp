@@ -27,12 +27,54 @@ struct view
     {
     }
 
-    T &operator[](size_t i) const { return this->data[i]; }
+    constexpr T &operator[](size_t i) const { return data[i]; }
 
     size_t size() const { return sizeof(T) * count; }
 
     T *data;
     size_t count;
+};
+#if 0
+template<typename T, int N>
+class array_t
+{
+public:
+    array_t() = default;
+
+    array_t(const T &value)
+    {
+        arrayfill(data, value);
+    }
+
+    array_t(const T (&value)[N])
+    {
+        for (size_t i = 0; i < N; i++)
+            data[i] = value[i];
+    }
+
+    array_t(const array_t<T, N> &other)
+    {
+        for (size_t i = 0; i < N; i++)
+            data[i] = other.data[i];
+    }
+
+    array_t(const array_t<T, N> &&other)
+    {
+        for (size_t i = 0; i < N; i++)
+            data[i] = other.data[i];
+    }
+
+    constexpr T &operator[](size_t i) const { return data[i]; }
+
+    void fill(const T &value)
+    {
+        for (size_t i = 0; i < N; i++)
+            data[i] = value;
+    }
+
+    constexpr size_t count() {return N;}
+
+    T data[N];
 };
 
 template<typename T>
@@ -89,3 +131,4 @@ private:
     size_t  m_count;
     size_t  m_capacity;
 };
+#endif

@@ -54,7 +54,7 @@ vec3 ImportanceSampleGGX(vec2 Xi, float roughness, vec3 N)
     const vec3 tangentY = cross(N, tangentX);
 
     // Convert from tangent to world space
-    return tangentX * H.x + tangentY * H.y + N * H.z;
+    return normalize(tangentX * H.x + tangentY * H.y + N * H.z);
 }
 
 float DistributionGGX(float dotNH, float roughness)
@@ -92,7 +92,6 @@ vec3 prefilter(vec3 R, float roughness)
 			const float solidAngleTexel = 4.0 * PI / (6.0 * mapDimension * mapDimension);
 			const float solidAngleSample = 1.0 / (float(NUM_SAMPLES) * pdf);
             const float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(solidAngleSample / solidAngleTexel);
-
             colour += texture(environmentMap, inUVW, mipLevel).rgb * NdotL;
             weight += NdotL;
         }

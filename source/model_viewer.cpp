@@ -1071,7 +1071,7 @@ void ModelViewer::loadResources()
         models.object.transform = mat4x4::identity();
 
         auto sb = StringbBuilder(100);
-        constexpr auto materialPath = view("materials/alien-panels/");
+        constexpr auto materialPath = view("materials/ribbed-metal/");
 
         sb << ASSETS_PATH << materialPath << view("albedo.png");
         textures.albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);

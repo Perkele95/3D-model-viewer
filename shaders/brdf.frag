@@ -59,15 +59,15 @@ float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
     return GL * GV;
 }
 
-vec2 IntegrateBRDF(float roughness, float NoV)
+vec2 IntegrateBRDF(float NdotV, float roughness)
 {
 	// Normal always points along z-axis for the 2D lookup
 	const vec3 N = vec3(0.0, 0.0, 1.0);
 
     vec3 V;
-    V.x = sqrt(1.0 - NoV * NoV); // som
+    V.x = sqrt(1.0 - NdotV * NdotV); // som
     V.y = 0.0;
-    V.z = NoV; // cos
+    V.z = NdotV; // cos
 
     float A = 0.0;
     float B = 0.0;
@@ -84,8 +84,8 @@ vec2 IntegrateBRDF(float roughness, float NoV)
 
         if(NdotL > 0.0)
         {
-            const float G = GeometrySchlickSmithGGX(NdotL, NoV, roughness);
-            const float GVis = G * VdotH / (NdotH * NoV);
+            const float G = GeometrySchlickSmithGGX(NdotL, NdotV, roughness);
+            const float GVis = G * VdotH / (NdotH * NdotV);
             const float Fc = pow(1.0 - VdotH, 5.0);
             A += (1.0 - Fc) * GVis;
             B += Fc * GVis;

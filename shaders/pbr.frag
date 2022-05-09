@@ -92,9 +92,9 @@ vec3 SpecularColour(vec3 L, vec3 V, vec3 N, vec3 F0, vec3 albedo,
 
 vec3 PrefilteredReflection(vec3 R, float roughness)
 {
-    const float MAX_REFLECTION_LOD = 4.0;
-    const float mipLevel = roughness * MAX_REFLECTION_LOD;
-    return texture(prefilteredMap, R, mipLevel).rgb;
+    const float MAX_REFLECTION_LOD = 8.0;
+    const float lod = roughness * MAX_REFLECTION_LOD;
+    return texture(prefilteredMap, R, lod).rgb;
 }
 
 vec3 SrgbToLinear(vec3 source)
@@ -142,7 +142,7 @@ void main()
 
 	const vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
     const vec3 irradiance = texture(irradianceMap, N).rgb;
-    const vec3 reflection = PrefilteredReflection(R, roughness);
+    const vec3 reflection = PrefilteredReflection(R, roughness).rgb;
 
     const vec3 diffuse = irradiance * albedo;
 
