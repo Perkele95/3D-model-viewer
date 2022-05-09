@@ -22,12 +22,13 @@ layout(binding = 1) uniform light_data
 
 layout(binding = 2) uniform sampler2D brdfLUT;
 layout(binding = 3) uniform samplerCube irradianceMap;
+layout(binding = 4) uniform samplerCube prefilteredMap;
 
-layout(binding = 4) uniform sampler2D albedoMap;
-layout(binding = 5) uniform sampler2D normalMap;
-layout(binding = 6) uniform sampler2D roughnessMap;
-layout(binding = 7) uniform sampler2D metallicMap;
-layout(binding = 8) uniform sampler2D ambientMap;
+layout(binding = 5) uniform sampler2D albedoMap;
+layout(binding = 6) uniform sampler2D normalMap;
+layout(binding = 7) uniform sampler2D roughnessMap;
+layout(binding = 8) uniform sampler2D metallicMap;
+layout(binding = 9) uniform sampler2D ambientMap;
 
 const float PI = 3.14159265359;
 
@@ -65,34 +66,6 @@ float GeometrySchlickSmithGGX(float dotNL, float dotNV, float roughness)
     const float GV = dotNV / (dotNV * kInv + k);
     return GL * GV;
 }
-/*
-vec3 BRDF(pbr_material material, vec3 V, vec3 lightPosition, vec3 lightColour, vec3 position)
-{
-    const vec3 L = normalize(lightPosition - position);
-    const vec3 H = normalize(V + L); // halfway vector
-    const float dotNV = max(dot(material.normal, V), 0.0);
-    const float dotNL = max(dot(material.normal, L), 0.0);
-    const float dotLH = max(dot(L, H), 0.0);
-    const float dotNH = max(dot(material.normal, H), 0.0);
-    const float dotHV = max(dot(H, V), 0.0);
-
-    const float dist = length(lightPosition - position);
-    const float attenuation = 1.0 / (dist * dist);
-    const vec3 radiance = lightColour * attenuation;
-
-    const float D = DistributionGGX(dotNH, material.roughness);
-    const vec3 F = FresnelSchlick(dotHV, material.albedo, material.metallic);
-    const float G = GeometrySchlickSmithGGX(dotNL, dotNV, material.roughness);
-
-    const vec3 Ks = F;
-    const vec3 Kd = (vec3(1.0) - Ks) * (1.0 - material.metallic);
-
-    const vec3 numerator = D * F * G;
-    const float denominator = 4.0 * dotNV * dotNL + 0.0001; // + avoids dividing by zero
-    const vec3 specular = numerator / denominator;
-
-    return (Kd * material.albedo / PI + specular) * radiance * dotNL;
-}*/
 
 vec3 SpecularColour(vec3 L, vec3 V, vec3 N, vec3 F0, vec3 albedo,
                     vec3 radiance, float roughness, float metallic)
@@ -117,12 +90,19 @@ vec3 SpecularColour(vec3 L, vec3 V, vec3 N, vec3 F0, vec3 albedo,
     return colour;
 }
 
+vec3 PrefilteredReflection(vec3 R, float roughness)
+{
+    const float MAX_REFLECTION_LOD = 4.0;
+    const float mipLevel = roughness * MAX_REFLECTION_LOD;
+    return texture(prefilteredMap, R, mipLevel).rgb;
+}
+
 vec3 SrgbToLinear(vec3 source)
 {
     return pow(source, vec3(2.2));
 }
 
-vec3 calculateNormal()
+vec3 CalculateNormal()
 {
     const vec3 tangentNormal = SrgbToLinear(texture(normalMap, inUV).rgb);
 
@@ -144,16 +124,16 @@ void main()
     const vec3 albedo = SrgbToLinear(texture(albedoMap, inUV).rgb);
     const float roughness = texture(roughnessMap, inUV).r;
     const float metallic = texture(metallicMap, inUV).r;
-    const vec3 ao = texture(ambientMap, inUV).rrr;
 
-    const vec3 N = calculateNormal();
+    const vec3 N = CalculateNormal();
 	const vec3 V = normalize(camera.position.xyz - inPosition);
+    const vec3 R = reflect(-V, N);
     const vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     vec3 Lo = vec3(0.0);
     for (int i = 0; i < lights.positions.length(); i++)
     {
-        const vec3 L = normalize(lights.positions[i].xyz);
+        const vec3 L = normalize(lights.positions[i].xyz - inPosition);
         const float dist = length(lights.positions[i].xyz - inPosition);
         const vec3 radiance = lights.colours[i].xyz * (1.0 / dist * dist);
 
@@ -162,14 +142,15 @@ void main()
 
 	const vec2 brdf = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
     const vec3 irradiance = texture(irradianceMap, N).rgb;
+    const vec3 reflection = PrefilteredReflection(R, roughness);
 
     const vec3 diffuse = irradiance * albedo;
 
     const vec3 F = FresnelSchlickRoughness(F0, max(dot(N, V), 0.0), roughness);
-    const vec3 specular = /*reflection **/ (F * brdf.x + brdf.y);
+    const vec3 specular = reflection * (F * brdf.x + brdf.y);
 
     const vec3 kD = (1.0 - F) * (1.0 - metallic);
-    const vec3 ambient = (kD * diffuse + specular) * ao;
+    const vec3 ambient = (kD * diffuse + specular) * texture(ambientMap, inUV).rrr;
 
     vec3 colour = ambient + Lo;
 

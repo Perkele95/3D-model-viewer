@@ -209,6 +209,47 @@ void ModelViewer::onScrollWheelEvent(double x, double y)
     m_mainCamera.fov = clamp(m_mainCamera.fov, Camera::FOV_LIMITS_LOW, Camera::FOV_LIMITS_HIGH);
 }
 
+void ModelViewer::createPregenRenderPass(VkRenderPass *pRenderPass, VkFormat format, VkImageLayout finalLayout)
+{
+    auto colourAttachment = vkInits::attachmentDescription(format);
+    colourAttachment.finalLayout = finalLayout;
+
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colourAttachmentRef;
+
+    VkSubpassDependency dependencies[2];
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colourAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+    vkCreateRenderPass(device, &renderPassInfo, nullptr, pRenderPass);
+}
+
 void ModelViewer::generateBrdfLUT()
 {
     constexpr auto format = VK_FORMAT_R16G16_SFLOAT;
@@ -247,45 +288,8 @@ void ModelViewer::generateBrdfLUT()
 
     // Render pass
 
-    auto colourAttachment = vkInits::attachmentDescription(format);
-    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-    auto colourAttachmentRef = vkInits::attachmentReference(0);
-    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colourAttachmentRef;
-
-    VkSubpassDependency dependencies[2];
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colourAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-    renderPassInfo.pDependencies = dependencies;
-
     VkRenderPass brdfRenderPass = VK_NULL_HANDLE;
-    vkCreateRenderPass(device, &renderPassInfo, nullptr, &brdfRenderPass);
+    createPregenRenderPass(&brdfRenderPass, format, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
     // Framebuffer
 
@@ -441,45 +445,8 @@ void ModelViewer::generateIrradianceMap()
 
     // Render pass
 
-    auto colourAttachment = vkInits::attachmentDescription(format);
-    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    auto colourAttachmentRef = vkInits::attachmentReference(0);
-    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colourAttachmentRef;
-
-    VkSubpassDependency dependencies[2];
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colourAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-    renderPassInfo.pDependencies = dependencies;
-
     VkRenderPass irradianceRenderpass = VK_NULL_HANDLE;
-    vkCreateRenderPass(device, &renderPassInfo, nullptr, &irradianceRenderpass);
+    createPregenRenderPass(&irradianceRenderpass, format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     OffscreenBuffer offscreen;
     {
@@ -576,16 +543,12 @@ void ModelViewer::generateIrradianceMap()
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(vec3<float>));
 
-    VkVertexInputAttributeDescription attributes[] = {
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0}
-    };
-
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(CubemapModel::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = CubemapModel::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewportState = vkInits::pipelineViewportStateCreateInfo(1, 1);
@@ -809,45 +772,8 @@ void ModelViewer::generatePrefilteredMap()
 
     // Render pass
 
-    auto colourAttachment = vkInits::attachmentDescription(format);
-    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    auto colourAttachmentRef = vkInits::attachmentReference(0);
-    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &colourAttachmentRef;
-
-    VkSubpassDependency dependencies[2];
-    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[0].dstSubpass = 0;
-    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    dependencies[1].srcSubpass = 0;
-    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-    VkRenderPassCreateInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    renderPassInfo.attachmentCount = 1;
-    renderPassInfo.pAttachments = &colourAttachment;
-    renderPassInfo.subpassCount = 1;
-    renderPassInfo.pSubpasses = &subpass;
-    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-    renderPassInfo.pDependencies = dependencies;
-
     VkRenderPass prefilteredRenderpass = VK_NULL_HANDLE;
-    vkCreateRenderPass(device, &renderPassInfo, nullptr, &prefilteredRenderpass);
+    createPregenRenderPass(&prefilteredRenderpass, format, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
     OffscreenBuffer offscreen;
     {
@@ -944,16 +870,12 @@ void ModelViewer::generatePrefilteredMap()
 
     auto bindingDescription = vkInits::vertexBindingDescription(sizeof(vec3<float>));
 
-    VkVertexInputAttributeDescription attributes[] = {
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0}
-    };
-
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     vertexInputInfo.vertexBindingDescriptionCount = 1;
     vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(attributes));
-    vertexInputInfo.pVertexAttributeDescriptions = attributes;
+    vertexInputInfo.vertexAttributeDescriptionCount = uint32_t(arraysize(CubemapModel::Attributes));
+    vertexInputInfo.pVertexAttributeDescriptions = CubemapModel::Attributes;
 
     auto inputAssembly = vkInits::inputAssemblyInfo();
     auto viewportState = vkInits::pipelineViewportStateCreateInfo(1, 1);
@@ -1149,7 +1071,7 @@ void ModelViewer::loadResources()
         models.object.transform = mat4x4::identity();
 
         auto sb = StringbBuilder(100);
-        constexpr auto materialPath = view("materials/patterned-bw-vinyl-bl/");
+        constexpr auto materialPath = view("materials/alien-panels/");
 
         sb << ASSETS_PATH << materialPath << view("albedo.png");
         textures.albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
@@ -1218,7 +1140,7 @@ void ModelViewer::buildDescriptors()
     const VkDescriptorPoolSize poolSizes[] = {
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 * MAX_IMAGES_IN_FLIGHT)
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9 * MAX_IMAGES_IN_FLIGHT)
     };
 
     auto maxSets = vkTools::descriptorPoolMaxSets(poolSizes);
@@ -1238,7 +1160,8 @@ void ModelViewer::buildDescriptors()
         vkInits::descriptorSetLayoutBinding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
         vkInits::descriptorSetLayoutBinding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
-        vkInits::descriptorSetLayoutBinding(8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        vkInits::descriptorSetLayoutBinding(8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(9, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
     };
 
     auto setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(bindings);
@@ -1258,11 +1181,12 @@ void ModelViewer::buildDescriptors()
             vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &scene.lightBuffers[i].descriptor),
             vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &brdf.descriptor),
             vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &irradiance.descriptor),
-            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.albedo.descriptor),
-            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.normal.descriptor),
-            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.roughness.descriptor),
-            vkInits::writeDescriptorSet(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.metallic.descriptor),
-            vkInits::writeDescriptorSet(8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.ao.descriptor)
+            vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &prefiltered.descriptor),
+            vkInits::writeDescriptorSet(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.albedo.descriptor),
+            vkInits::writeDescriptorSet(6, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.normal.descriptor),
+            vkInits::writeDescriptorSet(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.roughness.descriptor),
+            vkInits::writeDescriptorSet(8, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.metallic.descriptor),
+            vkInits::writeDescriptorSet(9, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.ao.descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -1286,11 +1210,7 @@ void ModelViewer::buildDescriptors()
     {
         auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-#if 0
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &prefiltered.descriptor)
-#else
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.skybox.descriptor)
-#endif
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);

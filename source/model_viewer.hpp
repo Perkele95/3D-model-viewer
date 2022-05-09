@@ -77,9 +77,9 @@ public:
     void onScrollWheelEvent(double x, double y);
 
 private:
-    // Pre-generated pbr textures
-    // TODO(arle): Combine anything shared between these three (renderpass)
-    // irradiance and prefiltered are generated pretty much the same way.
+    void createPregenRenderPass(VkRenderPass *pRenderPass,
+                                VkFormat format,
+                                VkImageLayout finalLayout);
     void generateBrdfLUT();
     void generateIrradianceMap();
     void generatePrefilteredMap();
