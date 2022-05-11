@@ -51,14 +51,6 @@ public:
     }
 };
 
-struct OffscreenBuffer
-{
-    VkImage         image;
-    VkImageView     view;
-    VkDeviceMemory  memory;
-    VkFramebuffer   framebuffer;
-};
-
 class ModelViewer : public VulkanInstance
 {
 public:
@@ -77,13 +69,11 @@ public:
     void onScrollWheelEvent(double x, double y);
 
 private:
-    void createPregenRenderPass(VkRenderPass *pRenderPass,
-                                VkFormat format,
-                                VkImageLayout finalLayout);
     void generateBrdfLUT();
     void generateIrradianceMap();
     void generatePrefilteredMap();
 
+    void loadHDRSkybox(const char *filename);
     void loadResources();
     void buildUniformBuffers();
     void buildDescriptors();
@@ -99,6 +89,7 @@ private:
     Camera                  m_mainCamera;
     SceneLights             m_lights;
     VkDescriptorPool        m_descriptorPool;
+    VkRenderPass            m_pregenRenderPass;
 
     struct ModelAssets
     {
@@ -113,8 +104,11 @@ private:
         Texture2D               roughness;
         Texture2D               metallic;
         Texture2D               ao;
-        TextureCubeMap          skybox;
+        TextureCubeMap2         environment;
     }textures;
+
+    TextureCubeMap2             irradiance;
+    TextureCubeMap2             prefiltered;
 
     struct PreGenerated
     {
@@ -123,7 +117,7 @@ private:
         VkDeviceMemory          memory;
         VkSampler               sampler;
         VkDescriptorImageInfo   descriptor;
-    }brdf, irradiance, prefiltered;
+    }brdf;
 
     struct Scene
     {

@@ -2,6 +2,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "../../vendor/stb/stb_image.h"
+#undef STB_IMAGE_IMPLEMENTATION
 
 void Texture::destroy(VkDevice device)
 {
@@ -338,6 +339,135 @@ void Texture2D::loadDefault(const VulkanDevice *device, VkQueue queue)
 
     auto samplerInfo = vkInits::samplerCreateInfo();
     vkCreateSampler(device->device, &samplerInfo, nullptr, &m_sampler);
+
+    updateDescriptor();
+}
+
+void TextureBase::destroy(VkDevice device)
+{
+    vkDestroySampler(device, sampler, nullptr);
+    vkFreeMemory(device, memory, nullptr);
+    vkDestroyImageView(device, view, nullptr);
+    vkDestroyImage(device, image, nullptr);
+}
+
+void TextureBase::updateDescriptor()
+{
+    descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    descriptor.imageView = view;
+    descriptor.sampler = sampler;
+}
+
+CoreResult HDRImage::load(const VulkanDevice *device, VkQueue queue, const char *filename)
+{
+    int x = 0, y = 0, channels = 0;
+    auto pixels = stbi_loadf(filename, &x, &y, &channels, 4);
+
+    format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    extent = {uint32_t(x), uint32_t(y)};
+    mipLevels = 1;
+
+    if(pixels != nullptr)
+    {
+        VulkanBuffer transfer;
+        device->createBuffer(VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MEM_FLAG_HOST_VISIBLE,
+                             16 * extent.width * extent.height,
+                             transfer, pixels);
+
+        stbi_image_free(pixels);
+
+        auto imageInfo = vkInits::imageCreateInfo();
+        imageInfo.extent.width = extent.width;
+        imageInfo.extent.height = extent.height;
+        imageInfo.format = format;
+        imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                          VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.mipLevels = mipLevels;
+        imageInfo.arrayLayers = 1;
+        vkCreateImage(device->device, &imageInfo, nullptr, &image);
+
+        VkMemoryRequirements memReqs{};
+        vkGetImageMemoryRequirements(device->device, image, &memReqs);
+
+        auto allocInfo = device->getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+        vkAllocateMemory(device->device, &allocInfo, nullptr, &memory);
+        vkBindImageMemory(device->device, image, memory, 0);
+
+        auto samplerInfo = vkInits::samplerCreateInfo();
+        vkCreateSampler(device->device, &samplerInfo, nullptr, &sampler);
+
+        auto viewInfo = vkInits::imageViewCreateInfo();
+        viewInfo.image = image;
+        viewInfo.format = format;
+        viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        viewInfo.subresourceRange.levelCount = mipLevels;
+        vkCreateImageView(device->device, &viewInfo, nullptr, &view);
+
+        auto cmd = device->createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+        vkTools::SetImageLayout(cmd,
+                                VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                image);
+
+        const auto bufferCopy = vkInits::bufferImageCopy(extent);
+        vkCmdCopyBufferToImage(cmd, transfer.data, image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                               1, &bufferCopy);
+
+        vkTools::SetImageLayout(cmd,
+                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                image);
+
+        device->flushCommandBuffer(cmd, queue);
+
+        transfer.destroy(device->device);
+
+        updateDescriptor();
+
+        return CoreResult::Success;
+    }
+
+    return CoreResult::Source_Missing;
+}
+
+void TextureCubeMap2::prepare(const VulkanDevice *device)
+{
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.format = format;
+    imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.extent = {extent.width, extent.height, 1};
+    imageInfo.arrayLayers = 6;
+    imageInfo.mipLevels = mipLevels;
+    imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    vkCreateImage(device->device, &imageInfo, nullptr, &image);
+
+    VkMemoryRequirements memReqs{};
+    vkGetImageMemoryRequirements(device->device, image, &memReqs);
+
+    auto allocInfo = device->getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+    vkAllocateMemory(device->device, &allocInfo, nullptr, &memory);
+    vkBindImageMemory(device->device, image, memory, 0);
+
+    auto samplerInfo = vkInits::samplerCreateInfo(float(mipLevels));
+    samplerInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+    vkCreateSampler(device->device, &samplerInfo, nullptr, &sampler);
+
+    auto viewInfo = vkInits::imageViewCreateInfo();
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    viewInfo.image = image;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = mipLevels;
+    viewInfo.subresourceRange.layerCount = 6;
+    vkCreateImageView(device->device, &viewInfo, nullptr, &view);
 
     updateDescriptor();
 }

@@ -36,6 +36,14 @@ struct QueueBits
     uint32_t present;
 };
 
+struct OffscreenBuffer
+{
+    VkImage         image;
+    VkImageView     view;
+    VkDeviceMemory  memory;
+    VkFramebuffer   framebuffer;
+};
+
 class VulkanDevice
 {
 public:
@@ -54,11 +62,17 @@ public:
     VkCommandBuffer createCommandBuffer(VkCommandBufferLevel level, bool begin = true) const;
     void flushCommandBuffer(VkCommandBuffer command, VkQueue queue, bool free = true) const;
 
-    VkResult createBuffer(VkBufferUsageFlags usage,
-                          VkMemoryPropertyFlags memFlags,
-                          VkDeviceSize size,
-                          VulkanBuffer &buffer,
-                          const void *src = nullptr) const;
+    void createBuffer(VkBufferUsageFlags usage,
+                      VkMemoryPropertyFlags memFlags,
+                      VkDeviceSize size,
+                      VulkanBuffer &buffer,
+                      const void *src = nullptr) const;
+
+    void createOffscreenBuffer(VkFormat format,
+                               VkExtent2D dimension,
+                               VkRenderPass renderPass,
+                               VkQueue queue,
+                               OffscreenBuffer &buffer) const;
 
     // ~Tools
 

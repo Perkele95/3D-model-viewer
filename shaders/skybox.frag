@@ -15,7 +15,7 @@ void main()
     colour = colour / (colour + vec3(1.0));
 
     // Gamma correct
-    colour = pow(colour, vec3(0.4545));
+    colour = pow(colour, vec3(0.9));
 
     outColour = vec4(colour, 1.0);
 }

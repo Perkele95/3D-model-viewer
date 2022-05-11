@@ -48,6 +48,35 @@ public:
 private:
     void loadDefault(const VulkanDevice *device, VkQueue queue);
 };
+// TODO(arle): replace the original
+class TextureBase
+{
+public:
+    void destroy(VkDevice device);
+    void updateDescriptor();
+
+    VkImage                 image;
+    VkImageView             view;
+    VkDeviceMemory          memory;
+    VkExtent2D              extent;
+    VkSampler               sampler;
+	uint32_t                mipLevels;
+    VkFormat                format;
+    VkDescriptorImageInfo   descriptor;
+};
+
+// Loads HDR images with 32-bit float precision
+class HDRImage : public TextureBase
+{
+public:
+    CoreResult load(const VulkanDevice *device, VkQueue queue, const char *filename);
+};
+// TODO(arle): replace the original
+class TextureCubeMap2 : public TextureBase
+{
+public:
+    void prepare(const VulkanDevice *device);
+};
 
 class TextureCubeMap : public Texture
 {

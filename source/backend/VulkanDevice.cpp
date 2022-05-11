@@ -103,14 +103,14 @@ void VulkanDevice::flushCommandBuffer(VkCommandBuffer command, VkQueue queue, bo
         vkFreeCommandBuffers(device, commandPool, 1, &command);
 }
 
-VkResult VulkanDevice::createBuffer(VkBufferUsageFlags usage,
-                                    VkMemoryPropertyFlags memFlags,
-                                    VkDeviceSize size,
-                                    VulkanBuffer &buffer,
-                                    const void *src) const
+void VulkanDevice::createBuffer(VkBufferUsageFlags usage,
+                                VkMemoryPropertyFlags memFlags,
+                                VkDeviceSize size,
+                                VulkanBuffer &buffer,
+                                const void *src) const
 {
     auto bufferInfo = vkInits::bufferCreateInfo(size, usage);
-    auto result = vkCreateBuffer(device, &bufferInfo, nullptr, &buffer.data);
+    vkCreateBuffer(device, &bufferInfo, nullptr, &buffer.data);
 
     VkMemoryRequirements memReqs;
     vkGetBufferMemoryRequirements(device, buffer.data, &memReqs);
@@ -128,6 +128,53 @@ VkResult VulkanDevice::createBuffer(VkBufferUsageFlags usage,
         memcpy(buffer.mapped, src, size);
         buffer.unmap(device);
     }
+}
 
-    return result;
+void VulkanDevice::createOffscreenBuffer(VkFormat format,
+                                         VkExtent2D dimension,
+                                         VkRenderPass renderPass,
+                                         VkQueue queue,
+                                         OffscreenBuffer &buffer) const
+{
+    auto imageInfo = vkInits::imageCreateInfo();
+    imageInfo.format = format;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.extent = {dimension.width, dimension.height, 1};
+    imageInfo.arrayLayers = 1;
+    imageInfo.mipLevels = 1;
+    vkCreateImage(device, &imageInfo, nullptr, &buffer.image);
+
+    VkMemoryRequirements memReqs{};
+    vkGetImageMemoryRequirements(device, buffer.image, &memReqs);
+
+    auto allocInfo = getMemoryAllocInfo(memReqs, MEM_FLAG_GPU_LOCAL);
+    vkAllocateMemory(device, &allocInfo, nullptr, &buffer.memory);
+    vkBindImageMemory(device, buffer.image, buffer.memory, 0);
+
+    auto viewInfo = vkInits::imageViewCreateInfo();
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.image = buffer.image;
+    viewInfo.format = format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+    vkCreateImageView(device, &viewInfo, nullptr, &buffer.view);
+
+    auto framebufferInfo = vkInits::framebufferCreateInfo();
+    framebufferInfo.width = dimension.width;
+    framebufferInfo.height = dimension.height;
+    framebufferInfo.renderPass = renderPass;
+    framebufferInfo.pAttachments = &buffer.view;
+    framebufferInfo.attachmentCount = 1;
+    vkCreateFramebuffer(device, &framebufferInfo, nullptr, &buffer.framebuffer);
+
+    auto cmd = createCommandBuffer(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+    vkTools::SetImageLayout(cmd,
+                            VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                            buffer.image);
+    flushCommandBuffer(cmd, queue);
 }
