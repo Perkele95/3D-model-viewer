@@ -59,6 +59,7 @@ public:
     // Tools
 
     VkMemoryAllocateInfo getMemoryAllocInfo(VkMemoryRequirements memReqs, VkMemoryPropertyFlags flags) const;
+    bool linearFilterSupport(VkFormat format, VkImageTiling tiling) const;
     VkCommandBuffer createCommandBuffer(VkCommandBufferLevel level, bool begin = true) const;
     void flushCommandBuffer(VkCommandBuffer command, VkQueue queue, bool free = true) const;
 

@@ -19,23 +19,6 @@ namespace vkTools
         return maxSets;
     }
 
-    TOOLS_API bool LinearFilterSupport(VkPhysicalDevice gpu,
-                                       VkFormat format,
-                                       VkImageTiling tiling)
-    {
-        VkFormatProperties props;
-        vkGetPhysicalDeviceFormatProperties(gpu, format, &props);
-
-        switch (tiling)
-        {
-            case VK_IMAGE_TILING_LINEAR:
-                return props.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
-            case VK_IMAGE_TILING_OPTIMAL:
-                return props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
-            default: return false;
-        }
-    }
-
     TOOLS_API void InsertMemoryarrier(VkCommandBuffer cmd,
                                       VkImageLayout oldLayout,
                                       VkImageLayout newLayout,

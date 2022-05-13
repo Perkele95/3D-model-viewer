@@ -89,7 +89,6 @@ private:
     Camera                  m_mainCamera;
     SceneLights             m_lights;
     VkDescriptorPool        m_descriptorPool;
-    VkRenderPass            m_pregenRenderPass;
 
     struct ModelAssets
     {
@@ -104,13 +103,13 @@ private:
         Texture2D               roughness;
         Texture2D               metallic;
         Texture2D               ao;
-        TextureCubeMap2         environment;
+        TextureCubeMap          environment;
     }textures;
 
-    TextureCubeMap2             irradiance;
-    TextureCubeMap2             prefiltered;
+    TextureCubeMap              irradiance;
+    TextureCubeMap              prefiltered;
 
-    struct PreGenerated
+    struct
     {
         VkImage                 image;
         VkImageView             view;

@@ -54,7 +54,7 @@ public:
 
 private:
     void prepareRenderpass();
-    void prepareFontTexture();
+    void prepareGlyphAtlas();
     void prepareDescriptors();
     void preparePipeline();
     void prepareRenderBuffers();
@@ -70,7 +70,7 @@ private:
     FragmentShader          m_fragmentShader;
     VulkanBuffer            m_vertexBuffer;
     VulkanBuffer            m_indexBuffer;
-    Texture2D               m_fontTexture;
+    Texture2D               m_glyphAtlas;
     quad_vertex*            m_mappedVertices;
     quad_index*             m_mappedIndices;
     size_t                  m_quadCount;

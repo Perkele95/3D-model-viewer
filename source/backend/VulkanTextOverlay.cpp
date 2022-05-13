@@ -41,7 +41,7 @@ void VulkanTextOverlay::init(const VulkanDevice* device, linear_storage *storage
     auto cmdInfo = vkInits::commandBufferAllocateInfo(device->commandPool, MAX_IMAGES_IN_FLIGHT);
     vkAllocateCommandBuffers(m_device->device, &cmdInfo, commandBuffers);
 
-    prepareFontTexture();
+    prepareGlyphAtlas();
     prepareDescriptors();
     prepareRenderpass();
     preparePipeline();
@@ -55,7 +55,8 @@ void VulkanTextOverlay::destroy()
 
     m_vertexBuffer.destroy(m_device->device);
     m_indexBuffer.destroy(m_device->device);
-    m_fontTexture.destroy(m_device->device);
+
+    m_glyphAtlas.destroy(m_device->device);
 
     vkDestroyRenderPass(m_device->device, m_renderPass, nullptr);
     vkDestroyPipeline(m_device->device, m_pipeline, nullptr);
@@ -271,17 +272,19 @@ void VulkanTextOverlay::prepareRenderpass()
     vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
 }
 
-void VulkanTextOverlay::prepareFontTexture()
+void VulkanTextOverlay::prepareGlyphAtlas()
 {
+    //TODO(arle): put fontpixels directly into gpu memory instead of static memory
     static uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
     STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
-    m_fontTexture.loadFromMemory(m_device,
-                                 graphicsQueue,
-                                 VK_FORMAT_R8_UNORM,
-                                 {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT},
-                                 1,
-                                 fontpixels);
+    ImageFile file{};
+    file.pixels = fontpixels[0];
+    file.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT};
+    file.format = VK_FORMAT_R8_UNORM;
+    file.bytesPerPixel = 1;
+
+    m_glyphAtlas.create(m_device, graphicsQueue, file);
 }
 
 void VulkanTextOverlay::prepareDescriptors()
@@ -312,7 +315,7 @@ void VulkanTextOverlay::prepareDescriptors()
     {
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                        m_descriptorSets[i], &m_fontTexture.descriptor)
+                                        m_descriptorSets[i], &m_glyphAtlas.descriptor)
         };
         vkUpdateDescriptorSets(m_device->device, uint32_t(arraysize(writes)), writes, 0, nullptr);
     }

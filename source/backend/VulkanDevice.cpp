@@ -70,6 +70,21 @@ VkMemoryAllocateInfo VulkanDevice::getMemoryAllocInfo(VkMemoryRequirements memRe
     return allocInfo;
 }
 
+bool VulkanDevice::linearFilterSupport(VkFormat format, VkImageTiling tiling) const
+{
+    VkFormatProperties props;
+    vkGetPhysicalDeviceFormatProperties(gpu, format, &props);
+
+    switch (tiling)
+    {
+        case VK_IMAGE_TILING_LINEAR:
+            return props.linearTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        case VK_IMAGE_TILING_OPTIMAL:
+            return props.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+        default: return false;
+    }
+}
+
 VkCommandBuffer VulkanDevice::createCommandBuffer(VkCommandBufferLevel level, bool begin) const
 {
     VkCommandBuffer command = VK_NULL_HANDLE;

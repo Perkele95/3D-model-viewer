@@ -37,47 +37,6 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
     sb.flush() << SHADERS_PATH << view("skybox_frag.spv");
     skybox.fragmentShader.load(device, sb.c_str());
 
-    // Render pass used in pregenerating skybox, irradiance & prefiltered textures
-    {
-        auto colourAttachment = vkInits::attachmentDescription(VK_FORMAT_R16G16B16A16_SFLOAT);
-        colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        auto colourAttachmentRef = vkInits::attachmentReference(0);
-        colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colourAttachmentRef;
-
-        VkSubpassDependency dependencies[2];
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-        dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
-
-        VkRenderPassCreateInfo renderPassInfo{};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = 1;
-        renderPassInfo.pAttachments = &colourAttachment;
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
-        renderPassInfo.pDependencies = dependencies;
-        vkCreateRenderPass(device, &renderPassInfo, nullptr, &m_pregenRenderPass);
-    }
-
     sb.flush() << ASSETS_PATH << view("skybox/Newport_Loft_Ref.hdr");
     loadHDRSkybox(sb.c_str());
 
@@ -85,8 +44,6 @@ ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platfor
 
     generateIrradianceMap();
     generatePrefilteredMap();
-
-    vkDestroyRenderPass(device, m_pregenRenderPass, nullptr);
 
     m_mainCamera.init();
     m_lights.init();
@@ -133,16 +90,12 @@ ModelViewer::~ModelViewer()
 {
     vkDeviceWaitIdle(device);
 
-    const auto destroyPreGenerated = [](VkDevice vkDev, PreGenerated &resource)
-    {
-        vkDestroySampler(vkDev, resource.sampler, nullptr);
-        vkDestroyImageView(vkDev, resource.view, nullptr);
-        vkDestroyImage(vkDev, resource.image, nullptr);
-        vkFreeMemory(vkDev, resource.memory, nullptr);
-    };
+    vkDestroySampler(device, brdf.sampler, nullptr);
+    vkDestroyImageView(device, brdf.view, nullptr);
+    vkDestroyImage(device, brdf.image, nullptr);
+    vkFreeMemory(device, brdf.memory, nullptr);
 
     textures.environment.destroy(device);
-    destroyPreGenerated(device, brdf);
     irradiance.destroy(device);
     prefiltered.destroy(device);
 
@@ -451,9 +404,49 @@ void ModelViewer::generateIrradianceMap()
     irradiance.mipLevels = static_cast<uint32_t>(std::floor(std::log2(dimension))) + 1;
     irradiance.prepare(&device);
 
+    auto colourAttachment = vkInits::attachmentDescription(irradiance.format);
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colourAttachmentRef;
+
+    VkSubpassDependency dependencies[2];
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colourAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+
+    VkRenderPass irradianceRenderPass = VK_NULL_HANDLE;
+    vkCreateRenderPass(device, &renderPassInfo, nullptr, &irradianceRenderPass);
+
     OffscreenBuffer offscreen;
     device.createOffscreenBuffer(irradiance.format, irradiance.extent,
-                                 m_pregenRenderPass,
+                                 irradianceRenderPass,
                                  graphicsQueue, offscreen);
 
     // Descriptors
@@ -555,7 +548,7 @@ void ModelViewer::generateIrradianceMap()
     pipelineInfo.pColorBlendState = &colourBlend;
     pipelineInfo.layout = irradiancePipelineLayout;
     pipelineInfo.pDynamicState = &dynamicStateInfo;
-    pipelineInfo.renderPass = m_pregenRenderPass;
+    pipelineInfo.renderPass = irradianceRenderPass;
 
     VkPipeline irradiancePipeline = VK_NULL_HANDLE;
     vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &irradiancePipeline);
@@ -565,7 +558,7 @@ void ModelViewer::generateIrradianceMap()
     VkClearValue clearValue;
     clearValue.color = {{0.0f, 0.0f, 0.2f, 1.0f}};
 
-    auto renderBeginInfo = vkInits::renderPassBeginInfo(m_pregenRenderPass, irradiance.extent);
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(irradianceRenderPass, irradiance.extent);
     renderBeginInfo.framebuffer = offscreen.framebuffer;
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = &clearValue;
@@ -678,6 +671,7 @@ void ModelViewer::generateIrradianceMap()
 
     device.flushCommandBuffer(cmd, graphicsQueue);
 
+    vkDestroyRenderPass(device, irradianceRenderPass, nullptr);
     vkDestroyFramebuffer(device, offscreen.framebuffer, nullptr);
     vkFreeMemory(device, offscreen.memory, nullptr);
     vkDestroyImageView(device, offscreen.view, nullptr);
@@ -698,9 +692,49 @@ void ModelViewer::generatePrefilteredMap()
     prefiltered.mipLevels = static_cast<uint32_t>(std::floor(std::log2(dimension))) + 1;
     prefiltered.prepare(&device);
 
+    auto colourAttachment = vkInits::attachmentDescription(prefiltered.format);
+    colourAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    auto colourAttachmentRef = vkInits::attachmentReference(0);
+    colourAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass{};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &colourAttachmentRef;
+
+    VkSubpassDependency dependencies[2];
+    dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[0].dstSubpass = 0;
+    dependencies[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    dependencies[1].srcSubpass = 0;
+    dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+    VkRenderPassCreateInfo renderPassInfo{};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1;
+    renderPassInfo.pAttachments = &colourAttachment;
+    renderPassInfo.subpassCount = 1;
+    renderPassInfo.pSubpasses = &subpass;
+    renderPassInfo.dependencyCount = uint32_t(arraysize(dependencies));
+    renderPassInfo.pDependencies = dependencies;
+
+    VkRenderPass prefilteredRenderPass = VK_NULL_HANDLE;
+    vkCreateRenderPass(device, &renderPassInfo, nullptr, &prefilteredRenderPass);
+
     OffscreenBuffer offscreen;
     device.createOffscreenBuffer(prefiltered.format, prefiltered.extent,
-                                 m_pregenRenderPass,
+                                 prefilteredRenderPass,
                                  graphicsQueue, offscreen);
 
     // Descriptors
@@ -805,7 +839,7 @@ void ModelViewer::generatePrefilteredMap()
     pipelineInfo.pColorBlendState = &colourBlend;
     pipelineInfo.layout = prefilteredPipelineLayout;
     pipelineInfo.pDynamicState = &dynamicStateInfo;
-    pipelineInfo.renderPass = m_pregenRenderPass;
+    pipelineInfo.renderPass = prefilteredRenderPass;
 
     VkPipeline prefilteredPipeline = VK_NULL_HANDLE;
     vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &prefilteredPipeline);
@@ -815,7 +849,7 @@ void ModelViewer::generatePrefilteredMap()
     VkClearValue clearValue;
     clearValue.color = {{0.2f, 0.0f, 0.0f, 1.0f}};
 
-    auto renderBeginInfo = vkInits::renderPassBeginInfo(m_pregenRenderPass, prefiltered.extent);
+    auto renderBeginInfo = vkInits::renderPassBeginInfo(prefilteredRenderPass, prefiltered.extent);
     renderBeginInfo.framebuffer = offscreen.framebuffer;
     renderBeginInfo.clearValueCount = 1;
     renderBeginInfo.pClearValues = &clearValue;
@@ -934,6 +968,7 @@ void ModelViewer::generatePrefilteredMap()
 
     device.flushCommandBuffer(cmd, graphicsQueue);
 
+    vkDestroyRenderPass(device, prefilteredRenderPass, nullptr);
     vkDestroyFramebuffer(device, offscreen.framebuffer, nullptr);
     vkFreeMemory(device, offscreen.memory, nullptr);
     vkDestroyImageView(device, offscreen.view, nullptr);
@@ -1220,6 +1255,7 @@ void ModelViewer::loadHDRSkybox(const char *filename)
 
         device.flushCommandBuffer(cmd, graphicsQueue);
 
+        vkDestroyRenderPass(device, skyboxRenderPass, nullptr);
         vkDestroyFramebuffer(device, offscreen.framebuffer, nullptr);
         vkFreeMemory(device, offscreen.memory, nullptr);
         vkDestroyImageView(device, offscreen.view, nullptr);
@@ -1244,19 +1280,29 @@ void ModelViewer::loadResources()
         constexpr auto materialPath = view("materials/warped-sheet-metal/");
 
         sb << ASSETS_PATH << materialPath << view("albedo.png");
-        textures.albedo.loadRGBA(&device, graphicsQueue, sb.c_str(), true);
+        auto imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        textures.albedo.create(&device, graphicsQueue, imageFile, true);
+        Texture2D::freeFile(imageFile);
 
         sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
-        textures.normal.loadRGBA(&device, graphicsQueue, sb.c_str());
+        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        textures.normal.create(&device, graphicsQueue, imageFile, true);
+        Texture2D::freeFile(imageFile);
 
         sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
-        textures.roughness.loadRGBA(&device, graphicsQueue, sb.c_str());
+        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        textures.roughness.create(&device, graphicsQueue, imageFile, true);
+        Texture2D::freeFile(imageFile);
 
         sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
-        textures.metallic.loadRGBA(&device, graphicsQueue, sb.c_str());
+        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        textures.metallic.create(&device, graphicsQueue, imageFile, true);
+        Texture2D::freeFile(imageFile);
 
         sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
-        textures.ao.loadRGBA(&device, graphicsQueue, sb.c_str());
+        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        textures.ao.create(&device, graphicsQueue, imageFile, true);
+        Texture2D::freeFile(imageFile);
 
         sb.destroy();
     }
