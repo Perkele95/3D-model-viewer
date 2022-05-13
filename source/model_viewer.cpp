@@ -12,16 +12,16 @@ void CoreMessageCallback(log_level level, const char *string)
     pltf::DebugBreak();
 }
 
-ModelViewer::ModelViewer(pltf::logical_device platform) : VulkanInstance(platform, MegaBytes(64))
+ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
 {
     settings.title = "PBR Demo";
     settings.syncMode = VSyncMode::Off;
     settings.enValidation = ENABLE_VALIDATION;
 
-    auto dispatcher = EventDispatcher<ModelViewer>(platform, this);
-
     VulkanInstance::coreMessage = CoreMessageCallback;
     VulkanInstance::prepare();
+
+    auto dispatcher = EventDispatcher<ModelViewer>(platformDevice, this);
 
     loadResources();
     generateBrdfLUT();
@@ -1315,9 +1315,9 @@ void ModelViewer::buildUniformBuffers()
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
         device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
-                            sizeof(mvp_matrix), scene.cameraBuffers[i]);
+                            sizeof(MvpMatrix), scene.cameraBuffers[i]);
         device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
-                            sizeof(mvp_matrix), scene.lightBuffers[i]);
+                            sizeof(MvpMatrix), scene.lightBuffers[i]);
     }
 
     updateCamera(0.0f);
@@ -1507,7 +1507,7 @@ void ModelViewer::updateCamera(float dt)
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
     {
         scene.cameraBuffers[i].map(device);
-        *static_cast<mvp_matrix*>(scene.cameraBuffers[i].mapped) = ubo;
+        *static_cast<MvpMatrix*>(scene.cameraBuffers[i].mapped) = ubo;
         scene.cameraBuffers[i].unmap(device);
     }
 }

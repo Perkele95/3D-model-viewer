@@ -2,6 +2,8 @@
 
 void VulkanInstance::prepare()
 {
+    platformDevice = pltf::DeviceCreate();
+
     pltf::WindowCreate(platformDevice, settings.title);
 
     auto appInfo = vkInits::applicationInfo(settings.title);
@@ -359,6 +361,8 @@ void VulkanInstance::destroy()
     device.destroy();
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyInstance(m_instance, nullptr);
+
+    pltf::DeviceDestroy(platformDevice);
 }
 
 void VulkanInstance::onResize()

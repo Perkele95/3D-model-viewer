@@ -15,7 +15,7 @@ struct CameraControls
     bool moveRight;
 };
 
-struct alignas(16) mvp_matrix
+struct alignas(16) MvpMatrix
 {
     mat4x4 view;
     mat4x4 proj;
@@ -57,7 +57,7 @@ public:
     void init();
     void update(float dt, float aspectRatio);
 
-    mvp_matrix getModelViewProjection();
+    MvpMatrix getModelViewProjection();
     ModelViewMatrix getModelView();
 
     float           fov;

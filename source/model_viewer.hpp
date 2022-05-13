@@ -9,52 +9,10 @@
 #include "backend/camera.hpp"
 #include "backend/lights.hpp"
 
-template<typename T>
-class EventDispatcher
-{
-public:
-    static void WindowSize(pltf::logical_device device, int32_t width, int32_t height)
-    {
-        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
-        app->onWindowSize(width, height);
-    }
-
-    static void KeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
-    {
-        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
-        app->onKeyEvent(key, mod);
-    }
-
-    static void MouseEvent(pltf::logical_device device, pltf::mouse_button button)
-    {
-        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
-        app->onMouseButtonEvent(button);
-    }
-
-    static void ScrollWheel(pltf::logical_device device, double x, double y)
-    {
-        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
-        app->onScrollWheelEvent(x, y);
-    }
-
-    EventDispatcher(pltf::logical_device device, T *handle)
-    {
-        pltf::DeviceSetHandle(device, handle);
-
-        pltf::EventCallbacks procs;
-        procs.windowSize = WindowSize;
-        procs.keyEvent = KeyEvent;
-        procs.mouseMove = nullptr;
-        procs.mouseButton = MouseEvent;
-        procs.scrollWheel = ScrollWheel;
-        pltf::EventsBindCallbacks(device, procs);
-    }
-};
-
 class ModelViewer : public VulkanInstance
 {
 public:
-    ModelViewer(pltf::logical_device platform);
+    ModelViewer();
     ~ModelViewer();
 
     ModelViewer(const ModelViewer &src) = delete;
@@ -139,4 +97,46 @@ private:
         VkDescriptorSetLayout   setLayout;
         VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
     }skybox;
+};
+
+template<typename T>
+class EventDispatcher
+{
+public:
+    static void WindowSize(pltf::logical_device device, int32_t width, int32_t height)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onWindowSize(width, height);
+    }
+
+    static void KeyEvent(pltf::logical_device device, pltf::key_code key, pltf::modifier mod)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onKeyEvent(key, mod);
+    }
+
+    static void MouseEvent(pltf::logical_device device, pltf::mouse_button button)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onMouseButtonEvent(button);
+    }
+
+    static void ScrollWheel(pltf::logical_device device, double x, double y)
+    {
+        auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
+        app->onScrollWheelEvent(x, y);
+    }
+
+    EventDispatcher(pltf::logical_device device, T *handle)
+    {
+        pltf::DeviceSetHandle(device, handle);
+
+        pltf::EventCallbacks procs;
+        procs.windowSize = WindowSize;
+        procs.keyEvent = KeyEvent;
+        procs.mouseMove = nullptr;
+        procs.mouseButton = MouseEvent;
+        procs.scrollWheel = ScrollWheel;
+        pltf::EventsBindCallbacks(device, procs);
+    }
 };

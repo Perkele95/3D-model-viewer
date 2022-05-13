@@ -274,17 +274,17 @@ void VulkanTextOverlay::prepareRenderpass()
 
 void VulkanTextOverlay::prepareGlyphAtlas()
 {
-    //TODO(arle): put fontpixels directly into gpu memory instead of static memory
-    static uint8_t fontpixels[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
-    STB_SOMEFONT_CREATE(s_Fontdata, fontpixels, STB_SOMEFONT_BITMAP_HEIGHT);
+    auto fontPixels = new uint8_t[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];
+    STB_SOMEFONT_CREATE(s_Fontdata, fontPixels, STB_SOMEFONT_BITMAP_HEIGHT);
 
     ImageFile file{};
-    file.pixels = fontpixels[0];
+    file.pixels = fontPixels[0];
     file.extent = {STB_SOMEFONT_BITMAP_WIDTH, STB_SOMEFONT_BITMAP_HEIGHT};
     file.format = VK_FORMAT_R8_UNORM;
     file.bytesPerPixel = 1;
-
     m_glyphAtlas.create(m_device, graphicsQueue, file);
+
+    delete[] fontPixels;
 }
 
 void VulkanTextOverlay::prepareDescriptors()

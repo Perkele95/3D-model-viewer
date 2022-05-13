@@ -41,9 +41,9 @@ void Camera::update(float dt, float aspectRatio)
     m_proj = mat4x4::perspective(this->fov, aspectRatio, m_zNear, m_zFar);
 }
 
-mvp_matrix Camera::getModelViewProjection()
+MvpMatrix Camera::getModelViewProjection()
 {
-    auto mvp = mvp_matrix();
+    auto mvp = MvpMatrix();
     mvp.view = m_view;
     mvp.proj = m_proj;
     mvp.position = vec4(m_position, 1.0f);

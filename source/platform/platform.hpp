@@ -2,8 +2,8 @@
 
 #include <stdint.h>
 
-const auto SCREEN_SIZE_X = 1920;
-const auto SCREEN_SIZE_Y = 1080;
+const auto SCREEN_SIZE_X = 2560;
+const auto SCREEN_SIZE_Y = 1440;
 const auto VIEWPORT_SIZE_X = 1280;
 const auto VIEWPORT_SIZE_Y = 720;
 
@@ -13,11 +13,6 @@ namespace pltf
 	using logical_device = logical_device_T*;
 	using timestep_type = float;
 }
-
-// User defined custom entrypoint
-// Pltf uses WinMain on win32 instead of int main
-
-int EntryPoint(pltf::logical_device device);
 
 namespace pltf
 {
@@ -182,13 +177,15 @@ namespace pltf
 
     // Main
 
+	logical_device DeviceCreate();
+	void DeviceDestroy(logical_device device);
+	void DeviceSetHandle(logical_device device, void *handle);
+	void *DeviceGetHandle(logical_device device);
+
 	bool WindowCreate(logical_device device, const char *title);
 	void WindowSetFullscreen(logical_device device);
 	void WindowSetMinimised(logical_device device);
 	void WindowClose();
-
-	void DeviceSetHandle(logical_device device, void *handle);
-	void *DeviceGetHandle(logical_device device);
 
     // Flag query
 

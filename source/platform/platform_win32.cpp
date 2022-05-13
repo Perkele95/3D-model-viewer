@@ -31,6 +31,43 @@ namespace pltf
 	static bool s_WindowResized = false;
 	static bool s_WindowFullscreen = false;
 
+	void WindowSizeStub(logical_device device, int32_t x, int32_t y){}
+	void KeyEventStub(logical_device, key_code, modifier){}
+	void MouseMoveStub(logical_device){}
+	void MouseButtonStub(logical_device, mouse_button){}
+	void ScrollWheelStub(logical_device, double x, double y){}
+
+	logical_device DeviceCreate()
+	{
+		auto device = new logical_device_T;
+		device->instance = GetModuleHandleA(nullptr);
+		device->window = nullptr;
+		device->windowPlacement = {sizeof(WINDOWPLACEMENT)};
+		device->dt = 0.0f;
+		device->windowSizeCallback = WindowSizeStub;
+		device->keyEventCallback = KeyEventStub;
+		device->mouseMoveCallback = MouseMoveStub;
+		device->mouseButtonCallback = MouseButtonStub;
+		device->scrollWheelCallback = ScrollWheelStub;
+		device->callbackHandle = nullptr;
+		return device;
+	}
+
+	void DeviceDestroy(logical_device device)
+	{
+		delete device;
+	}
+
+	void DeviceSetHandle(logical_device device, void *handle)
+	{
+		device->callbackHandle = handle;
+	}
+
+	void *DeviceGetHandle(logical_device device)
+	{
+		return device->callbackHandle;
+	}
+
 	LRESULT CALLBACK MainWindowCallback(HWND window, UINT message,
 										WPARAM wParam, LPARAM lParam)
 	{
@@ -73,6 +110,10 @@ namespace pltf
 			SetDefaultWindowStyle(device->window);
 		}
 
+		QueryPerformanceFrequency(&device->counterFrequency);
+		QueryPerformanceCounter(&device->counter);
+		s_Running = true;
+
 		return false;
 	}
 
@@ -104,16 +145,6 @@ namespace pltf
 	void WindowClose()
 	{
 		s_Running = false;
-	}
-
-	void DeviceSetHandle(logical_device device, void *handle)
-	{
-		device->callbackHandle = handle;
-	}
-
-	void *DeviceGetHandle(logical_device device)
-	{
-		return device->callbackHandle;
 	}
 
     bool IsRunning()
@@ -218,7 +249,7 @@ namespace pltf
 		modifier mod = altFlag | repeatFlag | extFlag;
 		return mod;
 
-		/* A simpler explanation of this procedure:
+		/* A simpler explanation:
 
 		if((HIWORD(param) & KF_ALTDOWN))
 			mod |= MODIFIER_ALT;
@@ -354,37 +385,6 @@ namespace pltf
 	{
 		return bool(VirtualFree(mapped, 0, MEM_RELEASE));
 	}
-}
-
-void WindowSizeStub(pltf::logical_device device, int32_t x, int32_t y){}
-void KeyEventStub(pltf::logical_device, pltf::key_code, pltf::modifier){}
-void MouseMoveStub(pltf::logical_device){}
-void MouseButtonStub(pltf::logical_device, pltf::mouse_button){}
-void ScrollWheelStub(pltf::logical_device, double x, double y){}
-
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
-                   _In_ PSTR lpCmdLine, _In_ INT nCmdShow)
-{
-	pltf::logical_device_T device;
-	device.instance = hInstance;
-	device.window = NULL;
-	device.windowPlacement = {sizeof(WINDOWPLACEMENT)};
-
-	QueryPerformanceFrequency(&device.counterFrequency);
-	QueryPerformanceCounter(&device.counter);
-
-	device.dt = 0.001f;
-	device.windowSizeCallback = WindowSizeStub;
-	device.keyEventCallback = KeyEventStub;
-	device.mouseMoveCallback = MouseMoveStub;
-	device.mouseButtonCallback = MouseButtonStub;
-	device.scrollWheelCallback = ScrollWheelStub;
-	device.callbackHandle = nullptr;
-
-	pltf::s_Running = true;
-
-    const auto mainResult = EntryPoint(&device);
-    return mainResult;
 }
 
 namespace io
