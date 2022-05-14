@@ -1,26 +1,54 @@
 #include "lights.hpp"
 
-void SceneLights::init()
+void SceneLight::init(const VulkanDevice *device)
 {
-    constexpr float LIGHT_STR = 200.0f;
-    m_positions[0] = vec4(5.0f, 1.0f, -5.0f, 0.0f);
-    m_positions[1] = vec4(-5.0f, -1.0f, 5.0f, 0.0f);
-    m_positions[2] = vec4(0.0f);
-    m_positions[3] = vec4(0.0f);
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+    {
+        device->createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
+                            sizeof(LightData), buffers[i]);
+    }
 
-    m_colours[0] = GetColour(255, 247, 207) * LIGHT_STR;
-    m_colours[1] = GetColour(125, 214, 250) * LIGHT_STR;
-    m_colours[2] = vec4(0.0f);
-    m_colours[3] = vec4(0.0f);
+    pointLights[0].strength = 200.0f;
+    pointLights[0].position = vec3(5.0f, 1.0f, -5.0f);
+    pointLights[0].colour = GetColour(255, 247, 207);
+
+    pointLights[1].strength = 200.0f;
+    pointLights[1].position = vec3(-5.0f, -1.0f, 5.0f);
+    pointLights[1].colour = GetColour(125, 214, 250);
+
+    pointLights[2].strength = 0.0f;
+    pointLights[2].position = vec3(0.0f);
+    pointLights[2].colour = vec4(0.0f);
+
+    pointLights[3].strength = 0.0f;
+    pointLights[3].position = vec3(0.0f);
+    pointLights[3].colour = vec4(0.0f);
+
+    update(device->device);
 }
 
-LightData SceneLights::getData()
+void SceneLight::destroy(VkDevice device)
 {
-    auto data = LightData();
-    for (size_t i = 0; i < LIGHTS_COUNT; i++)
+    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
+        buffers[i].destroy(device);
+}
+
+void SceneLight::update(VkDevice device)
+{
+    for (size_t image = 0; image < MAX_IMAGES_IN_FLIGHT; image++)
     {
-        data.positions[i] = m_positions[i];
-        data.colours[i] = m_colours[i];
+        buffers[image].map(device);
+
+        auto mapped = static_cast<LightData*>(buffers[image].mapped);
+        for (size_t i = 0; i < arraysize(pointLights); i++)
+        {
+            mapped->positions[i] = vec4(pointLights[i].position, 1.0f);
+            mapped->colours[i] = pointLights[i].colour * pointLights[i].strength;
+        }
+
+        mapped->exposure = exposure;
+        mapped->gamma = gamma;
+
+        buffers[image].unmap(device);
     }
-    return data;
 }

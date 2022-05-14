@@ -7,6 +7,14 @@ layout(location = 0) out vec4 outColour;
 
 layout(binding = 0) uniform samplerCube cubeMapSampler;
 
+layout(binding = 1) uniform light_data
+{
+    vec4 positions[4];
+    vec4 colours[4];
+    float exposure;
+    float gamma;
+} lights;
+
 // From http://filmicworlds.com/blog/filmic-tonemapping-operators/
 vec3 Uncharted2Tonemap(vec3 colour)
 {
@@ -24,11 +32,11 @@ void main()
 {
     vec3 colour = texture(cubeMapSampler, inUVW, 0.0).rgb;
 
-    // Reinhard HDR tonemapping
-    colour = Uncharted2Tonemap(colour);
+    // Tonemapping
+    colour = Uncharted2Tonemap(colour * lights.exposure);
 
     // Gamma correct
-    colour = pow(colour, vec3(0.9));
+    colour = pow(colour, vec3(1.0 / lights.gamma));
 
     outColour = vec4(colour, 1.0);
 }

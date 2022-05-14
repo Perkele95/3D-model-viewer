@@ -19,7 +19,7 @@ enum class text_coord_type{absolute, relative};
 class VulkanTextOverlay
 {
 public:
-    void init(const VulkanDevice* device, linear_storage *storage);
+    void init(const VulkanDevice* device);
     void destroy();
 
     VulkanTextOverlay(const VulkanTextOverlay &src) = delete;

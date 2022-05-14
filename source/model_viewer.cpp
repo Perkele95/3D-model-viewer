@@ -45,8 +45,11 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
     generateIrradianceMap();
     generatePrefilteredMap();
 
+    m_lights.exposure = 1.2f;
+    m_lights.gamma = 0.9f;
+
     m_mainCamera.init();
-    m_lights.init();
+    m_lights.init(&device);
 
     buildUniformBuffers();
     buildDescriptors();
@@ -64,7 +67,7 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
     m_overlay->graphicsQueue = graphicsQueue;
     m_overlay->frameBuffers = framebuffers;
     m_overlay->extent = extent;
-    m_overlay->init(&device, this); // obj slicing
+    m_overlay->init(&device);
 
     m_overlay->textTint = vec4(1.0f);
     m_overlay->textAlignment = text_align::centre;
@@ -122,10 +125,9 @@ ModelViewer::~ModelViewer()
     models.object.destroy(device);
 
     for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-    {
         scene.cameraBuffers[i].destroy(device);
-        scene.lightBuffers[i].destroy(device);
-    }
+
+    m_lights.destroy(device);
 
     vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
 
@@ -1316,19 +1318,15 @@ void ModelViewer::buildUniformBuffers()
     {
         device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
                             sizeof(MvpMatrix), scene.cameraBuffers[i]);
-        device.createBuffer(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, MEM_FLAG_HOST_VISIBLE,
-                            sizeof(MvpMatrix), scene.lightBuffers[i]);
     }
 
     updateCamera(0.0f);
-    updateLights();
 }
 
 void ModelViewer::buildDescriptors()
 {
     const VkDescriptorPoolSize poolSizes[] = {
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
-        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, MAX_IMAGES_IN_FLIGHT),
+        vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 * MAX_IMAGES_IN_FLIGHT),
         vkInits::descriptorPoolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9 * MAX_IMAGES_IN_FLIGHT)
     };
 
@@ -1367,7 +1365,7 @@ void ModelViewer::buildDescriptors()
         auto &setRef = scene.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
             vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &scene.cameraBuffers[i].descriptor),
-            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &scene.lightBuffers[i].descriptor),
+            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &m_lights.buffers[i].descriptor),
             vkInits::writeDescriptorSet(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &brdf.descriptor),
             vkInits::writeDescriptorSet(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &irradiance.descriptor),
             vkInits::writeDescriptorSet(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &prefiltered.descriptor),
@@ -1384,7 +1382,8 @@ void ModelViewer::buildDescriptors()
     // Skybox
 
     const VkDescriptorSetLayoutBinding skyboxBindings[] = {
-        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        vkInits::descriptorSetLayoutBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT),
+        vkInits::descriptorSetLayoutBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
     };
 
     setLayoutInfo = vkInits::descriptorSetLayoutCreateInfo(skyboxBindings);
@@ -1399,7 +1398,8 @@ void ModelViewer::buildDescriptors()
     {
         auto &setRef = skybox.descriptorSets[i];
         const VkWriteDescriptorSet writes[] = {
-            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.environment.descriptor)
+            vkInits::writeDescriptorSet(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, setRef, &textures.environment.descriptor),
+            vkInits::writeDescriptorSet(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, setRef, &m_lights.buffers[i].descriptor)
         };
 
         vkUpdateDescriptorSets(device, uint32_t(arraysize(writes)), writes, 0, nullptr);
@@ -1509,17 +1509,6 @@ void ModelViewer::updateCamera(float dt)
         scene.cameraBuffers[i].map(device);
         *static_cast<MvpMatrix*>(scene.cameraBuffers[i].mapped) = ubo;
         scene.cameraBuffers[i].unmap(device);
-    }
-}
-
-void ModelViewer::updateLights()
-{
-    const auto ubo = m_lights.getData();
-    for (size_t i = 0; i < MAX_IMAGES_IN_FLIGHT; i++)
-    {
-        scene.lightBuffers[i].map(device);
-        *static_cast<LightData*>(scene.lightBuffers[i].mapped) = ubo;
-        scene.lightBuffers[i].unmap(device);
     }
 }
 

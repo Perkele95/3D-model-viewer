@@ -18,6 +18,8 @@ layout(binding = 1) uniform light_data
 {
     vec4 positions[4];
     vec4 colours[4];
+    float exposure;
+    float gamma;
 } lights;
 
 layout(binding = 2) uniform sampler2D brdfLUT;
@@ -167,11 +169,11 @@ void main()
 
     vec3 colour = ambient + Lo;
 
-    // Reinhard HDR tonemapping
-    colour = Uncharted2Tonemap(colour);
+    // Tonemapping
+    colour = Uncharted2Tonemap(colour * lights.exposure);
 
     // Gamma correct
-    //colour = pow(colour, vec3(0.5));
+    colour = pow(colour, vec3(1.0 / lights.gamma));
 
     outColour = vec4(colour, 1.0);
 }

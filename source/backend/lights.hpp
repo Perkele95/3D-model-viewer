@@ -8,16 +8,27 @@ struct alignas(16) LightData
 {
     vec4<float> positions[LIGHTS_COUNT];
     vec4<float> colours[LIGHTS_COUNT];
+    float exposure;
+    float gamma;
+    vec2<float> reserved;
 };
 
-class SceneLights
+struct PointLight
+{
+    float strength;
+    vec3<float> position;
+    vec4<float> colour;
+};
+
+class SceneLight
 {
 public:
-    void init();
+    void init(const VulkanDevice *device);
+    void destroy(VkDevice device);
+    void update(VkDevice device);
 
-    LightData getData();
-
-private:
-    vec4<float> m_positions[LIGHTS_COUNT];
-    vec4<float> m_colours[LIGHTS_COUNT];
+    float           exposure;
+    float           gamma;
+    PointLight      pointLights[4];
+    VulkanBuffer    buffers[MAX_IMAGES_IN_FLIGHT];
 };

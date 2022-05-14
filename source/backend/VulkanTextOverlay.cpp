@@ -22,7 +22,7 @@ constexpr static VkVertexInputAttributeDescription s_OverlayAttributes[] = {
 
 static stb_fontchar s_Fontdata[STB_SOMEFONT_NUM_CHARS];
 
-void VulkanTextOverlay::init(const VulkanDevice* device, linear_storage *storage)
+void VulkanTextOverlay::init(const VulkanDevice* device)
 {
     m_quadCount = 0;
     m_zOrder = Z_ORDER_GUI_DEFAULT;
@@ -271,7 +271,7 @@ void VulkanTextOverlay::prepareRenderpass()
 
     vkCreateRenderPass(m_device->device, &renderPassInfo, nullptr, &m_renderPass);
 }
-
+// TODO(arle): map and fill a gpu buffer directly instead of double buffering
 void VulkanTextOverlay::prepareGlyphAtlas()
 {
     auto fontPixels = new uint8_t[STB_SOMEFONT_BITMAP_HEIGHT][STB_SOMEFONT_BITMAP_WIDTH];

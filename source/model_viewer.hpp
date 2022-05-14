@@ -39,13 +39,12 @@ private:
     // pipelinelayout does not need to be recreated upon window resize event
 
     void updateCamera(float dt);
-    void updateLights();
     void recordFrame(VkCommandBuffer cmdBuffer);
 
     VkCommandBuffer         m_commands[2];
     VulkanTextOverlay*      m_overlay;
     Camera                  m_mainCamera;
-    SceneLights             m_lights;
+    SceneLight              m_lights;
     VkDescriptorPool        m_descriptorPool;
 
     struct ModelAssets
@@ -85,7 +84,6 @@ private:
         VkDescriptorSetLayout   setLayout;
         VkDescriptorSet         descriptorSets[MAX_IMAGES_IN_FLIGHT];
         VulkanBuffer            cameraBuffers[MAX_IMAGES_IN_FLIGHT];
-        VulkanBuffer            lightBuffers[MAX_IMAGES_IN_FLIGHT];
     }scene;
 
     struct Skybox
