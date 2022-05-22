@@ -53,7 +53,8 @@
         "cstring": "cpp",
         "cwchar": "cpp",
         "limits": "cpp",
-        "xstddef": "cpp"
+        "xstddef": "cpp",
+        "*.rh": "cpp"
     },
     "C_Cpp.errorSquiggles": "Disabled"
 }

@@ -2,7 +2,7 @@
 
 #include "base.hpp"
 #include "backend/VulkanInstance.hpp"
-#include "backend/VulkanTextOverlay.hpp"
+#include "backend/VulkanImgui.hpp"
 #include "backend/VulkanModels.hpp"
 
 #include "backend/shader.hpp"
@@ -42,7 +42,6 @@ private:
     void recordFrame(VkCommandBuffer cmdBuffer);
 
     VkCommandBuffer         m_commands[2];
-    VulkanTextOverlay*      m_overlay;
     Camera                  m_mainCamera;
     SceneLight              m_lights;
     VkDescriptorPool        m_descriptorPool;

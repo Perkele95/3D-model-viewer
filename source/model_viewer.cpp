@@ -56,37 +56,39 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
 
     buildPipelines();
 
-    // Prepare text overlay
+    // Prepare imgui
 
-    m_overlay = allocate<VulkanTextOverlay>(1);
+    auto &imgui = VulkanImgui::Instance();
 
-    m_overlay->depthFormat = depthFormat;
-    m_overlay->surfaceFormat = surfaceFormat;
-    m_overlay->sampleCount = sampleCount;
-    m_overlay->imageCount = imageCount;
-    m_overlay->graphicsQueue = graphicsQueue;
-    m_overlay->frameBuffers = framebuffers;
-    m_overlay->extent = extent;
-    m_overlay->init(&device);
+    imgui.device = &device;
+    imgui.extent = extent;// TODO(arle): use pointer
+    VulkanImgui::CreateInfo guiInfo;
+    guiInfo.depthFormat = depthFormat;
+    guiInfo.sampleCount = sampleCount;
+    guiInfo.surfaceFormat = surfaceFormat;
+    imgui.init(guiInfo, graphicsQueue);
 
-    m_overlay->textTint = vec4(1.0f);
-    m_overlay->textAlignment = text_align::centre;
-    m_overlay->textType = text_coord_type::relative;
-    m_overlay->textSize = 1.0f;
-
+    imgui.settings.tint = vec4(1.0f);
+    imgui.settings.alignment = VulkanImgui::Alignment::Centre;
+    imgui.settings.size = 1.0f;
+    // TODO(arle): put device name into VulkanInstance
     VkPhysicalDeviceProperties deviceProps;
     vkGetPhysicalDeviceProperties(device.gpu, &deviceProps);
     const char *deviceNameString = deviceProps.deviceName;
     const auto deviceNameView = StringbBuilder::MakeView(deviceNameString);
 
-    m_overlay->begin();
-    m_overlay->draw(StringbBuilder::MakeView(settings.title), vec2(50.0f, 12.0f));
+    imgui.begin();
+    imgui.text(StringbBuilder::MakeView(settings.title), vec2(50.0f, 12.0f));
 
-    m_overlay->textSize = 0.8f;
-    m_overlay->textAlignment = text_align::left;
-    m_overlay->draw("Device:", vec2(5.0f, 88.0f));
-    m_overlay->draw(deviceNameView, vec2(5.0f, 90.0f));
-    m_overlay->end();
+    imgui.settings.size = 0.8f;
+    imgui.settings.alignment = VulkanImgui::Alignment::Left;
+    imgui.text("Device:", vec2(5.0f, 88.0f));
+    imgui.text(deviceNameView, vec2(5.0f, 90.0f));
+
+    imgui.settings.tint = GetColour(100, 100, 100, 100);
+    imgui.box(vec2(40.0f, 90.0f), vec2(60.0f, 95.0f));
+
+    imgui.end();
 }
 
 ModelViewer::~ModelViewer()
@@ -102,7 +104,7 @@ ModelViewer::~ModelViewer()
     irradiance.destroy(device);
     prefiltered.destroy(device);
 
-    m_overlay->destroy();
+    VulkanImgui::Instance().destroy();
 
     vkDestroyPipeline(device, skybox.pipeline, nullptr);
     vkDestroyPipelineLayout(device, skybox.pipelineLayout, nullptr);
@@ -136,6 +138,8 @@ ModelViewer::~ModelViewer()
 
 void ModelViewer::run()
 {
+    auto &imgui = VulkanImgui::Instance();
+
     while(pltf::IsRunning())
     {
         pltf::EventsPoll(platformDevice);
@@ -148,10 +152,10 @@ void ModelViewer::run()
         VulkanInstance::prepareFrame();
 
         recordFrame(commandBuffers[currentFrame]);
-        m_overlay->recordFrame(currentFrame, imageIndex);
+        imgui.recordFrame(currentFrame, framebuffers[imageIndex]);
 
         m_commands[0] = commandBuffers[currentFrame];
-        m_commands[1] = m_overlay->commandBuffers[currentFrame];
+        m_commands[1] = imgui.commandBuffers[currentFrame];
 
         submitInfo.pCommandBuffers = m_commands;
         submitInfo.commandBufferCount = uint32_t(arraysize(m_commands));
@@ -159,7 +163,7 @@ void ModelViewer::run()
         VulkanInstance::submitFrame();
 
         if(resizeRequired)
-            onWindowSize(uint32_t(extent.width), uint32_t(extent.height));
+            onWindowSize(int32_t(extent.width), int32_t(extent.height));
     }
 }
 
@@ -178,8 +182,9 @@ void ModelViewer::onWindowSize(int32_t width, int32_t height)
     // NOTE(arle): pipeline layout does not need to be recreated
     buildPipelines();
 
-    m_overlay->extent = extent;
-    m_overlay->onWindowResize();
+    auto &imgui = VulkanImgui::Instance();
+    imgui.extent = extent;
+    imgui.onWindowResize(sampleCount);
 }
 
 void ModelViewer::onKeyEvent(pltf::key_code key, pltf::modifier mod)
