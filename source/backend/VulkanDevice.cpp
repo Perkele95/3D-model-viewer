@@ -40,6 +40,8 @@ void VulkanDevice::create(bool validation)
     auto poolInfo = vkInits::commandPoolCreateInfo(queueBits.graphics);
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool);
+
+    vkGetPhysicalDeviceProperties(gpu, &gpuProperties);
 }
 
 void VulkanDevice::destroy()

@@ -47,7 +47,6 @@ struct OffscreenBuffer
 class VulkanDevice
 {
 public:
-
     void create(bool validation);
     void destroy();
 
@@ -77,8 +76,9 @@ public:
 
     // ~Tools
 
-    VkPhysicalDevice    gpu;
-    QueueBits           queueBits;
-    VkDevice            device;
-    VkCommandPool       commandPool;
+    VkPhysicalDevice            gpu;
+    QueueBits                   queueBits;
+    VkDevice                    device;
+    VkCommandPool               commandPool;
+    VkPhysicalDeviceProperties  gpuProperties;
 };

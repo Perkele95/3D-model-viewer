@@ -3,7 +3,7 @@
 #include "array_types.hpp"
 #include <cstring>
 
-class StringbBuilder
+class StringBuilder
 {
 public:
     static constexpr size_t DEFAULT_MAX = 256;
@@ -26,7 +26,7 @@ public:
         return view(cstring, Strlen(cstring));
     }
 
-    StringbBuilder(size_t capacity = DEFAULT_MAX)
+    StringBuilder(size_t capacity = DEFAULT_MAX)
     {
         m_str = new char[capacity];
         memset(m_str, 0, capacity);
@@ -39,7 +39,7 @@ public:
         delete m_str;
     }
 
-    constexpr StringbBuilder &operator<<(view<const char> stringView)
+    constexpr StringBuilder &operator<<(view<const char> stringView)
     {
         const auto length = stringView.count - 1;
         const bool hasSpace = (m_length + length) < m_capacity;
@@ -54,7 +54,7 @@ public:
         return *this;
     }
 
-    constexpr StringbBuilder &operator<<(view<char> stringView)
+    constexpr StringBuilder &operator<<(view<char> stringView)
     {
         const auto length = stringView.count - 1;
         const bool hasSpace = (m_length + length) < m_capacity;
@@ -69,24 +69,24 @@ public:
         return *this;
     }
 
-    constexpr StringbBuilder &operator<<(const StringbBuilder &ref)
+    constexpr StringBuilder &operator<<(const StringBuilder &ref)
     {
         return (*this << ref.getView());
     }
 
-    constexpr StringbBuilder &operator<<(const char *cstring)
+    constexpr StringBuilder &operator<<(const char *cstring)
     {
         const auto length = Strlen(cstring);
         return (*this << view(cstring, length));
     }
 
-    constexpr StringbBuilder &operator<<(char *cstring)
+    constexpr StringBuilder &operator<<(char *cstring)
     {
         const auto length = Strlen(cstring);
         return (*this << view(cstring, length));
     }
 
-    constexpr StringbBuilder &flush()
+    constexpr StringBuilder &flush()
     {
         memset(m_str, 0, m_length);
         m_length = 0;

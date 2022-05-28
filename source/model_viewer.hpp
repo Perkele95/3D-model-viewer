@@ -39,12 +39,15 @@ private:
     // pipelinelayout does not need to be recreated upon window resize event
 
     void updateCamera(float dt);
+    void updateGui();
     void recordFrame(VkCommandBuffer cmdBuffer);
-
+    // TODO(arle): remove m_ prefix
     VkCommandBuffer         m_commands[2];
     Camera                  m_mainCamera;
     SceneLight              m_lights;
     VkDescriptorPool        m_descriptorPool;
+    VulkanImgui&            imgui;
+    StringBuilder           stringBuffer;
 
     struct ModelAssets
     {

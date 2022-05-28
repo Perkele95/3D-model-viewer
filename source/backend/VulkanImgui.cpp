@@ -30,7 +30,7 @@ void VulkanImgui::init(const CreateInfo &info, VkQueue queue)
     quadCount = 0;
     zOrder = Z_ORDER_GUI_DEFAULT;
 
-    auto sb = StringbBuilder();
+    auto sb = StringBuilder();
 
     sb << SHADERS_PATH << view("gui_vert.spv");
     vertexShader.load(device->device, sb.c_str());
@@ -208,6 +208,8 @@ void VulkanImgui::begin()
 
     quadCount = 0;
     zOrder = Z_ORDER_GUI_DEFAULT;
+    state.itemCounter = 0;
+    state.hotItem = GUI_ITEM_NULL;
 }
 
 void VulkanImgui::end()
@@ -323,6 +325,54 @@ void VulkanImgui::box(vec2<float> topLeft, vec2<float> bottomRight)
     zOrder -= Z_ORDER_GUI_INCREMENT;
 }
 
+bool VulkanImgui::button(vec2<float> topLeft, vec2<float> bottomRight)
+{
+    auto id = createItem();
+    auto result = false;
+    auto tint = settings.tint;
+
+    if(state.activeItem == GUI_ITEM_NULL && state.hotItem == GUI_ITEM_NULL)
+    {
+        if(hitCheck(topLeft, bottomRight))
+        {
+            if(buttonPressed)
+            {
+                state.activeItem = id;
+                // draw pressed button
+                settings.tint.x *= 0.75f;
+                settings.tint.y *= 0.75f;
+                settings.tint.z *= 0.75f;
+            }
+            else
+            {
+                state.hotItem = id;
+                // draw hovered button
+                settings.tint.x *= 0.9f;
+                settings.tint.y *= 0.9f;
+                settings.tint.z *= 0.9f;
+            }
+        }
+    }
+    else if(state.activeItem == id  && !buttonPressed)
+    {
+        if(hitCheck(topLeft, bottomRight))
+        {
+            result = true;
+        }
+
+        state.activeItem = GUI_ITEM_NULL;
+        // draw pressed button
+        settings.tint.x *= 0.75f;
+        settings.tint.y *= 0.75f;
+        settings.tint.z *= 0.75f;
+    }
+
+    box(topLeft, bottomRight);
+    settings.tint = tint;
+
+    return false;
+}
+
 void VulkanImgui::recordFrame(size_t currentFrame, VkFramebuffer framebuffer)
 {
     if(quadCount == 0)
@@ -418,4 +468,11 @@ void VulkanImgui::preparePipeline(VkSampleCountFlagBits sampleCount)
     pipelineInfo.renderPass = renderPass;
     vkCreateGraphicsPipelines(device->device, VK_NULL_HANDLE, 1,
                               &pipelineInfo, nullptr, &pipeline);
+}
+
+bool VulkanImgui::hitCheck(vec2<float> topLeft, vec2<float> bottomRight)
+{
+    const auto x = (float(mousePosition.x) / float(extent.width)) * 100.0f;
+    const auto y = (float(mousePosition.y) / float(extent.height)) * 100.0f;
+    return (x >= topLeft.x && x < bottomRight.x && y >= topLeft.y && y < bottomRight.y);
 }

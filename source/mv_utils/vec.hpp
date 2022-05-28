@@ -34,13 +34,13 @@ struct vec2
 };
 
 template<typename T>
-inline vec2<T> VECTOR_API operator+(vec2<T> a, vec2<T> b)
+constexpr inline vec2<T> VECTOR_API operator+(vec2<T> a, vec2<T> b)
 {
     return vec2(a.x + b.x, a.y + b.y);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator+=(vec2<T> &a, vec2<T> b)
+constexpr inline vec2<T>& VECTOR_API operator+=(vec2<T> &a, vec2<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -48,13 +48,13 @@ inline vec2<T>& VECTOR_API operator+=(vec2<T> &a, vec2<T> b)
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator-(vec2<T> a, vec2<T> b)
+constexpr inline vec2<T> VECTOR_API operator-(vec2<T> a, vec2<T> b)
 {
     return vec2(a.x - b.x, a.y - b.y);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator-=(vec2<T> &a, vec2<T> b)
+constexpr inline vec2<T>& VECTOR_API operator-=(vec2<T> &a, vec2<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -62,13 +62,13 @@ inline vec2<T>& VECTOR_API operator-=(vec2<T> &a, vec2<T> b)
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator*(vec2<T> a, T value)
+constexpr inline vec2<T> VECTOR_API operator*(vec2<T> a, T value)
 {
     return vec2(a.x * value, a.y * value);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, T value)
+constexpr inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, T value)
 {
     a.x *= value;
     a.y *= value;
@@ -76,13 +76,13 @@ inline vec2<T>& VECTOR_API operator*=(vec2<T> &a, T value)
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator/(vec2<T> a, T value)
+constexpr inline vec2<T> VECTOR_API operator/(vec2<T> a, T value)
 {
     return vec2(a.x / value, a.y / value);
 }
 
 template<typename T>
-inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, T value)
+constexpr inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, T value)
 {
     a.x /= value;
     a.y /= value;
@@ -90,9 +90,19 @@ inline vec2<T>& VECTOR_API operator/=(vec2<T> &a, T value)
 }
 
 template<typename T>
-inline vec2<T> VECTOR_API operator-(vec2<T> a)
+constexpr inline vec2<T> VECTOR_API operator-(vec2<T> a)
 {
     return vec2(-a.x, -a.y);
+}
+
+template<typename T, typename U>
+constexpr inline vec2<U> VECTOR_API Vec2Map(vec2<T> a)
+{
+    auto result = vec2<U>(
+        static_cast<U>(a.x),
+        static_cast<U>(a.y)
+    );
+    return result;
 }
 
 // vec3
@@ -119,13 +129,13 @@ struct vec3
 };
 
 template<typename T>
-inline vec3<T> VECTOR_API operator+(vec3<T> a, vec3<T> b)
+constexpr inline vec3<T> VECTOR_API operator+(vec3<T> a, vec3<T> b)
 {
     return vec3(a.x + b.x, a.y + b.y, a.z + b.z);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator+=(vec3<T> &a, vec3<T> b)
+constexpr inline vec3<T>& VECTOR_API operator+=(vec3<T> &a, vec3<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -134,13 +144,13 @@ inline vec3<T>& VECTOR_API operator+=(vec3<T> &a, vec3<T> b)
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator-(vec3<T> a, vec3<T> b)
+constexpr inline vec3<T> VECTOR_API operator-(vec3<T> a, vec3<T> b)
 {
     return vec3(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator-=(vec3<T> &a, vec3<T> b)
+constexpr inline vec3<T>& VECTOR_API operator-=(vec3<T> &a, vec3<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -149,13 +159,13 @@ inline vec3<T>& VECTOR_API operator-=(vec3<T> &a, vec3<T> b)
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator*(vec3<T> a, T value)
+constexpr inline vec3<T> VECTOR_API operator*(vec3<T> a, T value)
 {
     return vec3(a.x * value, a.y * value, a.z * value);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, T value)
+constexpr inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, T value)
 {
     a.x *= value;
     a.y *= value;
@@ -164,13 +174,13 @@ inline vec3<T>& VECTOR_API operator*=(vec3<T> &a, T value)
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator/(vec3<T> a, T value)
+constexpr inline vec3<T> VECTOR_API operator/(vec3<T> a, T value)
 {
     return vec3(a.x / value, a.y / value, a.z / value);
 }
 
 template<typename T>
-inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, T value)
+constexpr inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, T value)
 {
     a.x /= value;
     a.y /= value;
@@ -179,9 +189,20 @@ inline vec3<T>& VECTOR_API operator/=(vec3<T> &a, T value)
 }
 
 template<typename T>
-inline vec3<T> VECTOR_API operator-(vec3<T> a)
+constexpr inline vec3<T> VECTOR_API operator-(vec3<T> a)
 {
     return vec3(-a.x, -a.y, -a.z);
+}
+
+template<typename T, typename U>
+constexpr inline vec3<U> VECTOR_API Vec3Map(vec3<T> a)
+{
+    auto result = vec3<U>(
+        static_cast<U>(a.x),
+        static_cast<U>(a.y),
+        static_cast<U>(a.z)
+    );
+    return result;
 }
 
 // vec4
@@ -210,13 +231,13 @@ struct vec4
 };
 
 template<typename T>
-inline vec4<T> VECTOR_API operator+(vec4<T> a, vec4<T> b)
+constexpr inline vec4<T> VECTOR_API operator+(vec4<T> a, vec4<T> b)
 {
     return vec4(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator+=(vec4<T> &a, vec4<T> b)
+constexpr inline vec4<T>& VECTOR_API operator+=(vec4<T> &a, vec4<T> b)
 {
     a.x += b.x;
     a.y += b.y;
@@ -226,13 +247,13 @@ inline vec4<T>& VECTOR_API operator+=(vec4<T> &a, vec4<T> b)
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator-(vec4<T> a, vec4<T> b)
+constexpr inline vec4<T> VECTOR_API operator-(vec4<T> a, vec4<T> b)
 {
     return vec4(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator-=(vec4<T> &a, vec4<T> b)
+constexpr inline vec4<T>& VECTOR_API operator-=(vec4<T> &a, vec4<T> b)
 {
     a.x -= b.x;
     a.y -= b.y;
@@ -242,13 +263,13 @@ inline vec4<T>& VECTOR_API operator-=(vec4<T> &a, vec4<T> b)
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator*(vec4<T> a, T value)
+constexpr inline vec4<T> VECTOR_API operator*(vec4<T> a, T value)
 {
     return vec4(a.x * value, a.y * value, a.z * value, a.w * value);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, T value)
+constexpr inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, T value)
 {
     a.x *= value;
     a.y *= value;
@@ -258,13 +279,13 @@ inline vec4<T>& VECTOR_API operator*=(vec4<T> &a, T value)
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator/(vec4<T> a, T value)
+constexpr inline vec4<T> VECTOR_API operator/(vec4<T> a, T value)
 {
     return vec4(a.x / value, a.y / value, a.z / value, a.w / value);
 }
 
 template<typename T>
-inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, T value)
+constexpr inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, T value)
 {
     a.x /= value;
     a.y /= value;
@@ -274,9 +295,21 @@ inline vec4<T>& VECTOR_API operator/=(vec4<T> &a, T value)
 }
 
 template<typename T>
-inline vec4<T> VECTOR_API operator-(vec4<T> a)
+constexpr inline vec4<T> VECTOR_API operator-(vec4<T> a)
 {
     return vec4(-a.x, -a.y, -a.z, -a.w);
+}
+
+template<typename T, typename U>
+constexpr inline vec4<U> VECTOR_API Vec4Map(vec4<T> a)
+{
+    auto result = vec4<U>(
+        static_cast<U>(a.x),
+        static_cast<U>(a.y),
+        static_cast<U>(a.z),
+        static_cast<U>(a.w)
+    );
+    return result;
 }
 
 // Float & double specific functions
@@ -365,17 +398,17 @@ inline vec4<double> VECTOR_API normalise(vec4<double> a)
     return a;
 }
 
-inline float VECTOR_API dot(vec3<float> a, vec3<float> b)
+constexpr inline float VECTOR_API dot(vec3<float> a, vec3<float> b)
 {
     return (a.x * b.x + a.y * b.y + a.z * b.z);
 }
 
-inline double VECTOR_API dot(vec3<double> a, vec3<double> b)
+constexpr inline double VECTOR_API dot(vec3<double> a, vec3<double> b)
 {
     return (a.x * b.x + a.y * b.y + a.z * b.z);
 }
 
-inline vec3<float> VECTOR_API cross(vec3<float> a, vec3<float> b)
+constexpr inline vec3<float> VECTOR_API cross(vec3<float> a, vec3<float> b)
 {
     auto result = vec3(
         (a.y * b.z) - (a.z * b.y),
@@ -385,7 +418,7 @@ inline vec3<float> VECTOR_API cross(vec3<float> a, vec3<float> b)
     return result;
 }
 
-inline vec3<double> VECTOR_API cross(vec3<double> a, vec3<double> b)
+constexpr inline vec3<double> VECTOR_API cross(vec3<double> a, vec3<double> b)
 {
     auto result = vec3(
         (a.y * b.z) - (a.z * b.y),

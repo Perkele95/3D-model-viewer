@@ -577,9 +577,9 @@ void VulkanInstance::refreshCapabilities()
     if(extent.width == 0xFFFFFFFF)
     {
         extent.width = clamp(extent.width, m_capabilities.minImageExtent.width,
-                             m_capabilities.maxImageExtent.width);
+                              m_capabilities.maxImageExtent.width);
         extent.height = clamp(extent.height, m_capabilities.minImageExtent.height,
-                             m_capabilities.maxImageExtent.height);
+                              m_capabilities.maxImageExtent.height);
     }
 
     // Refresh aspect ratio

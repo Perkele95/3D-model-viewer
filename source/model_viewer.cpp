@@ -12,7 +12,8 @@ void CoreMessageCallback(log_level level, const char *string)
     pltf::DebugBreak();
 }
 
-ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
+ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64)),
+    imgui(VulkanImgui::Instance()), stringBuffer(512)
 {
     settings.title = "PBR Demo";
     settings.syncMode = VSyncMode::Off;
@@ -26,21 +27,17 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
     loadResources();
     generateBrdfLUT();
 
-    auto sb = StringbBuilder(128);
+    stringBuffer.flush() << SHADERS_PATH << view("pbr_vert.spv");
+    scene.vertexShader.load(device, stringBuffer.c_str());
+    stringBuffer.flush() << SHADERS_PATH << view("pbr_frag.spv");
+    scene.fragmentShader.load(device, stringBuffer.c_str());
+    stringBuffer.flush() << SHADERS_PATH << view("skybox_vert.spv");
+    skybox.vertexShader.load(device, stringBuffer.c_str());
+    stringBuffer.flush() << SHADERS_PATH << view("skybox_frag.spv");
+    skybox.fragmentShader.load(device, stringBuffer.c_str());
 
-    sb << SHADERS_PATH << view("pbr_vert.spv");
-    scene.vertexShader.load(device, sb.c_str());
-    sb.flush() << SHADERS_PATH << view("pbr_frag.spv");
-    scene.fragmentShader.load(device, sb.c_str());
-    sb.flush() << SHADERS_PATH << view("skybox_vert.spv");
-    skybox.vertexShader.load(device, sb.c_str());
-    sb.flush() << SHADERS_PATH << view("skybox_frag.spv");
-    skybox.fragmentShader.load(device, sb.c_str());
-
-    sb.flush() << ASSETS_PATH << view("skybox/Newport_Loft_Ref.hdr");
-    loadHDRSkybox(sb.c_str());
-
-    sb.destroy();
+    stringBuffer.flush() << ASSETS_PATH << view("skybox/Newport_Loft_Ref.hdr");
+    loadHDRSkybox(stringBuffer.c_str());
 
     generateIrradianceMap();
     generatePrefilteredMap();
@@ -58,8 +55,6 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
 
     // Prepare imgui
 
-    auto &imgui = VulkanImgui::Instance();
-
     imgui.device = &device;
     imgui.extent = extent;// TODO(arle): use pointer
     VulkanImgui::CreateInfo guiInfo;
@@ -69,26 +64,6 @@ ModelViewer::ModelViewer() : VulkanInstance(MegaBytes(64))
     imgui.init(guiInfo, graphicsQueue);
 
     imgui.settings.tint = vec4(1.0f);
-    imgui.settings.alignment = VulkanImgui::Alignment::Centre;
-    imgui.settings.size = 1.0f;
-    // TODO(arle): put device name into VulkanInstance
-    VkPhysicalDeviceProperties deviceProps;
-    vkGetPhysicalDeviceProperties(device.gpu, &deviceProps);
-    const char *deviceNameString = deviceProps.deviceName;
-    const auto deviceNameView = StringbBuilder::MakeView(deviceNameString);
-
-    imgui.begin();
-    imgui.text(StringbBuilder::MakeView(settings.title), vec2(50.0f, 12.0f));
-
-    imgui.settings.size = 0.8f;
-    imgui.settings.alignment = VulkanImgui::Alignment::Left;
-    imgui.text("Device:", vec2(5.0f, 88.0f));
-    imgui.text(deviceNameView, vec2(5.0f, 90.0f));
-
-    imgui.settings.tint = GetColour(100, 100, 100, 100);
-    imgui.box(vec2(40.0f, 90.0f), vec2(60.0f, 95.0f));
-
-    imgui.end();
 }
 
 ModelViewer::~ModelViewer()
@@ -134,12 +109,12 @@ ModelViewer::~ModelViewer()
     vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
 
     VulkanInstance::destroy();
+
+    stringBuffer.destroy();
 }
 
 void ModelViewer::run()
 {
-    auto &imgui = VulkanImgui::Instance();
-
     while(pltf::IsRunning())
     {
         pltf::EventsPoll(platformDevice);
@@ -148,6 +123,7 @@ void ModelViewer::run()
             continue;
 
         updateCamera(pltf::GetTimestep(platformDevice));
+        updateGui();
 
         VulkanInstance::prepareFrame();
 
@@ -182,7 +158,6 @@ void ModelViewer::onWindowSize(int32_t width, int32_t height)
     // NOTE(arle): pipeline layout does not need to be recreated
     buildPipelines();
 
-    auto &imgui = VulkanImgui::Instance();
     imgui.extent = extent;
     imgui.onWindowResize(sampleCount);
 }
@@ -206,6 +181,7 @@ void ModelViewer::onKeyEvent(pltf::key_code key, pltf::modifier mod)
 
 void ModelViewer::onMouseButtonEvent(pltf::mouse_button button)
 {
+    imgui.buttonPressed = button == pltf::mouse_button::lmb;
     return;
 }
 
@@ -340,17 +316,13 @@ void ModelViewer::generateBrdfLUT()
 
     // shader stages & shader load
 
-    auto sb = StringbBuilder(100);
-
     VertexShader brdfVertexShader;
-    sb << SHADERS_PATH << view("brdf_vert.spv");
-    brdfVertexShader.load(device, sb.c_str());
+    stringBuffer.flush() << SHADERS_PATH << view("brdf_vert.spv");
+    brdfVertexShader.load(device, stringBuffer.c_str());
 
     FragmentShader brdfFragmentShader;
-    sb.flush() << SHADERS_PATH << view("brdf_frag.spv");
-    brdfFragmentShader.load(device, sb.c_str());
-
-    sb.destroy();
+    stringBuffer.flush() << SHADERS_PATH << view("brdf_frag.spv");
+    brdfFragmentShader.load(device, stringBuffer.c_str());
 
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
         brdfVertexShader.shaderStage(), brdfFragmentShader.shaderStage()
@@ -491,12 +463,10 @@ void ModelViewer::generateIrradianceMap()
 
     // Shaders
 
-    auto sb = StringbBuilder(100);
-    sb << SHADERS_PATH << view("irradiance_frag.spv");
+    stringBuffer.flush() << SHADERS_PATH << view("irradiance_frag.spv");
 
     FragmentShader irradianceFragmentShader;
-    irradianceFragmentShader.load(device, sb.c_str());
-    sb.destroy();
+    irradianceFragmentShader.load(device, stringBuffer.c_str());
 
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
         skybox.vertexShader.shaderStage(), irradianceFragmentShader.shaderStage()
@@ -779,12 +749,10 @@ void ModelViewer::generatePrefilteredMap()
 
     // Shaders
 
-    auto sb = StringbBuilder(100);
-    sb << SHADERS_PATH << view("prefiltered_frag.spv");
+    stringBuffer.flush() << SHADERS_PATH << view("prefiltered_frag.spv");
 
     FragmentShader prefilteredFragmentShader;
-    prefilteredFragmentShader.load(device, sb.c_str());
-    sb.destroy();
+    prefilteredFragmentShader.load(device, stringBuffer.c_str());
 
     const VkPipelineShaderStageCreateInfo shaderStages[] = {
         skybox.vertexShader.shaderStage(), prefilteredFragmentShader.shaderStage()
@@ -1081,12 +1049,10 @@ void ModelViewer::loadHDRSkybox(const char *filename)
 
         // Shaders
 
-        auto sb = StringbBuilder(100);
-        sb << SHADERS_PATH << view("hdr_convert_frag.spv");
+        stringBuffer.flush() << SHADERS_PATH << view("hdr_convert_frag.spv");
 
         FragmentShader fragmentShader;
-        fragmentShader.load(device, sb.c_str());
-        sb.destroy();
+        fragmentShader.load(device, stringBuffer.c_str());
 
         const VkPipelineShaderStageCreateInfo shaderStages[] = {
             skybox.vertexShader.shaderStage(), fragmentShader.shaderStage()
@@ -1283,35 +1249,32 @@ void ModelViewer::loadResources()
         models.object.loadSpherePrimitive(&device, graphicsQueue);
         models.object.transform = mat4x4::identity();
 
-        auto sb = StringbBuilder(100);
         constexpr auto materialPath = view("materials/warped-sheet-metal/");
 
-        sb << ASSETS_PATH << materialPath << view("albedo.png");
-        auto imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        stringBuffer.flush() << ASSETS_PATH << materialPath << view("albedo.png");
+        auto imageFile = Texture2D::loadFile(stringBuffer.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
         textures.albedo.create(&device, graphicsQueue, imageFile, true);
         Texture2D::freeFile(imageFile);
 
-        sb.flush() << ASSETS_PATH << materialPath << view("normal.png");
-        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        stringBuffer.flush() << ASSETS_PATH << materialPath << view("normal.png");
+        imageFile = Texture2D::loadFile(stringBuffer.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
         textures.normal.create(&device, graphicsQueue, imageFile, true);
         Texture2D::freeFile(imageFile);
 
-        sb.flush() << ASSETS_PATH << materialPath << view("roughness.png");
-        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        stringBuffer.flush() << ASSETS_PATH << materialPath << view("roughness.png");
+        imageFile = Texture2D::loadFile(stringBuffer.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
         textures.roughness.create(&device, graphicsQueue, imageFile, true);
         Texture2D::freeFile(imageFile);
 
-        sb.flush() << ASSETS_PATH << materialPath << view("metallic.png");
-        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        stringBuffer.flush() << ASSETS_PATH << materialPath << view("metallic.png");
+        imageFile = Texture2D::loadFile(stringBuffer.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
         textures.metallic.create(&device, graphicsQueue, imageFile, true);
         Texture2D::freeFile(imageFile);
 
-        sb.flush() << ASSETS_PATH << materialPath << view("ao.png");
-        imageFile = Texture2D::loadFile(sb.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
+        stringBuffer.flush() << ASSETS_PATH << materialPath << view("ao.png");
+        imageFile = Texture2D::loadFile(stringBuffer.c_str(), VK_FORMAT_R8G8B8A8_SRGB);
         textures.ao.create(&device, graphicsQueue, imageFile, true);
         Texture2D::freeFile(imageFile);
-
-        sb.destroy();
     }
 
     models.skybox.load(&device, graphicsQueue);
@@ -1515,6 +1478,23 @@ void ModelViewer::updateCamera(float dt)
         *static_cast<MvpMatrix*>(scene.cameraBuffers[i].mapped) = ubo;
         scene.cameraBuffers[i].unmap(device);
     }
+}
+
+void ModelViewer::updateGui()
+{
+    imgui.begin();
+
+    imgui.settings.size = 1.0f;
+    imgui.settings.alignment = VulkanImgui::Alignment::Centre;
+    stringBuffer.flush() << settings.title;
+    imgui.text(stringBuffer.getView(), vec2(50.0f, 12.0f));
+
+    imgui.settings.size = 0.8f;
+    imgui.settings.alignment = VulkanImgui::Alignment::Left;
+    stringBuffer.flush() << view("Device: ") << device.gpuProperties.deviceName;
+    imgui.text(stringBuffer.getView(), vec2(5.0f, 88.0f));
+
+    imgui.end();
 }
 
 void ModelViewer::recordFrame(VkCommandBuffer cmdBuffer)

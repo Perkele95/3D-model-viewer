@@ -39,6 +39,9 @@ public:
 
     void init(const CreateInfo &info, VkQueue queue);
     void destroy();
+
+    // Events
+
     void onWindowResize(VkSampleCountFlagBits sampleCount);
 
     // UI Layout
@@ -47,11 +50,15 @@ public:
     void end();
     void text(view<const char> stringView, vec2<float> position);
     void box(vec2<float> topLeft, vec2<float> bottomRight);
+    bool button(vec2<float> topLeft, vec2<float> bottomRight);
+
     void recordFrame(size_t currentFrame, VkFramebuffer framebuffer);
 
     const VulkanDevice*     device;
-    VkExtent2D              extent;
     VkCommandBuffer         commandBuffers[MAX_IMAGES_IN_FLIGHT];
+    VkExtent2D              extent;
+    bool                    buttonPressed;
+    vec2<int32_t>           mousePosition;
 
     struct
     {
@@ -67,6 +74,8 @@ private:
     // Backend
 
     void preparePipeline(VkSampleCountFlagBits sampleCount);
+    bool hitCheck(vec2<float> topLeft, vec2<float> bottomRight);
+    int32_t createItem(){auto item = state.itemCounter++; return item;}
 
     VkRenderPass            renderPass;
     VkDescriptorPool        descriptorPool;
@@ -84,11 +93,10 @@ private:
     uint32_t                quadCount;
     float                   zOrder;
 
-    // Ui state
-
-    int32_t                 hotITem;
-    int32_t                 activeItem;
-    int32_t                 itemCounter;
-    bool                    buttonPressed;
-    vec2<int32_t>           mousePosition;
+    struct
+    {
+        int32_t             hotItem;
+        int32_t             activeItem;
+        int32_t             itemCounter;
+    }state;
 };
