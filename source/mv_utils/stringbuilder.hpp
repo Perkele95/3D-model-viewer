@@ -42,7 +42,7 @@ public:
     constexpr StringBuilder &operator<<(view<const char> stringView)
     {
         const auto length = stringView.count - 1;
-        const bool hasSpace = (m_length + length) < m_capacity;
+        const bool hasSpace = (m_length + length + 1) < m_capacity;
 
         if(hasSpace)
         {
@@ -57,7 +57,7 @@ public:
     constexpr StringBuilder &operator<<(view<char> stringView)
     {
         const auto length = stringView.count - 1;
-        const bool hasSpace = (m_length + length) < m_capacity;
+        const bool hasSpace = (m_length + length + 1) < m_capacity;
 
         if(hasSpace)
         {
@@ -100,7 +100,7 @@ public:
 
     constexpr view<const char> getView() const
     {
-        return view<const char>(m_str, m_length);
+        return view<const char>(m_str, m_length + 1);
     }
 
 private:
