@@ -1,6 +1,9 @@
 #include "VulkanImgui.hpp"
 #include "../../vendor/stb/stb_font_courier_40_latin1.inl"
 
+// for sprintf
+#include <cstdio>
+
 enum GUI_ITEM_CONSTANTS : int32_t
 {
     GUI_ITEM_NULL = -1,
@@ -285,6 +288,87 @@ void VulkanImgui::text(view<const char> stringView, vec2<float> position)
         zOrder -= Z_ORDER_GUI_INCREMENT;
         x += charData->advance * width;
     }
+}
+
+void VulkanImgui::text(const char *cstring, vec2<float> position)
+{
+    constexpr uint32_t firstChar = STB_SOMEFONT_FIRST_CHAR;
+    const float width = settings.size / float(extent.width);
+    const float height = settings.size / float(extent.height);
+
+    float x = (float(position.x) / 50.0f) - 1.0f;
+    float y = (float(position.y) / 50.0f) - 1.0f;
+
+    float totalWidth = 0.0f;
+    for(auto c = cstring; *c; c++)
+        totalWidth += s_Fontdata[uint32_t(*c) - firstChar].advance * width;
+
+    switch(settings.alignment)
+    {
+        case Alignment::Right: x -= totalWidth; break;
+        case Alignment::Centre: x -= totalWidth / 2.0f; break;
+        default: break;
+    };
+
+    for(auto c = cstring; *c; c++)
+    {
+        auto charData = &s_Fontdata[uint32_t(*c) - firstChar];
+
+        mappedVertices->position.x = x + charData->x0f * width;
+        mappedVertices->position.y = y + charData->y0f * height;
+        mappedVertices->position.z = zOrder;
+        mappedVertices->texCoord = vec2(charData->s0, charData->t0);
+        mappedVertices->colour = settings.tint;
+        mappedVertices++;
+
+        mappedVertices->position.x = x + charData->x1f * width;
+        mappedVertices->position.y = y + charData->y0f * height;
+        mappedVertices->position.z = zOrder;
+        mappedVertices->texCoord = vec2(charData->s1, charData->t0);
+        mappedVertices->colour = settings.tint;
+        mappedVertices++;
+
+        mappedVertices->position.x = x + charData->x1f * width;
+        mappedVertices->position.y = y + charData->y1f * height;
+        mappedVertices->position.z = zOrder;
+        mappedVertices->texCoord = vec2(charData->s1, charData->t1);
+        mappedVertices->colour = settings.tint;
+        mappedVertices++;
+
+        mappedVertices->position.x = x + charData->x0f * width;
+        mappedVertices->position.y = y + charData->y1f * height;
+        mappedVertices->position.z = zOrder;
+        mappedVertices->texCoord = vec2(charData->s0, charData->t1);
+        mappedVertices->colour = settings.tint;
+        mappedVertices++;
+
+        const auto offset = quadCount * QUAD_VERTEX_COUNT;
+        mappedIndices[0] = offset;
+        mappedIndices[1] = offset + 1;
+        mappedIndices[2] = offset + 2;
+        mappedIndices[3] = offset + 2;
+        mappedIndices[4] = offset + 3;
+        mappedIndices[5] = offset;
+        mappedIndices += QUAD_INDEX_COUNT;
+
+        quadCount++;
+        zOrder -= Z_ORDER_GUI_INCREMENT;
+        x += charData->advance * width;
+    }
+}
+
+void VulkanImgui::textInt(int32_t value, vec2<float> position)
+{
+    static char buffer[256];
+    sprintf_s(buffer, "%d", value);
+    text(buffer, position);
+}
+
+void VulkanImgui::textFloat(float value, vec2<float> position)
+{
+    static char buffer[256];
+    sprintf_s(buffer, "%f", value);
+    text(buffer, position);
 }
 
 void VulkanImgui::box(vec2<float> topLeft, vec2<float> bottomRight)

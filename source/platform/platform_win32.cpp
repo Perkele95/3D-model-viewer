@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <Windowsx.h>
 #include <vulkan/vulkan_win32.h>
 
 namespace pltf
@@ -31,11 +32,11 @@ namespace pltf
 	static bool s_WindowResized = false;
 	static bool s_WindowFullscreen = false;
 
-	void WindowSizeStub(logical_device device, int32_t x, int32_t y){}
+	void WindowSizeStub(logical_device, int32_t, int32_t){}
 	void KeyEventStub(logical_device, key_code, modifier){}
-	void MouseMoveStub(logical_device){}
+	void MouseMoveStub(logical_device, int32_t, int32_t){}
 	void MouseButtonStub(logical_device, mouse_button){}
-	void ScrollWheelStub(logical_device, double x, double y){}
+	void ScrollWheelStub(logical_device, double, double){}
 
 	logical_device DeviceCreate()
 	{
@@ -289,8 +290,11 @@ namespace pltf
 					auto wheelDelta = double(GET_WHEEL_DELTA_WPARAM(event.wParam) / WHEEL_DELTA);
 					device->scrollWheelCallback(device, 0.0f, wheelDelta);
 				} break;
-				case WM_MOUSEMOVE: device->mouseMoveCallback(device);
-					break;
+				case WM_MOUSEMOVE:{
+					const int32_t x = GET_X_LPARAM(event.lParam);
+					const int32_t y = GET_Y_LPARAM(event.lParam);
+					device->mouseMoveCallback(device, x, y);
+				} break;
 				case WM_LBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::lmb);
 					break;
 				case WM_RBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::rmb);

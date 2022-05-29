@@ -49,6 +49,9 @@ public:
     void begin();
     void end();
     void text(view<const char> stringView, vec2<float> position);
+    void text(const char *cstring, vec2<float> position);
+    void textInt(int32_t value, vec2<float> position);
+    void textFloat(float value, vec2<float> position);
     void box(vec2<float> topLeft, vec2<float> bottomRight);
     bool button(vec2<float> topLeft, vec2<float> bottomRight);
 

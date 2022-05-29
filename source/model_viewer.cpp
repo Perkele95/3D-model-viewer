@@ -179,6 +179,12 @@ void ModelViewer::onKeyEvent(pltf::key_code key, pltf::modifier mod)
     }
 }
 
+void ModelViewer::onMouseMoveEvent(int32_t x, int32_t y)
+{
+    imgui.mousePosition.x = x;
+    imgui.mousePosition.y = y;
+}
+
 void ModelViewer::onMouseButtonEvent(pltf::mouse_button button)
 {
     imgui.buttonPressed = button == pltf::mouse_button::lmb;
@@ -1484,15 +1490,18 @@ void ModelViewer::updateGui()
 {
     imgui.begin();
 
-    imgui.settings.size = 1.0f;
+    imgui.settings.size = 1.5f;
     imgui.settings.alignment = VulkanImgui::Alignment::Centre;
     stringBuffer.flush() << settings.title;
     imgui.text(stringBuffer.getView(), vec2(50.0f, 12.0f));
 
-    imgui.settings.size = 0.8f;
+    imgui.settings.size = 1.0f;
     imgui.settings.alignment = VulkanImgui::Alignment::Left;
     stringBuffer.flush() << view("Device: ") << device.gpuProperties.deviceName;
-    imgui.text(stringBuffer.getView(), vec2(5.0f, 88.0f));
+    imgui.text(stringBuffer.getView(), vec2(5.0f, 90.0f));
+
+    imgui.textInt(imgui.mousePosition.x, vec2(5.0f, 85.0f));
+    imgui.textInt(imgui.mousePosition.y, vec2(5.0f, 80.0f));
 
     imgui.end();
 }
