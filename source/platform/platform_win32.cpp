@@ -11,21 +11,18 @@ namespace pltf
 {
 	struct logical_device_T
 	{
-		HINSTANCE instance;
-		HWND window;
-		WINDOWPLACEMENT windowPlacement;
-
-		LARGE_INTEGER counter;
-		LARGE_INTEGER counterFrequency;
-        timestep_type dt;
-
-		window_size_callback windowSizeCallback;
-        key_event_callback keyEventCallback;
-        mouse_move_callback mouseMoveCallback;
-        mouse_button_callback mouseButtonCallback;
-		scroll_wheel_callback scrollWheelCallback;
-
-		void *callbackHandle;
+		HINSTANCE 				instance;
+		HWND 					window;
+		WINDOWPLACEMENT 		windowPlacement;
+		LARGE_INTEGER 			counter;
+		LARGE_INTEGER 			counterFrequency;
+        timestep_type 			dt;
+		window_size_callback 	windowSizeCallback;
+        key_event_callback 		keyEventCallback;
+        mouse_move_callback 	mouseMoveCallback;
+        mouse_button_callback 	mouseButtonCallback;
+		scroll_wheel_callback 	scrollWheelCallback;
+		void*					callbackHandle;
 	};
 
 	static bool s_Running = false;
@@ -35,7 +32,7 @@ namespace pltf
 	void WindowSizeStub(logical_device, int32_t, int32_t){}
 	void KeyEventStub(logical_device, key_code, modifier){}
 	void MouseMoveStub(logical_device, int32_t, int32_t){}
-	void MouseButtonStub(logical_device, mouse_button){}
+	void MouseButtonStub(logical_device, mouse_button, bool){}
 	void ScrollWheelStub(logical_device, double, double){}
 
 	logical_device DeviceCreate()
@@ -295,11 +292,17 @@ namespace pltf
 					const int32_t y = GET_Y_LPARAM(event.lParam);
 					device->mouseMoveCallback(device, x, y);
 				} break;
-				case WM_LBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::lmb);
+				case WM_LBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::lmb, true);
 					break;
-				case WM_RBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::rmb);
+				case WM_RBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::rmb, true);
 					break;
-				case WM_MBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::mmb);
+				case WM_MBUTTONDOWN: device->mouseButtonCallback(device, mouse_button::mmb, true);
+					break;
+				case WM_LBUTTONUP: device->mouseButtonCallback(device, mouse_button::lmb, false);
+					break;
+				case WM_RBUTTONUP: device->mouseButtonCallback(device, mouse_button::rmb, false);
+					break;
+				case WM_MBUTTONUP: device->mouseButtonCallback(device, mouse_button::mmb, false);
 					break;
 
 				default: {

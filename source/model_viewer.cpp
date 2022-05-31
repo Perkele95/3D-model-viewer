@@ -185,9 +185,9 @@ void ModelViewer::onMouseMoveEvent(int32_t x, int32_t y)
     imgui.mousePosition.y = y;
 }
 
-void ModelViewer::onMouseButtonEvent(pltf::mouse_button button)
+void ModelViewer::onMouseButtonEvent(pltf::mouse_button button, bool pressed)
 {
-    imgui.buttonPressed = button == pltf::mouse_button::lmb;
+    imgui.buttonPressed = button == pltf::mouse_button::lmb && pressed;
     return;
 }
 
@@ -1500,8 +1500,10 @@ void ModelViewer::updateGui()
     stringBuffer.flush() << view("Device: ") << device.gpuProperties.deviceName;
     imgui.text(stringBuffer.getView(), vec2(5.0f, 90.0f));
 
-    imgui.textInt(imgui.mousePosition.x, vec2(5.0f, 85.0f));
-    imgui.textInt(imgui.mousePosition.y, vec2(5.0f, 80.0f));
+    if(imgui.button(vec2(2.0f, 80.0f), vec2(6.0f, 84.0f)))
+    {
+        //
+    }
 
     imgui.end();
 }

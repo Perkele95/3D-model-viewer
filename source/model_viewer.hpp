@@ -24,7 +24,7 @@ public:
     void onWindowSize(int32_t width, int32_t height);
     void onKeyEvent(pltf::key_code key, pltf::modifier mod);
     void onMouseMoveEvent(int32_t x, int32_t y);
-    void onMouseButtonEvent(pltf::mouse_button button);
+    void onMouseButtonEvent(pltf::mouse_button button, bool pressed);
     void onScrollWheelEvent(double x, double y);
 
 private:
@@ -122,10 +122,10 @@ public:
         app->onMouseMoveEvent(x, y);
     }
 
-    static void MouseButtonEvent(pltf::logical_device device, pltf::mouse_button button)
+    static void MouseButtonEvent(pltf::logical_device device, pltf::mouse_button button, bool pressed)
     {
         auto app = static_cast<T*>(pltf::DeviceGetHandle(device));
-        app->onMouseButtonEvent(button);
+        app->onMouseButtonEvent(button, pressed);
     }
 
     static void ScrollWheel(pltf::logical_device device, double x, double y)

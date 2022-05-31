@@ -415,40 +415,41 @@ bool VulkanImgui::button(vec2<float> topLeft, vec2<float> bottomRight)
     auto result = false;
     auto tint = settings.tint;
 
-    if(state.activeItem == GUI_ITEM_NULL && state.hotItem == GUI_ITEM_NULL)
+    if(state.activeItem == GUI_ITEM_NULL)
     {
-        if(hitCheck(topLeft, bottomRight))
+        if(hitCheck(topLeft, bottomRight) && state.hotItem == GUI_ITEM_NULL)
         {
             if(buttonPressed)
             {
                 state.activeItem = id;
                 // draw pressed button
-                settings.tint.x *= 0.75f;
-                settings.tint.y *= 0.75f;
-                settings.tint.z *= 0.75f;
+                settings.tint.x = 0.75f;
+                settings.tint.y = 0.1f;
+                settings.tint.z = 0.1f;
             }
             else
             {
                 state.hotItem = id;
                 // draw hovered button
-                settings.tint.x *= 0.9f;
-                settings.tint.y *= 0.9f;
-                settings.tint.z *= 0.9f;
+                settings.tint.x = 0.1f;
+                settings.tint.y = 0.75f;
+                settings.tint.z = 0.1f;
             }
         }
     }
-    else if(state.activeItem == id  && !buttonPressed)
+    else if(state.activeItem == id)
     {
-        if(hitCheck(topLeft, bottomRight))
-        {
-            result = true;
-        }
-
-        state.activeItem = GUI_ITEM_NULL;
         // draw pressed button
-        settings.tint.x *= 0.75f;
-        settings.tint.y *= 0.75f;
-        settings.tint.z *= 0.75f;
+        settings.tint.x = 0.1f;
+        settings.tint.y = 0.1f;
+        settings.tint.z = 0.75f;
+
+        if(!buttonPressed)
+        {
+            state.activeItem = GUI_ITEM_NULL;
+            if(hitCheck(topLeft, bottomRight))
+                result = true;
+        }
     }
 
     box(topLeft, bottomRight);

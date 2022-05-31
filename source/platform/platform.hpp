@@ -172,7 +172,7 @@ namespace pltf
 	using window_size_callback = void(*)(logical_device, int32_t, int32_t);
 	using key_event_callback = void(*)(logical_device, key_code, modifier);
 	using mouse_move_callback = void(*)(logical_device, int32_t, int32_t);
-	using mouse_button_callback = void(*)(logical_device, mouse_button);
+	using mouse_button_callback = void(*)(logical_device, mouse_button, bool);
 	using scroll_wheel_callback = void(*)(logical_device, double, double);
 
     // Main
