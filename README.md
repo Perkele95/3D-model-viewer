@@ -1,10 +1,7 @@
 # 3D-model-viewer
 
-Flat colour pbr:
-![image](pbr_demo.png)
+### Physically Based Renderer
 
-Textured pbr:
-![image](pbr_textured.png)
+Recreated Unreal Engines rendering technique to understand PBR and get practice with Vulkan API.
 
-With Image Based Lighting:
 ![image](pbr_ibl.png)
